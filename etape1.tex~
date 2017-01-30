@@ -1,0 +1,235 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{listings}
+\usepackage[margin=1in]{geometry}
+
+\title{Projet Compilateur, partie 1 - IFT3065}
+\date{\today}
+\author{Philippe Caron et Philippe Courtemanche}
+
+\begin{document}
+\maketitle
+
+\section{Survol}
+
+La conception d'un compilateur simple nous permet d'apprécier l'effort immense qui est nécessaire
+pour en faire un complexe. 
+
+Notre tâche était de produire un compilateur de base pour un sous-ensemble limité de scheme.
+Ce sous-ensemble se limite à quelques expressions simples, des impressions, du typage dynamique et autre.
+Pour ce faire, il fût nécessaire de construire un système d'abstractions des étapes de compilation incluant un analyseur syntaxique et une représentation intermédiaire.
+
+Heureusement, la tâche n'était pas faite à partir de rien. Nous avions la bonne chance d'avoir un
+paquet contenant la structure de base du compilateur sur quoi construire le reste, et l'infrastructure nécessaire pour les tests unitaires. Cette infrastructure n'était pas sans particularités et quelques changements fûrent nécessaires.
+
+Une série de tests unitaires sert de vérification du bon fonctionnement du compilateur et code résultant.
+
+Pour consolider le tout, le système d'automatisation de compilation make est utilisé pour lubrifier le processus de compilation des tests, du rapport et du compilateur en soi.
+\newpage
+\section{Objectifs}
+
+Le but de cette première étape de conception de compilateur inclut:
+\begin{enumerate}
+\item Un analyseur lexical et syntaxique utilisant l'approche par descente récursive.
+Cette partie du compilateur nous permet de passer d'un fichier texte à une représentation interne de scheme.
+\item Un Générateur de code x86-64.
+Le code généré est compatible sur Mac et sur Linux. Cet objectif en soi contient deux sous-objectifs.
+De un, un générateur de code intermédiaire .ir, et un compilateur de .ir à .s. Cette séparation du problème nous permet de bien travailler en parallèle, et simplifie une tâche complexe en plusieurs tâches simples.
+\item Une automatisation de la compilation du compilateur avec make.
+Make nous permet de réduire une série d'opérations complexes en une seule commande.
+\end{enumerate}
+
+\section{Étapes de la conception}
+La conception du compilateur actuel s'est échelonnée sur plusieurs étapes clefs distinctes. Chacune de ses étapes a pu être réalisée séparément du reste du projet étant donnée la modularité du compilateur.
+\subsection{Read}
+Cette première implémentation de read ne sert pas immédiatement dans le compilateur. Celui de gambit sert à sa place puisque la complexité du code nécessaire pour la conception d'un compilateur est plus grand que la capacité d'analyse de read.scm.
+
+Pour le développement de read il fut nécessaire d'y donner la capacité de lire un fichier, sans toutefois sacrifier sa capacité de lecture du port de input standard. Pour ce faire, nous avons utilisé les arguments optionels avec !\#key pour y donner un port de fichier experne, tout en lui laissant la capacité de lire de stdin si aucun port n'est spécifié.
+
+\begin{lstlisting}[frame=single]
+(define (read key#! (port (current-input-port)))
+ ...
+ )
+\end{lstlisting}
+
+Suite à l'implémentation de cette fonctionnalité à read, nous avons découvert que c'était l'utilité de la fonction
+ \begin{lstlisting}
+ with-input-from-file
+ \end{lstlisting}
+ Si nous étions à refaire read, l'utilisation de la fonction ci-dessus serais préférable à alourdir le code avec autant d'arguments optionels.
+
+Read est un analyseur syntaxique et lexical à base récursive. Suite à la lecture d'un caractère, la fonction reconnaît le mode dans quoi il doit être et poursuit la lecture jusqu'au cas fermant de ce mode.
+
+Les fonctions de scheme fournit par gambit nous permet de facilement faire le lien entre la représentation textuelle et la représentation interne.  
+
+ \begin{lstlisting}
+ (string->number s)
+ (string->symbol s)
+ \end{lstlisting}
+
+Une difficulté rencontrée était l'usage de quote ('). Il est difficile de laisser savoir à read que ce qu'il faut quoter est le résultat d'une opération et non les éléments immédiats de l'expression.
+Évidemment c'est l'usage pertinent de quote, mais dans le contexte d'un analyseur syntaxique et lexical ça se présente comme problème.
+
+La syntaxe de scheme se prête bien à l'analyse syntaxique tel qu'implémentée ici. Des constructions tels que les commentaires ou les chaînes de caractères se lient bien à l'analyse par descente récursive grâce à la structure de scheme.
+
+Read doit différencier entre plusieurs types de mode. Chaque mode commence avec un caractére en particulier et termine avec un autre (parfois le même) caractère en particulier.
+
+ \subsubsection{le \#}
+ Lorsque read rencontre un dièse, il entre en mode:
+ \begin{lstlisting}
+read-pound-obj
+ \end{lstlisting}
+pour l'instant dans ce mode il existe que deux type d'objets. Le boolean, et les caractères. Pour faire la différence entre les deux modes on peut se servir du \\ qui se retrouve à la suite du \# dans le cas des caractères. Lorsqu'on à identifié le caractère, la suite des choses est simple vu que le caractère en question est le prochain lu.
+
+Si ce n'est pas un \\, nous savons que c'est un boolean. La suite des choses encore est simple vu l'existance de seulement deux booleans. Le choix du bon est fait en fonction du caractère qui se retrouve à la suite du \#.
+
+\subsubsection{La string}
+La string est identifiée par l'arrivée soudaine d'un \". Read entre alors en mode:
+ \begin{lstlisting}
+read-string
+ \end{lstlisting}
+
+Dans un monde parfait, la string se termine à l'arrivée du prochain \". Par contre, là n'est pas la fin de l'histoire. Si un utilisateur veut avoir un \" dans sa chaîne, il faut un moyen pour l'analyseur syntaxique de faire la différence entre celui dans la chaîne et celui qui termine la chaîne. C'est alors que l'usager à la capacité de précéder son caractère spécial par un \\ pour permettre son affichage ordinaire.
+
+La fonction read-string alors doit pouvoir échapper des caractères. C'est alors que à la lecture du \\ read-string ajoute le prochain caractère sans l'analyser pour sa valeur syntaxique.
+
+\subsubsection{Le commentaire}
+
+Un commentaire commence avec le caractère ; et termine avec le retour de la ligne. Il est donc simple pour l'analyseur lexical et syntaxique de se fermer les yeux jusqu'à la décoverte d'un newline. 
+
+C'est alors que l'instant qu'un ; est découvert, tout ce qui se retrouve dans le commentaire sera aucunement analysé. Les commentaires ne sont bon que jusqu'à la fin de la ligne, alors pour faire un commentaire qui se propage sur plusieurs étage il est nécessaire pour l'auteur de faire valoir plusieurs ;.
+\newpage
+ \subsection{Production du code IR}
+ Afin de produire le code IR, nous nous sommes servi du fichier "miniscm-ir.scm" auquel nous avons apporté les modifications nécessaires. Celles-ci comprennent:
+ \begin{enumerate}
+ \item L'ajout de nouvelles forme syntaxiques à reconnaître
+ \item L'ajout de nouvelles pseudo-instructions
+ \end{enumerate}
+ \subsubsection{Syntaxe}
+ Le compilateur peut maintenant reconnaître toute les formes syntaxiques exigées à la première étape. Pour ce faire il a fallut ajouter les formes suivantes:
+ \begin{lstlisting}
+   <boolean>
+   (quotient <expr> <expr>)
+   (modulo <expr> <expr>)
+   (= <expr> <expr>)
+   (< <expr> <expr>)
+   (if <expr> <expr> <expr>)
+ \end{lstlisting}
+ Il peut également successivement évaluer plusieurs expressions (sans toutefois pouvoir mettre celles-ci en relation encore).
+
+ \subsubsection{Pseudos-instructions}
+Toutes les instructions de ir suivent un contrat strict dans un environnement restreint. Cette approche permet de sacrifier la performance pour grandement améliorer la clareté de conception. Le règlement de base: Une instruction prend ses arguments sur la pile, et retourne son résultat sur la pile.
+ Il n'existe que la pile, donc il n'y aura jamais de confusion par rapport à ça.
+ Il a inévitablement fallu ajouter certaines instructions au jeu actuellement très réduit des instructions IR. Les voici :
+ \begin{lstlisting}
+   #(push-boolean <boolean>)
+   #(idiv)
+   #(mod)
+   #(eq)
+   #(sml)
+   #(jif <string>)
+   #(br <string)
+ \end{lstlisting}
+
+ \paragraph{push-boolean}
+ Comme son nom l'indique, cette fonction permet de pousser un booléen sur la pile. Au moment d'être traduite en assembleur, elle ajoutera automatique à la valeur inscrite le marqueur de type approprié.
+
+ \paragraph{idiv - Integer Division}
+ Contrairement au symbole "/" qui était déjà pris en charge par miniscm et qui symbolise la division, la fonction (quotient) effectue une division entière, c'est pourquoi une nouvelle pseudo-instruction a due être ajoutée. Elle sort 2 valeurs de la pile et en fait la division entière.
+
+ \paragraph{mod - Modulo}
+ Nous verrons plus tard que cette instruction a presque exactement le même code machine que idiv excepte qu'elle retourne un registre différent après la division. Elle a été ajoutée au jeu d'instruction pour permettre de faire un modulo après avoir sorti deux valeurs de la pile.
+
+ \paragraph{eq - Is Equal?}
+ Cette pseudo instruction a pour but de tester les deux valeurs les plus hautes sur la pile après les  avoir dépilée. Si elle sont égale, elle rempile la valeur 1, sinon 0, toute ces deux valeurs encodées avec le type booléen.
+
+ \paragraph{sml - Smaller Than?}
+ Aussi une instruction de test, elle sort deux valeurs de la pile, si la première (plus haut sur la pile) est plus petite que la seconde, elle pousse 1 sur la pile, sinon 0. Comme avec eq, les valeurs poussées sont encodées avec le type booléen.
+
+ \paragraph{jif - Jump If False}
+ Sert suite aux instructions de test, cette instruction nécessite une étiquette vers une adresse. Cette étiquette est générée automatiquement par la fonction gensym et est incrémentée chaque fois que la fonction if est appelée, de sorte qu'il n'y a pas de risque de recoupement.
+
+ \paragraph{br - Branch}
+ Cette instruction effectue le branchement inconditionnel vers l'étiquette qu'elle contient. Tout comme jif, elle ne sert présentement qu'à la fonction if.
+
+ \subsection{Production du code assembleur}
+ La production du code assembleur peut-être soit très complexe, ou très simple. Pour des raisons pratiques nous avons opté pour l'approche simple, autrement dit : chaque pseudo-instruction IR possède une traduction directe en assembleur. Cette méthode de procéder présente l'avantage indéniable d'être très rapide, très simple, et très stable. Ainsi lorsque la partie du compilateur dédiée à la traduction du code IR est appelée, elle ne fait que lire ce dernier et remplacer les expressions par le texte assembleur correspondant.
+ \subsubsection{Caractéristique de l'approche}
+ Il suffit que jouer un peu avec le compilateur pour réaliser que des fragments de code IR de type "pop, pop, opération" reviennent très souvent. En effet, c'est la seule manière de représenter une opération a deux paramètre dans le code IR. Ceci rend la gestion des registres particulièrement simple, mais au niveau de l'optimisation présente plusieurs inconvénient
+ 
+ \paragraph{Opération sur les constantes}
+ À chaque fois qu'une opération sur des constantes est évaluée, on se retrouve avec la forme :
+ \begin{lstlisting}
+   push   $c1
+   push   $c2
+   pop    %rax
+   pop    %rbx
+   ...
+ \end{lstlisting}
+ Ce qui est évidemment un usage complètement inutile de la pile. Éventuellement, il serait intéressant de remplacer l'utilisation des push par des mov lorsque des constantes sont utilisées dans les expressions. En fait, idéalement, le compilateur pourrait vérifier si l'expression constante n'est pas évaluable avant l'exécution, et le cas échéant calculer celle-ci jusqu'à l'apparition d'une variable de sorte que le code assembleur produit n'est pas encombrer par des opérations inutilesé
+
+ \paragraph{Opérations en chaine}
+ Il n'y a pas que les constantes qui engendrent une forme redondante. Lorsqu'il y a plusieurs opérations à effectuer de suite (par exemple $(* (+ 1 2) 4)$) la forme suivante apparaît:
+ \begin{lstlisting}
+   ...
+   push   %rax
+   pop    %rax 
+   ...
+ \end{lstlisting}
+ Encore une fois, la pile est surutilisée ce qui a sans aucun doute un impact sur les performances du compilateur.
+
+ Malgré ces quelques inconvénients, qui seraient d'ailleurs facile à résoudre avec un post-processeur relativement simple, cette approche nous permet d'implanter un langage à base de pile suivant un contrat clair et concis pour chaque instruction du langage intermédiaire program.ir. 
+
+
+ \subsection{exio.s}
+ Le fichier exio.s contient les routines nécessaires à l'affichages des divers types présent dans scheme (pour l'instant, int et bool). La routine print\_scm va elle même déterminer à quelle routine de exio.s faire appel afin que l'affichage de la valeur soit fait de manière appropriée.
+
+C'est à ce niveau ci que se fait la vérification du type d'un objet pour l'impression. La routine appropriée est sélectionnée selon la valeur des trois premiers bits. 001 pour boolean et 000 pour int.
+
+Il était nécessaire de faire la différence entre les types à ce niveau ci. Le langage intermédiaire ir n'était pas approprié pour cette implémentation, et l'ajout à ce niveau là du typage dynamique aurait sérieusement alourdi le code. C'est pourquoi nous avons choisi de faire la différence au niveau assembleur.
+
+ \subsection{Make}
+Il n'existe aucun projet trop petit pour un l'usage du programme d'organisation de tâches de compilation make. L'étape 1 du projet de compilation n'est aucunement une exception. En fait, make nous a permit d'automatiser de nombreuses tâches tel que la compilation des fichiers d'appoint, l'élimination des fichiers inutiles, et le déclenchement des tests automatisés.
+
+Make prendra sans doute une place de plus en plus importante à mesure que le compilateur prend plus de complexité.
+
+\subsubsection{make all}
+Make all est la cible principale de make. Appeler make sans arguments se dirige vers ce point. Cette cible s'assure de l'existence de tout les fichiers d'appoint nécessaire à l'usage correct du compilateur. Dans notre cas, il n'y a que les fichier d'aide de i/o stdio.o et exio.o. Ces deux fichiers contiennent les fonctions nécessaires au niveau assembleur pour faire l'entrée sortie.
+Le ficher exio.o lui contient des fonctions d'extension spécifiques à cette implémentation de scheme pour faire l'entrée sortie des entiers et des boolean formattés avec le type.
+
+\subsubsection{make ut, et make test}
+Make test fait appel à la cible make ut. Make ut s'assure de la compilation correcte de la cible all, et puis ensuite déclenche la batterie de tests avec
+
+\begin{lstlisting}
+./run-unit-tests.scm
+\end{lstlisting}
+
+Cette batterie de tests procède à la compilation de tout les fichiers .scm dans unit-tests/ et exécute le fichier exécutable résultat en capturant son output et son statut de sortie. Si la sortie est de 0 et l'output attendu, alors le test passe. Sinon une alerte est déclanchée et le test est comptabilisé comme un échec.
+
+\subsubsection{make clean, et make cleanrapport}
+Le rapport est écrit en *.tex alors suite à sa compilation en *.pdf il produit plusieurs fichiers de support. La cible cleanrapport vise à éliminer ces fichiers pour conserver un répertoire git ordonné.
+La cible make clean a une mission plus générale. 
+Non seulement cette cible fait appel à cleanrapport, mais elle élimine tout résultat de la compilation des fichiers scheme.
+Ces cibles servent à automatiser la conservation de l'ordre.
+\newpage
+ \section{Résultat}
+ Le compilateur que nous avons créé fonctionne pour tout le sous ensemble de scheme exigé dans la donnée, en ce sens nous pouvons dire que nous avons accompli l'objectif principal de l'étape 1. Les tests automatisés nous on permit de rapidement trouver et éliminer les fonctionnalités qui avait des problèmes qui ne sont survenus que plus tard dans l'implémentation, tel que la division avec les nombres négatifs et modulo. 
+
+Le compilateur résultant peut compiler en sous-ensemble de scheme qui est moyennement utile. Sa meilleure application constructive serait en terme d'une calculatrice de base qui peut accepter des conditionnelles et des expressions imbriqueés. Pour l'instant, c'est un domaine d'application assez limité.
+Quelques ajouts éventuels y permettrait d'avoir un langage beaucoup plus utile, comme par exemple l'affectation de mémoire à l'exécution ou bien la lecture de fichiers. 
+
+Le résultat courant de notre travail est extensible pour faire de telles modifications.
+
+%%% À VÉRIFIER
+ \section{Conclusion}
+
+Cette première étape dans la conception du compilateur pour l'ensemble restreint de scheme s'est très bien passé malgré quelques ralentissements techniques. Il y a certainement des optimisations à faire au point de vue de la structure de bas niveau, mais il servira de base adéquate pour l'ensemble plus complexe à venir dans les étapes 2 et 3. 
+
+Les tâches accomplies nous ont permit de mieux comprendre et apprécier les étapes nécessaires pour la conception d'un compilateur, et nous sommes nécessairement plus adapté à prendre charges des prochaines tâches de ce projet.
+
+%% ¡¡ REMPLIR ICI !!
+
+\end{document}

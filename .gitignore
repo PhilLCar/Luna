@@ -1,0 +1,11 @@
+*#
+#*
+.#*
+*.exe
+*.out.s
+*.o
+*.lir
+*.aux
+*.log
+*~
+*.pp.lua

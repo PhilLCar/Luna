@@ -1,0 +1,14 @@
+--[[
+   TABLE DE PRIORITÉ
+   ^ (r-assoc)
+   not - (unaire)
+   * /
+   + -
+   .. (r-assoc)
+   > < <= >= ~= ==
+   and
+   or
+]]
+file = io.open("test.lua", "r")
+text = file:read("all")
+print(text)
