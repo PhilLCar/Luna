@@ -1,8 +1,8 @@
-# LUNA
-Luna - Compilateur lua V0.1
-
 ## AUTEUR:
-Philippe Caron 
+Philippe Caron
+
+## PROFESSEUR:
+Marc Feeley
 
 
 INSTALATION
