@@ -29,7 +29,7 @@ cleansubfiles:
 cleancompile: cleansubfiles
 	rm -f *.exe unit-tests/*.exe
 
-rapport: description.pdf
+rapport: description.pdf cleansubfiles
 
 .tex.pdf:
 	$(PDFLATEX) $*.tex

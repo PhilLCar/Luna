@@ -1,8 +1,10 @@
 ## AUTEUR:
 Philippe Caron
+[philippe.caron.4@umontreal.ca](mailto:philippe.caron.4@umontreal.ca)
 
 ## PROFESSEUR:
 Marc Feeley
+[feeley@iro.umontreal.ca](mailto:feeley@iro.umontreal.ca)
 
 DESCRIPTION DU PROJET
 ===================================================================================
