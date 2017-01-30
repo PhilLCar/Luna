@@ -8,9 +8,7 @@ DESCRIPTION DU PROJET
 ===================================================================================
 L'objectif du projet est de concevoir un compilateur pour le langage lua capable de
 produire du code assembleur compilable par gcc. La description détaillée du projet
-peut-être consultée en suivant le lien ci-dessous:
-
-https://github.com/PhilLCar/Luna/blob/master/description.pdf
+peut-être consultée [en cliquant ici](https://github.com/PhilLCar/Luna/blob/master/description.pdf).
 
 INSTALATION
 ===================================================================================
