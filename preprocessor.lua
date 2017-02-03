@@ -50,8 +50,8 @@ function rmComments(str)
 end
 
 function isOperator(str)
-   ops = { "^", "-", "*", "/", "+", "..", ">", "<", ">=", "<=", "~=", "==",
-	   "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")" }
+   ops = { "^", "-", "*", "/", "[[", "]]", "+", "..", ">", "<", ">=", "<=", "~=", "==",
+	   "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -74,8 +74,8 @@ end
 function split(str)
    local t, s, n, i, j, ls = "", "", "", 1, 1, {}
    while (i <= #str) do
-      s = str:sub(i, i + 1)
-      t = isOperator(s) or isOperator(s:sub(1, 1))
+      s = str:sub(i, i + 2)
+      t = isOperator(s) or isOperator(s:sub(1, 2)) or isOperator(s:sub(1, 1))
       if t then
 	 if n ~= "" then
 	    ls[j] = n
@@ -89,6 +89,26 @@ function split(str)
 	       i = i + 1
 	       s = str:sub(i, i)
 	    until (s == t or i >= #str)
+	    ls[j] = n .. s
+	    n = ""
+	    i = i + 1
+	    j = j + 1
+	 elseif t == "[" then
+	    repeat
+	       n = n .. s
+	       i = i + 1
+	       s = str:sub(i, i)
+	    until (s == "]" or i >= #str)
+	    ls[j] = n .. s
+	    n = ""
+	    i = i + 1
+	    j = j + 1
+	 elseif t == "[[" then
+	    repeat
+	       n = n .. s
+	       i = i + 1
+	       s = str:sub(i, i)
+	    until (s == "]]" or i >= #str)
 	    ls[j] = n .. s
 	    n = ""
 	    i = i + 1
@@ -113,6 +133,14 @@ function split(str)
 	    ls[j] = t
 	    j = j + 1
 	    i = i + #t
+	    s = str:sub(i, i)
+	    while s == " " or s == "\t" do
+	       i = i + 1
+	       s = str:sub(i, i)
+	    end
+	    if str:sub(i, i) == "\n" then
+	       i = i + 1
+	    end
 	 end
       else
 	 t = s:sub(1, 1)
@@ -187,7 +215,7 @@ function filter(str)
 	 mem = isOperator(mem) or isReserved(mem)
       end
    end
-      astr = clean(astr)
+   astr = clean(astr)
    -- Priority level 3 - Multiplicative: * / [left-associative]
    for i = 2, #astr - 1 do
       mem = astr[i]
@@ -267,6 +295,10 @@ function parenthesize(str)
 	    for i = 1, indent do
 	       nstr = nstr .. "\t"
 	    end
+	 elseif s[1] == "else" or s[1] == "elseif" then
+	    for i = 1, indent - 1 do
+	       nstr = nstr .. "\t"
+	    end
 	 else  
 	    for i = 1, indent do
 	       nstr = nstr .. "\t"
@@ -278,6 +310,64 @@ function parenthesize(str)
 	 line = line .. s
       end
       i = i + 1
+   end
+   return nstr
+end
+
+-- ÉVENTUELLEMENT PIPELINER LE PRÉPROCESSEUR (quand le code va être moins laid)
+
+function rmSelf(str)
+   local mem, s, i, nstr = "", "", 0, ""
+   while i <= #str do
+      i = i + 1
+      s = str:sub(i, i)
+      nstr = nstr .. s
+      if s == " " or s == "\t" or s == "\n" then
+	 i = i + 1
+	 s = str:sub(i, i)
+	 if s == ":" then
+	    i = i + 1
+	    nstr = nstr .. ". "
+	    repeat
+	       i = i + 1
+	       s = str:sub(i, i)
+	       nstr = nstr .. s
+	    until (s == "(")
+	    nstr = nstr .. mem .. " , "
+	    mem = ""
+	 else
+	    nstr = nstr .. s
+	    mem = s
+	 end
+      else
+	 mem = mem .. s
+      end
+   end
+   return nstr
+end
+
+function rmDot(str)
+   local s, i, nstr = "", 0, ""
+   while i <= #str do
+      i = i + 1
+      s = str:sub(i, i)
+      nstr = nstr .. s
+      if s == " " or s == "\t" or s == "\n" then
+	 i = i + 1
+	 s = str:sub(i, i)
+	 if s == "." then
+	    i = i + 1
+	    s = "[\""
+	    repeat
+	       nstr = nstr .. s
+	       i = i + 1
+	       s = str:sub(i, i)
+	    until (s == " ")
+	    nstr = nstr .. "\"] "
+	 else
+	    nstr = nstr .. s
+	 end
+      end
    end
    return nstr
 end
@@ -293,9 +383,9 @@ file = io.open(arg[1] .. ".pp.lua", "w+")
 file:write(parenthesize(rmComments(text)))
 file.close()
 ]]
-file = io.open("test.lua", "r")
+file = io.open("unit-tests/test.lua", "r")
 text = file:read("all")
 file:close()
-file = io.open("test.pp.lua", "w+")
-file:write(parenthesize(rmComments(text)))
+file = io.open("unit-tests/test.pp.lua", "w+")
+file:write(rmDot(rmSelf(parenthesize(rmComments(text)))))
 file:close()
