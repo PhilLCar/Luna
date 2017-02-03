@@ -1,5 +1,6 @@
 stack = {}
 level = 1
+place = 0
 stack[level] = {}
 stack[level]["size"] = 0
 
@@ -167,8 +168,12 @@ function peval(str)
 	 k = k + 1
 	 call = false
       else
-	 -- TEMPORAIRE // en attendant le support de variable
-	 final = final .. "var\t" .. s .. "\n"
+	 call = get(s)
+	 if call then
+	    final = final .. "ref\t" .. tostring(call) .. "\n"
+	 else
+	    final = final .. "var\t" .. s .. "\n"
+	 end
 	 k = k + 1
 	 call = true
       end
@@ -197,13 +202,69 @@ function feval(str)
    return "args\t" .. tostring(k) .. "\n" .. final .. "call\n"
 end
 
---TODO LINE EVALUATION
+function eeval(str)
+   local i, j, k, final, token = 0, 0, 1, ""
+   token, i = nexttoken(str, i)
+   if token == "local" then
+      -- def/local mode
+      while token and token ~= "=" do
+	 if token == "," then
+	    k = k + 1
+	 else
+	    j = get(token)
+	    if j then
+	       final = final .. "ref\t" .. tostring(j) .. "\n"
+	    else
+	       place = place + 1
+	       stack[level]["size"] = stack[level]["size"] + 1
+	       stack[level][token] = place
+	       final = final .. "ref\t" .. tostring(place) .. "\n"
+	    end
+	 end
+      end
+      final = "sets\t" .. tostring(k) .. "\n" .. final
+      while j <= k do
+	 token, i = nexttoken(str, i)
+	 if not token then return final end
+	 if token ~= "," then
+	    final = final .. peval(token)
+	    j = j + 1
+	 end
+      end
+      return final .. "stack\n"
+   else
+      -- access/global mode
+      while token and token ~= "=" do
+	 if token == "," then
+	    k = k + 1
+	 else
+	    j = get(token)
+	    if j then
+	       final = final .. "ref\t" .. tostring(j) .. "\n"
+	    else
+	       final = final .. "var\t" .. token .. "\n"
+	    end
+	 end
+      end
+      final = "sets\t" .. tostring(k) .. "\n"
+      while j <= k do
+	 token, i = nexttoken(str, i)
+	 if not token then return final end
+	 if token ~= "," then
+	    final = final .. peval(token)
+	    j = j + 1
+	 end
+      end
+      return final .. "stack\n"
+   end
+end
+
 function leval(str, i)
-   local j, token = 0
+   local j = 0
    str, i = nextline(str, i)
    while j < #str do
       j = j + 1
-      if str:sub(j, j) == "=" then
+      if str:sub(j, j + 2) == " = " or str:sub(j, j + 5) == "local" then
 	 return eeval(str), i
       end
    end
@@ -237,6 +298,7 @@ function scope(str, i, name, fake)
    elseif s == "elseif" then
       s, i = nexttoken(str, i)
       scopes["if"] = scopes["if"] + 1
+      place = place - stack[level]["size"]
       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
       "else\t" .. tostring(scopes["if"] - 1) .. "\n" ..
       peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
@@ -245,6 +307,7 @@ function scope(str, i, name, fake)
       s, i = scope(str, i, "iend\t" .. tostring(scopes["if"]) .. "\n", true)
       final = final .. s
    elseif s == "else" then
+      place = place - stack[level]["size"]
       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
       "else\t" .. tostring(scopes["if"]) .. "\n"
       stack[level] = {}
@@ -252,6 +315,7 @@ function scope(str, i, name, fake)
       s, i = scope(str, i, "", true)
       final = final .. s
    elseif s == "end" then
+      place = place - stack[level]["size"]
       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name
       stack[level] = nil
       level = level - 1
@@ -262,6 +326,7 @@ function scope(str, i, name, fake)
       end
    elseif s == "until" then
       s, i = nexttoken(str, i)
+      place = place - stack[level]["size"]
       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name ..
 	 "\n" .. peval(s) .. "rend\t" .. name .. "\n"
       stack[level] = nil

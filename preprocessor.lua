@@ -257,12 +257,10 @@ function filter(str)
    for i, v in ipairs(astr) do
       if v:sub(1, 1) == "(" then
 	 astr[i] = "(" .. flatten(filter(v:sub(2, #v - 1))) .. ")"
-	 --[[if not (isReserved(astr[i - 1]) and isOperator(astr[i - 1])) then
-	    print(i)
-	    print(astr[i - 1])
+	 if i > 1 and not isReserved(astr[i - 1]) and not isOperator(astr[i - 1]) then
 	    astr[i] = astr[i - 1] .. " " .. astr[i]
 	    astr[i - 1] = nil
-	    end]]
+	    end
       end
       if v:sub(1, 1) == "[" then
 	 astr[i] = "[" .. flatten(filter(v:sub(2, #v - 1))) .. "]"

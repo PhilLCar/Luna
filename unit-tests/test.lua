@@ -21,7 +21,7 @@ do
    y = y  : sub(1, 2)
    function test2(prm, ...)
       x = x + 1
-      return y
+      return prm
    end
    if x == 1 and y == "test" or y ~= 2 then
       print("yo")
@@ -37,7 +37,7 @@ do
       x = 0
    until x == 0
    for i = 2, 10 do
-      x = 2 * test2[2+2](x)
+      x = 2 * test2(x)
    end
    print(x)
    print(y)
