@@ -51,7 +51,7 @@ end
 
 function isOperator(str)
    ops = { "^", "-", "*", "/", "[[", "]]", "+", "..", ">", "<", ">=", "<=", "~=", "==",
-	   "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
+	   "=", ":", ".", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -94,6 +94,7 @@ function split(str)
 	    i = i + 1
 	    j = j + 1
 	 elseif t == "[" then
+	    s = t
 	    repeat
 	       n = n .. s
 	       i = i + 1
@@ -162,6 +163,70 @@ function split(str)
    return ls
 end
 
+function rmSelf(str)
+   local mem, s, i, nstr, spc = "", "", 0, "", false
+   while i <= #str do
+      i = i + 1
+      s = str:sub(i, i)
+      spc = false
+      while s == " " or s == "\t" or s == "\n" do
+	 nstr = nstr .. s
+	 i = i + 1
+	 s = str:sub(i, i)
+	 spc = true
+      end
+      if s == ":" then
+	 nstr = nstr .. "."
+	 repeat
+	    i = i + 1
+	    s = str:sub(i, i)
+	    nstr = nstr .. s
+	 until (s == "(")
+	 nstr = nstr .. mem .. " , "
+	 mem = ""
+      else
+	 if spc then mem = "" end
+	 mem = mem .. s
+	 nstr = nstr .. s
+      end
+   end
+   return nstr
+end
+
+function rmDot(str)
+   local s, i, nstr = "", 0, ""
+   while i <= #str do
+      i = i + 1
+      s = str:sub(i, i + 2)
+      if s == "..." then
+	 nstr = nstr .. s
+	 i = i + 2
+      elseif s:sub(1, 2) == ".." then
+	 nstr = nstr .. ".."
+	 i = i + 1
+      elseif s:sub(1, 1) == "." then
+	 repeat
+	    i = i + 1
+	    s = str:sub(i, i)
+	 until s ~= " " and s ~= "\t" and s ~= "\n" 
+	 s = "[\"" .. s
+	 repeat
+	    nstr = nstr .. s
+	    i = i + 1
+	    s = str:sub(i, i)
+	 until s == "(" or s == " " or s == "\t" or s == "\n"
+	 nstr = nstr .. "\"] "
+	 if s == "(" then
+	    nstr = nstr .. "("
+	 end
+      else
+	 if spc then mem = "" end
+	 nstr = nstr .. s:sub(1, 1)
+      end
+   end
+   return nstr
+end
+
 function clean(tab)
    local ntab, len = {}, 0
    for i, v in pairs(tab) do
@@ -187,13 +252,25 @@ function flatten(astr)
 end
 
 function filter(str)
-   local astr = split(str)
+   local astr = split(rmDot(rmSelf(str)))
    local mem
    for i, v in ipairs(astr) do
       if v:sub(1, 1) == "(" then
 	 astr[i] = "(" .. flatten(filter(v:sub(2, #v - 1))) .. ")"
+	 --[[if not (isReserved(astr[i - 1]) and isOperator(astr[i - 1])) then
+	    print(i)
+	    print(astr[i - 1])
+	    astr[i] = astr[i - 1] .. " " .. astr[i]
+	    astr[i - 1] = nil
+	    end]]
+      end
+      if v:sub(1, 1) == "[" then
+	 astr[i] = "[" .. flatten(filter(v:sub(2, #v - 1))) .. "]"
+	 astr[i] = astr[i - 1] .. " " .. astr[i]
+	 astr[i - 1] = nil
       end
    end
+   clean(astr)
    -- Priority level 1 - Power: ^ [right-associative]
    for i = #astr - 1, 2, -1 do
       if astr[i] == "^" then
@@ -314,63 +391,6 @@ function parenthesize(str)
    return nstr
 end
 
--- ÉVENTUELLEMENT PIPELINER LE PRÉPROCESSEUR (quand le code va être moins laid)
-
-function rmSelf(str)
-   local mem, s, i, nstr = "", "", 0, ""
-   while i <= #str do
-      i = i + 1
-      s = str:sub(i, i)
-      nstr = nstr .. s
-      if s == " " or s == "\t" or s == "\n" then
-	 i = i + 1
-	 s = str:sub(i, i)
-	 if s == ":" then
-	    i = i + 1
-	    nstr = nstr .. ". "
-	    repeat
-	       i = i + 1
-	       s = str:sub(i, i)
-	       nstr = nstr .. s
-	    until (s == "(")
-	    nstr = nstr .. mem .. " , "
-	    mem = ""
-	 else
-	    nstr = nstr .. s
-	    mem = s
-	 end
-      else
-	 mem = mem .. s
-      end
-   end
-   return nstr
-end
-
-function rmDot(str)
-   local s, i, nstr = "", 0, ""
-   while i <= #str do
-      i = i + 1
-      s = str:sub(i, i)
-      nstr = nstr .. s
-      if s == " " or s == "\t" or s == "\n" then
-	 i = i + 1
-	 s = str:sub(i, i)
-	 if s == "." then
-	    i = i + 1
-	    s = "[\""
-	    repeat
-	       nstr = nstr .. s
-	       i = i + 1
-	       s = str:sub(i, i)
-	    until (s == " ")
-	    nstr = nstr .. "\"] "
-	 else
-	    nstr = nstr .. s
-	 end
-      end
-   end
-   return nstr
-end
 --[[
 if arg[1] == nil then
    arg[1] = "test"
@@ -387,5 +407,5 @@ file = io.open("unit-tests/test.lua", "r")
 text = file:read("all")
 file:close()
 file = io.open("unit-tests/test.pp.lua", "w+")
-file:write(rmDot(rmSelf(parenthesize(rmComments(text)))))
+file:write(parenthesize(rmComments(text)))
 file:close()
