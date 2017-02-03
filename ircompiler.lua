@@ -131,7 +131,6 @@ function nextline(str, i)
 end
 
 function peval(str)
-   print("<<" .. str .. ">>")
    local i, k, s, op, final, call = 0, 0, "", "", "", false
    while i <= #str do
       s, i = nexttoken(str, i)
@@ -178,7 +177,7 @@ function peval(str)
 	 call = true
       end
    end
-   if op and op ~= "" then
+   if ops[op] then
       final = final .. ops[op] .. "\n"
    end
    return final
@@ -207,6 +206,7 @@ function eeval(str)
    token, i = nexttoken(str, i)
    if token == "local" then
       -- def/local mode
+      token, i = nexttoken(str, i)
       while token and token ~= "=" do
 	 if token == "," then
 	    k = k + 1
@@ -221,11 +221,13 @@ function eeval(str)
 	       final = final .. "ref\t" .. tostring(place) .. "\n"
 	    end
 	 end
+	 token, i = nexttoken(str, i)
       end
       final = "sets\t" .. tostring(k) .. "\n" .. final
+      j = 0
       while j <= k do
 	 token, i = nexttoken(str, i)
-	 if not token then return final end
+	 if not token then break end
 	 if token ~= "," then
 	    final = final .. peval(token)
 	    j = j + 1
@@ -245,11 +247,13 @@ function eeval(str)
 	       final = final .. "var\t" .. token .. "\n"
 	    end
 	 end
+	 token, i = nexttoken(str, i)
       end
       final = "sets\t" .. tostring(k) .. "\n"
+      j = 0
       while j <= k do
 	 token, i = nexttoken(str, i)
-	 if not token then return final end
+	 if not token then break end
 	 if token ~= "," then
 	    final = final .. peval(token)
 	    j = j + 1
@@ -262,6 +266,7 @@ end
 function leval(str, i)
    local j = 0
    str, i = nextline(str, i)
+   if not str then return str end
    while j < #str do
       j = j + 1
       if str:sub(j, j + 2) == " = " or str:sub(j, j + 5) == "local" then
@@ -285,118 +290,130 @@ end
 function scope(str, i, name, fake)
    local final, s = ""
    s, i = nexttoken(str, i)
-   if s == "if" then
-      s, i = nexttoken(str, i)
-      scopes["if"] = scopes["if"] + 1
-      final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
-      peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-      level = level + 1
-      stack[level] = {}
-      stack[level]["size"] = 0
-      s, i = scope(str, i, "iend\t" .. tostring(scopes["if"]) "\n", false)
-      final = final .. s
-   elseif s == "elseif" then
-      s, i = nexttoken(str, i)
-      scopes["if"] = scopes["if"] + 1
-      place = place - stack[level]["size"]
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
-      "else\t" .. tostring(scopes["if"] - 1) .. "\n" ..
-      peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-      stack[level] = {}
-      stack[level]["size"] = 0
-      s, i = scope(str, i, "iend\t" .. tostring(scopes["if"]) .. "\n", true)
-      final = final .. s
-   elseif s == "else" then
-      place = place - stack[level]["size"]
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
-      "else\t" .. tostring(scopes["if"]) .. "\n"
-      stack[level] = {}
-      stack[level]["size"] = 0
-      s, i = scope(str, i, "", true)
-      final = final .. s
-   elseif s == "end" then
-      place = place - stack[level]["size"]
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name
-      stack[level] = nil
-      level = level - 1
-      if fake then
-	 return final, i - 4
+   while s do
+      if s == "if" then
+	 s, i = nexttoken(str, i)
+	 scopes["if"] = scopes["if"] + 1
+	 final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
+	 peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
+	 level = level + 1
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "iend\t" .. tostring(scopes["if"]) "\n", false)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+      elseif s == "elseif" then
+	 s, i = nexttoken(str, i)
+	 scopes["if"] = scopes["if"] + 1
+	 place = place - stack[level]["size"]
+	 final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
+	 "else\t" .. tostring(scopes["if"] - 1) .. "\n" ..
+	 peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "iend\t" .. tostring(scopes["if"]) .. "\n", true)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+      elseif s == "else" then
+	 place = place - stack[level]["size"]
+	 final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
+	 "else\t" .. tostring(scopes["if"]) .. "\n"
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "", true)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+      elseif s == "end" then
+	 place = place - stack[level]["size"]
+	 final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name
+	 stack[level] = nil
+	 level = level - 1
+	 if fake then
+	    return final, i - 4
+	 else
+	    return final, i
+	 end
+      elseif s == "until" then
+	 s, i = nexttoken(str, i)
+	 place = place - stack[level]["size"]
+	 final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name ..
+	    "\n" .. peval(s) .. "rend\t" .. name .. "\n"
+	 stack[level] = nil
+	 level = level - 1
+      elseif s == "while" then
+	 scopes["while"] = scopes["while"] + 1
+	 final = final .. "while\t" .. tostring(scopes["while"]) .. "\n" ..
+	 peval(s) .. "wdo\t" .. tostring(scopes["while"]) .. "\n"
+	 -- ASSERT
+	 s, i = nexttoken(str, i) -- SHOULD BE "do"
+	 level = level + 1
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "wend\t" .. tostring(scopes["while"]) "\n", false)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+	 -- TODODODODODODODODODODODODODODODODODODO
+      elseif s == "for" then
+	 s, i = nexttoken(str, i)
+	 scopes["while"] = scopes["while"] + 1
+	 final = final .. "while" .. tostring(scopes["while"]) .. ":\n" ..
+	 peval(s) .. "wdo" .. tostring(scopes["while"]) .. ":\n"
+	 -- ASSERT
+	 s, i = nexttoken(str, i) -- SHOULD BE "do"
+	 stack.level = stack.level + 1
+	 stack[stack.level] = {}
+	 s, i = scope(str, i, "wend" .. tostring(scopes["if"]) "\n", false)
+	 final = final .. s
+      elseif s == "repeat" then
+	 scopes["repeat"] = scopes["repeat"] + 1
+	 final = final .. "repeat\t" .. tostring(scopes["repeat"])
+	 level = level + 1
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, tostring(scopes["repeat"]), false)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+	 --TODODODODODODODODODO
+      elseif s == "function" then
+	 s, i = nexttoken(str, i)
+	 scopes["repeat"] = scopes["repeat"] + 1
+	 final = final .. "repeat\t" .. tostring(scopes["repeat"])
+	 stack.level = stack.level + 1
+	 stack[stack.level] = {}
+	 s, i = scope(str, i, tostring(scopes["repeat"]), false)
+	 final = final .. s
+      elseif s == "do" then
+	 scopes["do"] = scopes["do"] + 1
+	 final = final .. "do\t" .. tostring(scopes["do"] .. "\n")
+	 level = level + 1
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "dend\t" .. tostring(scopes["do"]) .. "\n", false)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
       else
-	 return final, i
+	 s, i = leval(str, i - #s - 1)
+	 if s then
+	    final = final .. s
+	    s, i = nexttoken(str, i)
+	 end
       end
-   elseif s == "until" then
-      s, i = nexttoken(str, i)
-      place = place - stack[level]["size"]
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name ..
-	 "\n" .. peval(s) .. "rend\t" .. name .. "\n"
-      stack[level] = nil
-      level = level - 1
-   elseif s == "while" then
-      s, i = nexttoken(str, i)
-      scopes["while"] = scopes["while"] + 1
-      final = final .. "while\t" .. tostring(scopes["while"]) .. "\n" ..
-      peval(s) .. "wdo\t" .. tostring(scopes["while"]) .. "\n"
-      -- ASSERT
-      s, i = nexttoken(str, i) -- SHOULD BE "do"
-      level = level + 1
-      stack[level] = {}
-      s, i = scope(str, i, "wend\t" .. tostring(scopes["while"]) "\n", false)
-      final = final .. s
-      -- TODODODODODODODODODODODODODODODODODODO
-   elseif s == "for" then
-      s, i = nexttoken(str, i)
-      scopes["while"] = scopes["while"] + 1
-      final = final .. "while" .. tostring(scopes["while"]) .. ":\n" ..
-      peval(s) .. "wdo" .. tostring(scopes["while"]) .. ":\n"
-      -- ASSERT
-      s, i = nexttoken(str, i) -- SHOULD BE "do"
-      stack.level = stack.level + 1
-      stack[stack.level] = {}
-      s, i = scope(str, i, "wend" .. tostring(scopes["if"]) "\n", false)
-      final = final .. s
-   elseif s == "repeat" then
-      s, i = nexttoken(str, i)
-      scopes["repeat"] = scopes["repeat"] + 1
-      final = final .. "repeat\t" .. tostring(scopes["repeat"])
-      level = level + 1
-      stack[level] = {}
-      s, i = scope(str, i, tostring(scopes["repeat"]), false)
-      final = final .. s
-      --TODODODODODODODODODO
-   elseif s == "function" then
-      s, i = nexttoken(str, i)
-      scopes["repeat"] = scopes["repeat"] + 1
-      final = final .. "repeat\t" .. tostring(scopes["repeat"])
-      stack.level = stack.level + 1
-      stack[stack.level] = {}
-      s, i = scope(str, i, tostring(scopes["repeat"]), false)
-      final = final .. s
-      -- TODODODODODO
-   elseif s == "do" then
-      s, i = nexttoken(str, i)
-      scopes["repeat"] = scopes["repeat"] + 1
-      final = final .. "repeat\t" .. tostring(scopes["repeat"])
-      stack.level = stack.level + 1
-      stack[stack.level] = {}
-      s, i = scope(str, i, tostring(scopes["repeat"]), false)
-      final = final .. s
-   else
-      s, i = leval(str, i)
-      final = final .. s
    end
-   return s
+   return final
 end
 
 test = "((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"
 test2 = [[print ("a")
-io [ "write" ] ("\n")
+io ["write"] ("\n")
 do
 	print ("Hello World!")
 	local x , y = ((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1) , "test"
-	y = y [ "sub" ] (y, 1 , 2)
+	y = y ["sub"] (y , 1 , 2)
 	print (x)
 	print (y)
 end]]
 
 --print(peval("((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"))
-print(peval("(2 + print [\"x\"] (1 , \"Allo je m'appelle Jean!\" , 234 , alpha))"))
+file = io.open("unit-tests/test.lir", "w+")
+file:write(scope(test2, 0, "", false))
+file:close()
