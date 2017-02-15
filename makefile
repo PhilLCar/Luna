@@ -29,10 +29,13 @@ cleansubfiles:
 cleancompile: cleansubfiles
 	rm -f *.exe unit-tests/*.exe
 
-rapport: description.pdf cleansubfiles
+rapport:
+	for f in *.tex; do $(PDFLATEX) "$$f"; done
+	make cleansubfiles
 
 .tex.pdf:
 	$(PDFLATEX) $*.tex
+	make cleansubfiles
 
 help:
 	@echo "MAKE COMMANDS"

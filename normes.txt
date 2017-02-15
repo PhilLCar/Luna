@@ -1,0 +1,8 @@
+000	Integer
+001	Boolean
+010	String
+011	Table
+100	Function
+101	IO Object
+110	EMPTY
+111	EMPTY
