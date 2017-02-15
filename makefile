@@ -24,7 +24,7 @@ cleanrapport:
 	rm -f *.aux *.log *.pdf *.out
 
 cleansubfiles:
-	rm -f *.pp.lua *.lir *.out.s *.aux *.log unit-tests/*.s unit-tests/*.ir
+	rm -f *.pp.lua *.lir *.out.s *.aux *.log unit-tests/*.s unit-tests/*.lir
 
 cleancompile: cleansubfiles
 	rm -f *.exe unit-tests/*.exe

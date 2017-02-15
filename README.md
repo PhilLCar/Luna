@@ -16,4 +16,4 @@ peut-être consultée [en cliquant ici](https://github.com/PhilLCar/Luna/blob/ma
 
 RAPPORTS DE PROGRESSION
 ===================================================================================
-Pas de rapports pour le moment...
+1. [Rapport de la semaine 3] (https://github.com/PhilLCar/Luna/blob/master/rapport1.pdf)
