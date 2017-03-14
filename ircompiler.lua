@@ -210,7 +210,7 @@ function _eeval(str, forloop)
    token, i = nexttoken(str, i)
    if token == "local" or forloop then
       -- def/local mode
-      token, i = nexttoken(str, i)
+      if token == "local" then token, i = nexttoken(str, i) end
       while token and token ~= "=" do
 	 if token == "," then
 	    k = k + 1
@@ -286,7 +286,7 @@ function get(name)
 end
 
 function free()
-   local final
+   local final = ""
    place = place - stack[level]["size"]
    if stack[level]["size"] > 0 then
       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n"
@@ -296,12 +296,16 @@ function free()
    return final
 end
 
-function scope(str, i)
-   local final, s = ""
-   s, i = nexttoken(str, i)
+function alloc()
    level = level + 1
    stack[level] = {}
    stack[level]["size"] = 0
+end
+
+function scope(str, i)
+   local final, s = ""
+   s, i = nexttoken(str, i)
+   alloc()
    
    while s do
       
@@ -317,70 +321,54 @@ function scope(str, i)
 	 if s ~= "then" then
 	    print("error\n")
 	 end
-	 s, i = scope(str, i, 0)
+	 s, i = scope(str, i)
 	 final = final .. s .. free()
 	 s, i = nexttoken(str, i)
 	 while s == "elseif" do
+	    alloc()
 	    s, i = nexttoken(str, i)
 	    scopes["if"] = scopes["if"] + 1
-	    final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
+	    final = final .. "else\t" .. tostring(scopes["if"] - 1) .. "\n" ..
+	    "if\t" .. tostring(scopes["if"]) .. "\n" ..
 	    peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
 	    --- Assertion
 	    s, i = nexttoken(str, i)
 	    if s ~= "then" then
 	       print("error\n")
 	    end
-	    s, i = scope(str, i, 0)
+	    s, i = scope(str, i)
 	    final = final .. s .. free()
 	    s, i = nexttoken(str, i)
 	 end
 	 if s == "else" then
-	    s, i = nexttoken(str, i)
-	    final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
-	    peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-	    --- Assertion
-	    s, i = nexttoken(str, i)
-	    if s ~= "then" then
-	       print("error\n")
-	    end
-	    s, i = scope(str, i, 0)
+	    alloc()
+	    final = final .. "else\t" .. tostring(scopes["if"]) .. "\n"
+	    s, i = scope(str, i + 4)
 	    final = final .. s .. free()
-	    s, i = nexttoken(str, i)
 	 end
-	 final = final .. s .. "iend\t" .. tostring(scopes["if"]) .. "\n"
+	 for j = scopes["if"], count, -1 do
+	    final = final .. "iend\t" .. tostring(j) .. "\n"
+	 end
 
 	 
       elseif s == "elseif" then
-	 s, i = nexttoken(str, i)
-	 scopes["if"] = scopes["if"] + 1
-	 final = final .. free() .. "else\t" .. tostring(scopes["if"] - 1) .. "\nif\t" ..
-	 tostring(scopes["if"]) .. "\n" ..
-	 peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-	 --- Assertion
-	 s, i = nexttoken(str, i)
-	 if s ~= "then" then
-	    print("error\n")
-	 end
-	 s, i = scope(str, i, multi + 1)
-	 final = final .. s .. "iend\t" .. tostring(scopes["if"]) .. "\n"
+	 return final, i - 7
 
 	 
       elseif s == "else" then
-	 final = final .. free() .. "else\t" .. tostring(scopes["if"]) .. "\n"
-	 s, i = scope(str, i, multi + 1)
-	 final = final .. s
+	 return final, i - 7
 
 	 
       elseif s == "repeat" then
 	 scopes["repeat"] = scopes["repeat"] + 1
 	 final = final .. "repeat\t" .. tostring(scopes["repeat"]) .. "\n"
-	 s, i = scope(str, i, true))
-	 final = final .. s .. "rend\t" .. tostring(scopes["repeat"]) .. "\n"
+	 s, i = scope(str, i)
+	 final = final .. s .. free()
+	 s, i = nexttoken(str, i)
+	 final = final .. peval(s) .. "rend\t" .. tostring(scopes["repeat"]) .. "\n"
 
 	 
       elseif s == "until" then
-	 s, i = nexttoken(str, i)
-	 final = final .. free() .. peval(s) 
 	 return final, i
 
 	 
@@ -394,8 +382,8 @@ function scope(str, i)
 	 if s ~= "do" then
 	    print("error")
 	 end
-	 s, i = scope(str, i, true)
-	 final = final .. s .. "wend\t" .. tostring(scopes["while"]) .. "\n"
+	 s, i = scope(str, i)
+	 final = final .. s .. free() .. "wend\t" .. tostring(scopes["while"]) .. "\n"
 
 	 
       elseif s == "for" then
@@ -421,9 +409,6 @@ function scope(str, i)
 	    s, i = nexttoken(str, i)
 	 end
 	 ain = str:sub(j, i - 3)
-	 level = level + 1
-	 stack[level] = {}
-	 stack[level]["size"] = 0
 	 scopes["for"] = scopes["for"] + 1
 	 if bin then
 	    final = final .. "forin\t" .. tostring(scopes["for"]) .. "\n" ..
@@ -434,11 +419,13 @@ function scope(str, i)
 	    _eeval(args[0], true) .. peval(args[1]) .. "cond\n"
 	    if args[2] ~= nil then
 	       final = final .. peval(args[2])
+	    else
+	       final = final .. "int\t1\n"
 	    end
 	    final = final .. "fdo\t" .. tostring(scopes["for"]) .. "\n" 
 	 end
-	 s, i = scope(str, i, "fend\t" .. tostring(scopes["for"]) .. "\n", true)
-	 final = final .. s
+	 s, i = scope(str, i)
+	 final = final .. s .. free() .. "fend\t" .. tostring(scopes["for"]) .. "\n"
 	 
 	 --TODODODODODODODODODO
       elseif s == "function" then
@@ -454,17 +441,12 @@ function scope(str, i)
       elseif s == "do" then
 	 scopes["do"] = scopes["do"] + 1
 	 final = final .. "do\t" .. tostring(scopes["do"] .. "\n")
-	 level = level + 1
-	 stack[level] = {}
-	 stack[level]["size"] = 0
-	 s, i = scope(str, i, true)
-	 final = final .. s .. "dend\t" .. tostring(scopes["do"]) .. "\n"
+	 s, i = scope(str, i)
+	 final = final .. s .. free() .. "dend\t" .. tostring(scopes["do"]) .. "\n"
 
 	 
       elseif s == "end" then
-	 if multi ~= true and multi and multi > 0 then
-	    return final, i - 4
-	 else break end
+	 return final, i
 
 	 
       else
@@ -477,16 +459,8 @@ function scope(str, i)
       s, i = nexttoken(str, i)
    end
    
-   place = place - stack[level]["size"]
-   if stack[level]["size"] > 0 then
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n"
-   end
-   stack[level] = nil
-   level = level - 1
-   
-   if multi then
-      return final, i
-   else return final
+   free()
+   return final
 end
 
 test = "((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"
@@ -522,8 +496,8 @@ end]]
 
 --print(peval("((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"))
 file = io.open("unit-tests/test.lir", "w+")
-file:write(scope(test2, 0, "", false))
-print(scope(test2, 0, "", false))
+file:write(scope(test2, 0))
+print(scope(test2, 0))
 file:close()
 
 --[[
