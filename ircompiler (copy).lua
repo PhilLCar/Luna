@@ -285,119 +285,93 @@ function get(name)
    return false
 end
 
-function free()
-   local final
-   place = place - stack[level]["size"]
-   if stack[level]["size"] > 0 then
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n"
-   end
-   stack[level] = nil
-   level = level - 1
-   return final
-end
-
-function scope(str, i)
+function scope(str, i, multi)
    local final, s = ""
    s, i = nexttoken(str, i)
    level = level + 1
    stack[level] = {}
    stack[level]["size"] = 0
-   
    while s do
-      
       if s == "if" then
-	 local count
 	 s, i = nexttoken(str, i)
 	 scopes["if"] = scopes["if"] + 1
-	 count = scopes["if"]
-	 final = final .. "if\t" .. tostring(count) .. "\n" ..
-	 peval(s) .. "then\t" .. tostring(count) .. "\n"
-	 --- Assertion
+	 final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
+	 peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
 	 s, i = nexttoken(str, i)
 	 if s ~= "then" then
 	    print("error\n")
 	 end
 	 s, i = scope(str, i, 0)
-	 final = final .. s .. free()
+	 final = final .. s
 	 s, i = nexttoken(str, i)
-	 while s == "elseif" do
-	    s, i = nexttoken(str, i)
-	    scopes["if"] = scopes["if"] + 1
-	    final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
-	    peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-	    --- Assertion
-	    s, i = nexttoken(str, i)
-	    if s ~= "then" then
-	       print("error\n")
-	    end
-	    s, i = scope(str, i, 0)
-	    final = final .. s .. free()
-	    s, i = nexttoken(str, i)
-	 end
-	 if s == "else" then
-	    s, i = nexttoken(str, i)
-	    final = final .. "if\t" .. tostring(scopes["if"]) .. "\n" ..
-	    peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-	    --- Assertion
-	    s, i = nexttoken(str, i)
-	    if s ~= "then" then
-	       print("error\n")
-	    end
-	    s, i = scope(str, i, 0)
-	    final = final .. s .. free()
-	    s, i = nexttoken(str, i)
-	 end
-	 final = final .. s .. "iend\t" .. tostring(scopes["if"]) .. "\n"
-
-	 
       elseif s == "elseif" then
 	 s, i = nexttoken(str, i)
 	 scopes["if"] = scopes["if"] + 1
-	 final = final .. free() .. "else\t" .. tostring(scopes["if"] - 1) .. "\nif\t" ..
-	 tostring(scopes["if"]) .. "\n" ..
+	 place = place - stack[level]["size"]
+	 final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
+	 "else\t" .. tostring(scopes["if"] - 1) .. "\nif\t" .. tostring(scopes["if"]) .. "\n" ..
 	 peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-	 --- Assertion
-	 s, i = nexttoken(str, i)
-	 if s ~= "then" then
-	    print("error\n")
-	 end
-	 s, i = scope(str, i, multi + 1)
-	 final = final .. s .. "iend\t" .. tostring(scopes["if"]) .. "\n"
-
-	 
-      elseif s == "else" then
-	 final = final .. free() .. "else\t" .. tostring(scopes["if"]) .. "\n"
-	 s, i = scope(str, i, multi + 1)
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "iend\t" .. tostring(scopes["if"]) .. "\n", level)
 	 final = final .. s
-
-	 
-      elseif s == "repeat" then
-	 scopes["repeat"] = scopes["repeat"] + 1
-	 final = final .. "repeat\t" .. tostring(scopes["repeat"]) .. "\n"
-	 s, i = scope(str, i, true))
-	 final = final .. s .. "rend\t" .. tostring(scopes["repeat"]) .. "\n"
-
-	 
+	 s, i = nexttoken(str, i)
+      elseif s == "else" then
+	 place = place - stack[level]["size"]
+	 final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" ..
+	 "else\t" .. tostring(scopes["if"]) .. "\n"
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "", level)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+      elseif s == "end" then
+	 if fake == true or fake == false then
+	    place = place - stack[level]["size"]
+	    if fake then
+	       final = final .. name .. "free\t" .. tostring(stack[level]["size"]) .. "\n"
+	    else
+	       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n" .. name
+	    end
+	    stack[level] = nil
+	    level = level - 1
+	    return final, i
+	 else
+	    if level == fake then
+	    
+	    end
+	    final = final .. name
+	    if fake == 0 then
+	       return final, i
+	    else
+	       return final, i - 4
+	    end
+	 end
       elseif s == "until" then
 	 s, i = nexttoken(str, i)
-	 final = final .. free() .. peval(s) 
+	 place = place - stack[level]["size"]
+	 final = final .. peval(s) .. "rend\t" .. name .. "\n" .. "free\t"
+	    .. tostring(stack[level]["size"]) .. "\n"
+	 stack[level] = nil
+	 level = level - 1
 	 return final, i
-
-	 
       elseif s == "while" then
 	 s, i = nexttoken(str, i)
 	 scopes["while"] = scopes["while"] + 1
 	 final = final .. "while\t" .. tostring(scopes["while"]) .. "\n" ..
 	 peval(s) .. "wdo\t" .. tostring(scopes["while"]) .. "\n"
-	 --- Assertion
-	 s, i = nexttoken(str, i)
+	 -- ASSERT
+	 s, i = nexttoken(str, i) -- SHOULD BE "do"
 	 if s ~= "do" then
 	    print("error")
 	 end
-	 s, i = scope(str, i, true)
-	 final = final .. s .. "wend\t" .. tostring(scopes["while"]) .. "\n"
-
-	 
+	 level = level + 1
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, "wend\t" .. tostring(scopes["while"]) .. "\n", true)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
+	 -- TODODODODODODODODODODODODODODODODODODO
       elseif s == "for" then
 	 local j, k, args, bin, ain = i, 0, {}, false
 	 s, i = nexttoken(str, i)
@@ -439,7 +413,15 @@ function scope(str, i)
 	 end
 	 s, i = scope(str, i, "fend\t" .. tostring(scopes["for"]) .. "\n", true)
 	 final = final .. s
-	 
+      elseif s == "repeat" then
+	 scopes["repeat"] = scopes["repeat"] + 1
+	 final = final .. "repeat\t" .. tostring(scopes["repeat"]) .. "\n"
+	 level = level + 1
+	 stack[level] = {}
+	 stack[level]["size"] = 0
+	 s, i = scope(str, i, tostring(scopes["repeat"]), level)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
 	 --TODODODODODODODODODO
       elseif s == "function" then
 	 s, i = nexttoken(str, i)
@@ -449,44 +431,30 @@ function scope(str, i)
 	 stack[stack.level] = {}
 	 s, i = scope(str, i, tostring(scopes["repeat"]), level)
 	 final = final .. s
-
-	 
       elseif s == "do" then
 	 scopes["do"] = scopes["do"] + 1
 	 final = final .. "do\t" .. tostring(scopes["do"] .. "\n")
 	 level = level + 1
 	 stack[level] = {}
 	 stack[level]["size"] = 0
-	 s, i = scope(str, i, true)
-	 final = final .. s .. "dend\t" .. tostring(scopes["do"]) .. "\n"
-
-	 
-      elseif s == "end" then
-	 if multi ~= true and multi and multi > 0 then
-	    return final, i - 4
-	 else break end
-
-	 
+	 s, i = scope(str, i, "dend\t" .. tostring(scopes["do"]) .. "\n", false)
+	 final = final .. s
+	 s, i = nexttoken(str, i)
       else
 	 s, i = leval(str, i - #s - 1)
 	 if s then
 	    final = final .. s
+	    s, i = nexttoken(str, i)
 	 end
       end
-      
-      s, i = nexttoken(str, i)
    end
-   
    place = place - stack[level]["size"]
    if stack[level]["size"] > 0 then
       final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n"
    end
    stack[level] = nil
    level = level - 1
-   
-   if multi then
-      return final, i
-   else return final
+   return final
 end
 
 test = "((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"
