@@ -1,2 +1,4 @@
 #! /usr/bin/env lua
 
+dofile("preprocessor.lua")
+dofile("compiler.lua")
