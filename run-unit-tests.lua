@@ -2,28 +2,33 @@
 --  Pass   Fail   Unct     Progress                       234 / 352     Prct       Time
 --[    0 |    0 |    0 ]  [##############################----------]  [  68% ]  [ 312.7s ]
 
-function listdir(dir)
-   local proc, files, i = io.popen("ls " .. dir), {}, 0
+function listlua()
+   local proc, files, i = io.popen("ls ./unit-tests"), {}, 0
    for f in proc:lines() do
-      if f:find(".lua") and not f:find(".pp.lua") then
+      if f:find(".lua") and not f:find(".pp.lua") and not f:find(".lua~") then
 	 i = i + 1
-	 files[i] = f
+	 files[i] = "unit-tests/" .. f
       end
    end
    proc:close()
    return files
 end
 
-names = listdir("unit-tests")
-total = 57
-pass = 20
-fail = 8
-unkn = 12
-time = os.clock()
+function listexe()
+   local proc, files, i = io.popen("ls ./unit-tests"), {}, 0
+   for f in proc:lines() do
+      if f:find(".exe") then
+	 i = i + 1
+	 files[i] = "unit-tests/" .. f
+      end
+   end
+   proc:close()
+   return files
+end
 
 function progress()
    local completed, prop = pass + fail + unkn
-   io.write("  Pass   Fail   Unct     Progress                       " ..
+   io.write("  Pass   Fail   Unkn     Progress                       " ..
 	       string.format("%3d", completed) .. " / " ..
 	       string.format("%3d", total) .. "     Prct       Time\n")
    io.write("[ \27[1;38;5;47m" .. string.format("%4d", pass) ..
@@ -32,7 +37,7 @@ function progress()
 	       "\27[0m ]  [")
    prop = completed / total * 40
    for i = 1, 40 do
-      if (i < prop) then
+      if (i <= prop) then
 	 io.write("#")
       else
 	 io.write("-")
@@ -43,7 +48,72 @@ function progress()
    io.write("\27[2A\27[90D\r")
 end
 
-progress()
+function getexpresult(filename)
+   local file = io.open(filename, "r")
+   local line = file:read("line")
+   local ret = ""
+   while line ~= nil do
+      if line:sub(1, 2) == "--" then
+	 ret = ret .. line:sub(3, #line)
+	 line = file:read("line")
+	 if line ~= nil then
+	    ret = ret .. "\n"
+	 end
+      elseif line ~= "" then
+	 ret = ""
+      end
+      line = file:read("line")
+   end
+   file:close()
+   return ret
+end
+
+-- TESTING
+----------------------------------------
+names = listlua()
+total = #names
+pass = 0
+fail = 0
+unkn = 0
+time = os.clock()
+
 progress()
 
+for i = 1, #names do
+   -- Compile
+   local name = names[i]
+   os.execute("./luna " .. name .. " &> /dev/null")
+   local execs = listexe()
+   -- Execute
+   local sname, present = name:sub(1, #name - 4) .. ".exe", false
+   for i = 1, #execs do
+      if execs[i] == sname then
+	 present = true
+      end
+   end
+   if present then
+      local file = io.popen(sname)
+      local result = file:read("all")
+      --print(result)
+      file:close()
+      local expected = getexpresult(name)
+      --print(expected)
+      if result == expected then
+	 pass = pass + 1
+      else
+	 fail = fail + 1
+      end
+   else
+      unkn = unkn + 1
+   end
+   progress()
+end
+
 io.write("\27[2B\r")
+
+print()
+if pass == total then
+   print("ALL UNIT TESTS PASSED")
+else
+   print(tostring((fail + unkn) / total * 100) .. "% OF UNIT TESTS FAILED")
+end

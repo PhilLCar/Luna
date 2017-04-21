@@ -157,12 +157,10 @@ function push(value)
       end
       vpush(current())
    end
-   if value then
-      buf = "$" .. value
-   else
+   if not value then
       vpush(register())
-      buf = value
    end
+   buf = value
    return ret
 end
 
@@ -284,13 +282,18 @@ function translate(text)
       ---------------------------
       if instr == "int" then
 	 value = 8 * tonumber(value)
-	 ret = ret .. push(tostring(value))
+	 ret = ret .. push("$" .. tostring(value))
       elseif instr == "add" then
 	 ret = ret .. add()
       elseif instr == "ref" then
 	 ret = ret .. push(get(tonumber(value)))
       elseif instr == "var" then
-	 -- TBD
+	 -- TEMPORAIRE
+	 if value == "_print" then
+	    ret = ret .. "\tpush\t" .. get(0) .. "\n" ..
+	       "\tcall\tprint_lua\n\tcall\tprint_ret\n"
+	    vpush(register())
+	 end
       elseif instr == "sets" then
 	 base = realsize()
 	 target = tonumber(value) + base - 1
@@ -322,7 +325,7 @@ function translate(text)
 	    ret = ret .. "\tmov\t" .. o1 .. ", " .. o2 .. "\n"
 	 end
 	 modif = nil
-	 ret = ret .. free(realsize() - mbase - msize)
+	 ret = ret .. free(realsize() - mbase)
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))
       end

@@ -1,11 +1,13 @@
 #! /usr/bin/env lua
 
-file = arg[1]
-if file:sub(#file - 3, #file) == ".lua" then
-   file = file:sub(1, #file - 4)
+comp_file = arg[1]
+if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
+   comp_file = comp_file:sub(1, #comp_file - 4)
 end
-print(file)
 
-dofile("preprocessor.lua")
-dofile("compiler.lua")
-dofile("ir-compiler.lua")
+require("preprocessor")
+require("compiler")
+require("ir-compiler")
+-- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
+os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s " ..
+	      comp_file .. ".s -o " .. comp_file .. ".exe")

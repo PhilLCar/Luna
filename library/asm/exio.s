@@ -37,7 +37,10 @@ print_lua:
 #	jz	print_scmpair
 #	cmp	$7, %rax
 #	jz	print_scmproc
-	jmp	print_void
+	#	jmp	print_void
+	pop	%rax
+	popf
+	ret	$8
 
 # print_scmint fonction envoie une représentation décimale d'un entier scheme.
 # (les trois bits de gauche servent à identifier le type)
