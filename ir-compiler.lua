@@ -1,3 +1,6 @@
+-- Register information
+--------------------------------------------------------------------------------
+-- Registers (16)
 r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
       "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
 
@@ -13,6 +16,8 @@ u_cont = {  0,      0,      0,      0,      0,      0,      0,      0     }
 c = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%xmm0", "%xmm1",
       "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7" }
 
+-- Miscellaneous global variables
+--------------------------------------------------------------------------------
 intro =
    "\t.text\n" ..
    "\t.global\t_main\n" ..
@@ -24,10 +29,86 @@ outro =
    "\tmov\t$0, %rax\n" ..
    "\tret\n"
 
-function operation(instr)
-   return instr == "add"
+-- Internal structures and functions
+--------------------------------------------------------------------------------
+buf = false
+
+vstack = {}
+vsize  = 0
+
+rstack = {}
+rsize = 0
+-----------------------------------------
+function vpush(value)
+   vsize = vsize + 1
+   vstack[vsize] = value
 end
 
+function vpop()
+   local tmp = vstack[vsize]
+   vstack[vsize] = nil
+   vsize = vsize - 1
+   --tmp
+   if vsize < 0 then
+      print("ERROR")
+   end
+   return tmp
+end
+
+function vtop()
+   return vstack[vsize]
+end
+
+function vat(index)
+   return vstack[index]
+end
+
+function vfree(index)
+   index = vsize - index
+   for i = index + 1, vsize do
+      vstack[i] = nil
+   end
+   vsize = index
+end
+
+function realsize()
+   if buf then
+      return vsize + 1
+   end
+   return vsize
+end
+
+
+function rpush(value)
+   rsize = rsize + 1
+   rstack[rsize] = value
+end
+
+function rpop()
+   local tmp = rstack[rsize]
+   rstack[rsize] = nil
+   rsize = rsize - 1
+   return tmp
+end
+
+function rtop()
+   return rstack[rsize]
+end
+
+function rat(index)
+   return rstack[index]
+end
+
+function rfree(index)
+   index = rsize - index
+   for i = index + 1, rsize do
+      rstack[i] = nil
+   end
+   rsize = index
+end
+
+-- Register handling functions
+--------------------------------------------------------------------------------
 function available()
    return u_cont[u_reg] == 0
 end
@@ -42,47 +123,133 @@ function current()
    return u_name[u_reg - 1]
 end
 
+function future()
+   return u_name[u_reg]
+end
+
 function release()
    u_reg = (u_reg - 1) % u_size
    u_cont[u_reg] = u_cont[u_reg] - 1
    return u_name[u_reg]
 end
-   
 
---[[ FLAG VALUES
-   0 : int
-   1 : stack
-   2 : register
-   3 : closure
-]]
-function push(value, flag)
-   local s = ""
-   if flag == 0 then --INT
-      value = "$" .. value
-      if available() then
-	 s = "\tmov\t" .. value .. ", " .. register() .. "\n"
-      else
-	 local r = register()
-	 s = "\tpush\t" .. r .. "\n" ..
-	    "\tmov\t" .. value .. ", " .. r .. "\n"
+function replace()
+   local n = u_name[u_reg]
+   rpush(n)
+   for i = 1, vsize do
+      if vstack[i] == n then
+	 vstack[i] = n
       end
-   elseif flag == 2 then
-      
    end
-   return s
+   return "\tpush\t" .. n .. "\n"
 end
 
-function add(value)
-   local s = ""
-   if value then --INT
-      value = "$" .. value
-      s = "\tadd\t" .. value .. ", " .. current() .. "\n"
+-- *** Operating functions ***
+--------------------------------------------------------------------------------
+function push(value)
+   local ret = ""
+   if buf then
+      if available() then
+	 ret = "\tmov\t" .. buf .. ", " .. register() .. "\n"
+      else
+	 ret = replace()
+	 ret = ret .. "\tmov\t" .. buf .. ", " .. register() .. "\n"
+      end
+      vpush(current())
+   end
+   if value then
+      buf = "$" .. value
    else
-      s = "\tadd\t" .. release() .. ", " .. current() .. "\n"
+      vpush(register())
+      buf = value
    end
-   return s
+   return ret
 end
 
+function pop()
+   local top, ret = vtop(), ""
+   if type(top) == "number" then
+      if top == rsize then
+	 buf = rpop()
+	 ret = "\tpop\t" .. buf .. "\n"
+	 vpop()
+      else
+	 buf = rat(top)
+	 ret = "\tmov\t" .. tostring(8 * (rsize - top)) .. "(%rsp), " .. buf .. "\n"
+	 vpop()
+      end
+   else
+      buf = vpop()
+   end
+   release()
+   return ret
+end
+
+function free(index)
+   if index == 0 then return "" end
+   if buf then
+      buf = false
+      index = index - 1
+      if index == 0 then return "" end
+   end
+   for i = vsize - index + 1, vsize do
+      vstack[i] = nil
+      release()
+   end
+   vsize = vsize - index
+   return restore()
+end
+
+function restore()
+   local max, ret = 0, ""
+   if (vsize + 1) % u_size ~= u_reg then
+      print("Stack corruption")
+   end
+   for i = 1, vsize do
+      if type(vstack[i]) == "number" then
+	 if vstack[i] > max then
+	    max = vstack[i]
+	 end
+      end
+   end
+   for i = max + 1, rsize do
+      rstack[i] = nil
+   end
+   if rsize - max ~= 0 then
+      ret = "\tadd\t$" .. tostring((rsize - max) * 8) .. ", %rsp\n"
+   end
+   rsize = max
+   return ret
+end
+
+function get(index)
+   if buf then
+      if index == 0 then
+	 return buf
+      else
+	 index = index - 1
+      end
+   end
+   local val = vat(vsize - index)
+   if type(val) == "string" then
+      return val
+   else
+      return tostring(8 * (rsize - val)) .. "(%rsp)"
+   end
+end
+
+function add()
+   local ret = ""
+   if not buf then
+      ret = pop()
+   end
+   ret = ret .. "\tadd\t" .. buf .. ", " .. vtop() .. "\n"
+   buf = false
+   return ret
+end
+
+-- Parsing functions
+--------------------------------------------------------------------------------
 function readline(str, i)
    if i > #str then
       return false, i
@@ -107,47 +274,70 @@ function separate(instr)
    return ret, instr:sub(i + 1, #instr)
 end
 
+---------- PROGRAM ----------
 function translate(text)
    local ret, buf = intro, false
    local s, i = readline(text, 1)
-   local instr, value = separate(s)
-   local nins, nval
-   s, i = readline(text, i)
-   if s then
-      nins, nval = separate(s)
-   else
-      nins, nval = nil, nil
-   end
-   while instr do
+   local instr, value
+   while s do
+      instr, value = separate(s)
+      ---------------------------
       if instr == "int" then
-	 if operation(nins) then
-	    buf = value
-	 else
-	    ret = ret .. push(value, 0)
-	 end
+	 value = 8 * tonumber(value)
+	 ret = ret .. push(tostring(value))
       elseif instr == "add" then
-	 ret = ret .. add(buf)
-	 buf = false
-      else
+	 ret = ret .. add()
+      elseif instr == "ref" then
+	 ret = ret .. push(get(tonumber(value)))
+      elseif instr == "var" then
+	 -- TBD
+      elseif instr == "sets" then
+	 base = realsize()
+	 target = tonumber(value) + base - 1
+      elseif instr == "stack" then
+	 for i = realsize(), target do
+	    ret = ret .. push(false)
+	 end
+      elseif instr == "modif" then
+	 modif = {}
+	 msize = tonumber(value)
+	 mbase = realsize()
+	 for j = 1, msize do
+	    s, i = readline(text, i)
+	    instr, value = separate(s)
+	    if instr == "ref" then
+	       modif[j] = tonumber(value)
+	    elseif instr == "var" then
+	       -- TBD
+	    end
+	 end
+      elseif instr == "place" then
+	 local o1, o2
+	 for j = 1, msize do
+	    o1 = get(vsize - j - mbase)
+	    o2 = get(realsize() - mbase + modif[j])
+	    if (o1:sub(1, 1) ~= "%" or o1:sub(1, 1) ~= "$") and o2:sub(1, 1) ~= "%" then
+	       o1 = o1 .. ", %rax\n\tmov\t%rax"
+	    end
+	    ret = ret .. "\tmov\t" .. o1 .. ", " .. o2 .. "\n"
+	 end
+	 modif = nil
+	 ret = ret .. free(realsize() - mbase - msize)
+      elseif instr == "free" then
+	 ret = ret .. free(tonumber(value))
       end
-      
-      instr, value = nins, nval
+      ---------------------------
       s, i = readline(text, i)
-      if s then
-	 nins, nval = separate(s)
-      else
-	 nins, nval = nil, nil
-      end
    end
    return ret .. outro
 end
 
-file = io.open("unit-tests/simple_add2.lir", "r")
-test = file:read("all")
+--------------------------------------------------------------------------------
+
+local file = io.open(comp_file .. ".lir", "r")
+text = file:read("all")
 file:close()
-print(translate(test))
---[[
-file = io.open("unit-tests/simple_add2.lir", "w+")
-file:write(scope(test, 0))
-   file:close()]]
+file = io.open(comp_file .. ".s", "w+")
+file:write(translate(text))
+file:close()
 

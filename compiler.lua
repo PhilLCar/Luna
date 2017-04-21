@@ -2,7 +2,7 @@ stack = {}
 level = 1
 place = 0
 stack[level] = {}
-stack[level]["size"] = 0
+stack[level]["-"] = 0
 
 scopes = {}
 scopes["if"] = 0
@@ -148,6 +148,7 @@ function peval(str)
 	 final = final .. peval(s:sub(2, #s - 1)) .. "index\n"
 	 call = true
       elseif isNum(s) then
+	 stackup()
 	 final = final .. "int\t" .. s .. "\n"
 	 k = k + 1
 	 call = false
@@ -159,18 +160,22 @@ function peval(str)
 	 end
 	 call = false
       elseif isString(s) then
+	 stackup()
 	 final = final .. "string\t" .. s .. "\n"
 	 k = k + 1
 	 call = false
       elseif s == "true" or s == "false" then
+	 stackup()
 	 final = final .. "bool\t" .. s .. "\n"
 	 k = k + 1
 	 call = false
       else
 	 call = get(s)
 	 if call then
+	    stackup()
 	    final = final .. "ref\t" .. tostring(call) .. "\n"
 	 else
+	    stackup()
 	    final = final .. "var\t" .. s .. "\n"
 	 end
 	 k = k + 1
@@ -179,6 +184,7 @@ function peval(str)
    end
    if ops[op] then
       final = final .. ops[op] .. "\n"
+      stackdown()
    end
    return final
 end
@@ -201,12 +207,22 @@ function feval(str)
    return "args\t" .. tostring(k) .. "\n" .. final .. "call\n"
 end
 
+function stackup()
+   place = place + 1
+   stack[level]["-"] = stack[level]["-"] + 1
+end
+
+function stackdown()
+   place = place - 1
+   stack[level]["-"] = stack[level]["-"] - 1
+end
+
 function eeval(str)
    return _eeval(str, false)
 end
 
 function _eeval(str, forloop)
-   local i, j, k, final, token = 0, 0, 1, ""
+   local i, j, k, final, token, tmp = 0, 0, 1, ""
    token, i = nexttoken(str, i)
    if token == "local" or forloop then
       -- def/local mode
@@ -216,11 +232,12 @@ function _eeval(str, forloop)
 	    k = k + 1
 	 else
 	    place = place + 1
-	    stack[level]["size"] = stack[level]["size"] + 1
+	    stack[level]["-"] = stack[level]["-"] + 1
 	    stack[level][token] = place
 	 end
 	 token, i = nexttoken(str, i)
       end
+      tmp = stack[level]["-"]
       final = "sets\t" .. tostring(k) .. "\n" .. final
       j = 0
       while j <= k do
@@ -231,6 +248,7 @@ function _eeval(str, forloop)
 	    j = j + 1
 	 end
       end
+      stack[level]["-"] = tmp
       return final .. "stack\n"
    else
       -- access/global mode
@@ -247,6 +265,7 @@ function _eeval(str, forloop)
 	 end
 	 token, i = nexttoken(str, i)
       end
+      tmp = stack[level]["-"]
       final = "modif\t" .. tostring(k) .. "\n" .. final
       j = 0
       while j <= k do
@@ -257,6 +276,7 @@ function _eeval(str, forloop)
 	    j = j + 1
 	 end
       end
+      stack[level]["-"] = tmp
       return final .. "place\n"
    end
 end
@@ -279,7 +299,7 @@ function get(name)
    for i = level, 1, -1 do
       s = stack[i][name]
       if s then
-	 return place - s
+	 return place - s - 1
       end
    end
    return false
@@ -287,9 +307,9 @@ end
 
 function free()
    local final = ""
-   place = place - stack[level]["size"]
-   if stack[level]["size"] > 0 then
-      final = final .. "free\t" .. tostring(stack[level]["size"]) .. "\n"
+   place = place - stack[level]["-"]
+   if stack[level]["-"] > 0 then
+      final = final .. "free\t" .. tostring(stack[level]["-"]) .. "\n"
    end
    stack[level] = nil
    level = level - 1
@@ -299,7 +319,7 @@ end
 function alloc()
    level = level + 1
    stack[level] = {}
-   stack[level]["size"] = 0
+   stack[level]["-"] = 0
 end
 
 function scope(str, i)
@@ -459,55 +479,13 @@ function scope(str, i)
       s, i = nexttoken(str, i)
    end
    
-   free()
-   return final
+   return final .. free()
 end
 
-test = "((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"
-test2 = [[print ("a")
-io ["write"] ("\n")
-do
-	print ("Hello World!")
-	local x , y = ((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1) , "test"
-	y = y ["sub"] (y , 1 , 2)
-        if (1 == 2) then
-                 x = 3
-        elseif (1 == 3) then
-                 x = 1
-        elseif (1 == 4) then
-                 x = 1
-        else
-                 x = 2
-        end
-        repeat
-                 x = 1
-        until (x == 1)
-        while (y == "test") do
-                 y = 0
-        end
-        for i = 0 , 10 , 1 do
-                 x = i
-        end
-        for i , j in ipairs (y) do
-        end
-        function test (a, ...)
-                 x = a
-        end
-	print (x)
-	print (y)
-end]]
-
---print(peval("((((2 + 3) - (((4 * (- 4)) ^ 5) ^ 9)) > 2) and 1)"))
-file = io.open("unit-tests/simple_add2.pp.lua", "r")
-test = file:read("all")
+local file = io.open(comp_file .. ".pp.lua", "r")
+local text = file:read("all")
 file:close()
-file = io.open("unit-tests/simple_add2.lir", "w+")
-file:write(scope(test, 0))
---print(scope(test2, 0))
+file = io.open(comp_file .. ".lir", "w+")
+file:write(scope(text, 0))
 file:close()
 
---[[
-        elseif (1 == 3) then
-                 x = 1
-        elseif (1 == 4) then
-                 x = 1]]

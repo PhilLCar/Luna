@@ -389,21 +389,9 @@ function parenthesize(str)
    return nstr
 end
 
---[[
-if arg[1] == nil then
-   arg[1] = "test"
-end
-
-file = io.open(arg[1] ..  ".lua", "r")
-text = file:read("all")
+local file = io.open(comp_file .. ".lua", "r")
+local text = file:read("all")
 file:close()
-file = io.open(arg[1] .. ".pp.lua", "w+")
-file:write(parenthesize(rmComments(text)))
-file.close()
-]]
-file = io.open("unit-tests/simple_add2.lua", "r")
-text = file:read("all")
-file:close()
-file = io.open("unit-tests/simple_add2.pp.lua", "w+")
+file = io.open(comp_file .. ".pp.lua", "w+")
 file:write(parenthesize(rmComments(text)))
 file:close()

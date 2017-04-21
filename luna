@@ -1,4 +1,11 @@
 #! /usr/bin/env lua
 
+file = arg[1]
+if file:sub(#file - 3, #file) == ".lua" then
+   file = file:sub(1, #file - 4)
+end
+print(file)
+
 dofile("preprocessor.lua")
 dofile("compiler.lua")
+dofile("ir-compiler.lua")
