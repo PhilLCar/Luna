@@ -246,6 +246,16 @@ function add()
    return ret
 end
 
+function sub()
+   local ret = ""
+   if not buf then
+      ret = pop()
+   end
+   ret = ret .. "\tsub\t" .. buf .. ", " .. vtop() .. "\n"
+   buf = false
+   return ret
+end
+
 -- Parsing functions
 --------------------------------------------------------------------------------
 function readline(str, i)
@@ -285,6 +295,8 @@ function translate(text)
 	 ret = ret .. push("$" .. tostring(value))
       elseif instr == "add" then
 	 ret = ret .. add()
+      elseif instr == "sub" then
+	 ret = ret .. sub()
       elseif instr == "ref" then
 	 ret = ret .. push(get(tonumber(value)))
       elseif instr == "var" then

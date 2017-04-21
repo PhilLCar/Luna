@@ -15,10 +15,11 @@ all: stdio.o
 
 test: ut
 
-ut: @echo "not implemented yet"
+ut:
+	./run-unit-tests.lua
 
 clean: cleanrapport
-	rm -f *.o *.ir *.exe *.out.s *~ unit-tests/*.s unit-tests/*.exe unit-tests/*~ unit-tests/*.ir
+	rm -f *.o *.ir *.exe *.out.s *~ unit-tests/*.s unit-tests/*.exe unit-tests/*~ unit-tests/*.lir unit-tests/*.pp.lua
 
 cleanrapport:
 	rm -f *.aux *.log *.pdf *.out

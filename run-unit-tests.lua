@@ -76,6 +76,8 @@ pass = 0
 fail = 0
 unkn = 0
 time = os.clock()
+failed = {}
+fsize = 0
 
 progress()
 
@@ -102,9 +104,13 @@ for i = 1, #names do
 	 pass = pass + 1
       else
 	 fail = fail + 1
+	 fsize = fsize + 1
+	 failed[fsize] = sname
       end
    else
       unkn = unkn + 1
+      fsize = fsize + 1
+      failed[fsize] = name
    end
    progress()
 end
@@ -115,5 +121,9 @@ print()
 if pass == total then
    print("ALL UNIT TESTS PASSED")
 else
-   print(tostring((fail + unkn) / total * 100) .. "% OF UNIT TESTS FAILED")
+   print(tostring(string.format("%.1f", (fail + unkn) / total * 100))
+	    .. "% OF UNIT TESTS FAILED:")
+   for i = 1, fsize do
+      print("\t- " .. failed[i])
+   end
 end
