@@ -4,13 +4,13 @@
 r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
       "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
 
--- Reserved: %rax, %rsp
+-- Reserved: %rax, %rsp, %rbp
 
--- Usable registers (8)
+-- Usable registers (7)
 u_reg  = 1
-u_size = 8
-u_name = { "%rbx", "%rbp", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
-u_cont = {  0,      0,      0,      0,      0,      0,      0,      0     }
+u_size = 7
+u_name = { "%rbx", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
+u_cont = {  0,      0,      0,      0,      0,      0,      0     }
 
 -- Calling registers (14)
 c = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%xmm0", "%xmm1",
@@ -23,11 +23,24 @@ intro =
    "\t.global\t_main\n" ..
    "\t.global\tmain\n" ..
    "_main:\n" ..
-   "main:\n"
+   "main:\n" ..
+   "\txor\t%rbx, %rbx\n" ..
+   "\tmov\t$134217728, %rax\n" ..
+   --"\tmov\t%rax, _mem_size(%rip)\n" ..
+   "\tpush\t%rax\n" ..
+   "\tcall\tmmap\n" ..
+   "\tmov\t%rax, %rbp\n" 
+   --"\tmov\t%rbp, _mem_base(%rip)\n" ..
+   --"\tmov\t%rsp, _stack_base(%rip)\n"
 
 outro =
    "\tmov\t$0, %rax\n" ..
    "\tret\n"
+
+need_data = false
+data =
+   "\n\n################################################################################\n" ..
+   ".data\n\n"
 
 -- Internal structures and functions
 --------------------------------------------------------------------------------
@@ -76,6 +89,26 @@ function realsize()
       return vsize + 1
    end
    return vsize
+end
+
+function flatten()
+   if buf then
+      local r, ret = register()
+      vsize = vsize + 1
+      vstack[vsize] = r
+      ret = "\tmov\t" .. buf .. ", " .. r .. "\n"
+      buf = false
+      return ret
+   end
+   return ""
+end
+
+function fillbuf()
+   if not buf then
+      buf = vstack[vsize]
+      vstack[vsize] = nil
+      vsize = vsize - 1
+   end
 end
 
 
@@ -256,6 +289,34 @@ function sub()
    return ret
 end
 
+notcount = 0
+function nt()
+   notcount = notcount + 1
+   local ret, addr = "", tostring(notcount)
+   if buf then
+      ret = flatten()
+   end
+   ret = ret .. "\tcmp\t$1, " .. vtop() .. "\n" ..
+      "\tjz\tnot" .. addr .. "\n" ..
+      "\tmov\t$1, " .. vtop() .. "\n" ..
+      "\tjmp\tnt" .. addr .. "\n" ..
+      "not" .. addr .. ":\tmov\t$9, " .. vtop() .. "\n" ..
+      "nt" .. addr .. ":"
+   return ret
+end
+
+stringcount = 0
+function st(value)
+   local ret = flatten()
+   need_data = true
+   stringcount = stringcount + 1
+   data = data .. "string" .. tostring(stringcount) .. ":\n" ..
+      "\t.asciz\t" .. value .. "\n"
+   vpush(register())
+   return ret .. "\tlea\tstring" .. tostring(stringcount) .. "(%rip), " .. vtop() .. "\n" ..
+      "\tlea\t2(, " .. vtop() .. ", 8), " .. vtop() .. "\n"
+end
+
 -- Parsing functions
 --------------------------------------------------------------------------------
 function readline(str, i)
@@ -284,7 +345,7 @@ end
 
 ---------- PROGRAM ----------
 function translate(text)
-   local ret, buf = intro, false
+   local ret = intro
    local s, i = readline(text, 1)
    local instr, value
    while s do
@@ -293,10 +354,20 @@ function translate(text)
       if instr == "int" then
 	 value = 8 * tonumber(value)
 	 ret = ret .. push("$" .. tostring(value))
+      elseif instr == "bool" then
+	 if value == true then
+	    ret = ret .. push("$9")
+	 else
+	    ret = ret .. push("$1")
+	 end
+      elseif instr == "string" then
+	 ret = ret .. st(value)
       elseif instr == "add" then
 	 ret = ret .. add()
       elseif instr == "sub" then
 	 ret = ret .. sub()
+      elseif instr == "not" then
+	 ret = ret .. nt()
       elseif instr == "ref" then
 	 ret = ret .. push(get(tonumber(value)))
       elseif instr == "var" then
@@ -310,6 +381,9 @@ function translate(text)
 	 base = realsize()
 	 target = tonumber(value) + base - 1
       elseif instr == "stack" then
+	 if buf then
+	    ret = ret .. flatten()
+	 end
 	 for i = realsize(), target do
 	    ret = ret .. push(false)
 	 end
@@ -327,6 +401,7 @@ function translate(text)
 	    end
 	 end
       elseif instr == "place" then
+	 print(ret)
 	 local o1, o2
 	 for j = 1, msize do
 	    o1 = get(vsize - j - mbase)
@@ -341,10 +416,21 @@ function translate(text)
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))
       end
+      --printv(instr)
       ---------------------------
       s, i = readline(text, i)
    end
+   if need_data then
+      outro = outro .. data
+   end
    return ret .. outro
+end
+
+--- TEMP ---
+function printv(text)
+   for i = 1, #vstack do
+      print(text .. ": " .. vstack[i])
+   end
 end
 
 --------------------------------------------------------------------------------

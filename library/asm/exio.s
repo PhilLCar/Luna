@@ -62,8 +62,6 @@ print_int:
 
 print_bool:
 
-	push	$'#'
-	call	putchar
 	mov	24(%rsp), %rax		#Gets the bool value
 	cmp	$1, %rax		#The literal value 1 is false
 	je	print_bool_false
@@ -72,13 +70,15 @@ print_bool:
 	# (none for now)
 ################################################
 	
-print_scmbool_true:
+print_bool_true:
 	lea	string_true(%rip), %rax
+	push	%rax
 	call 	print_string
 	jmp 	print_bool_end
 	
 print_bool_false:
 	lea	string_false(%rip), %rax
+	push	%rax
 	call 	print_string
 	
 print_bool_end:
@@ -92,7 +92,6 @@ print_str:
 
 	mov	24(%rsp), %rax
 	sar	$3, %rax
-	add	$8, %rax
 	push	%rax
 	call	print_string
 	pop	%rax

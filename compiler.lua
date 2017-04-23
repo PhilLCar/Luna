@@ -37,21 +37,23 @@ function isOperator(str)
 end
 
 ops = {}
-ops["+"] = "add"
-ops["-"] = "sub"
-ops["--"] = "neg"
-ops["*"] = "mul"
-ops["/"] = "div"
-ops["^"] = "exp"
-ops[".."] = "concat"
-ops[">"] = "gt"
-ops["<"] = "lt"
-ops[">="] = "gte"
-ops["<="] = "lte"
-ops["=="] = "eq"
-ops["~="] = "neq"
+ops["+"]   = "add"
+ops["-"]   = "sub"
+ops["--"]  = "neg"
+ops["*"]   = "mul"
+ops["/"]   = "div"
+ops["^"]   = "exp"
+ops[".."]  = "concat"
+ops[">"]   = "gt"
+ops["<"]   = "lt"
+ops[">="]  = "gte"
+ops["<="]  = "lte"
+ops["=="]  = "eq"
+ops["~="]  = "neq"
 ops["and"] = "and"
-ops["or"] = "or"
+ops["or"]  = "or"
+ops["not"] = "not"
+ops["~"]   = "inv"
 
 function isNum(str)
    local s = str:byte(1, 1)
@@ -184,7 +186,9 @@ function peval(str)
    end
    if ops[op] then
       final = final .. ops[op] .. "\n"
-      stackdown()
+      if op ~= "~" or op ~= "--" or op ~= "not" then
+	 stackdown()
+      end
    end
    return final
 end

@@ -51,7 +51,7 @@ end
 
 function isOperator(str)
    ops = { "^", "-", "*", "/", "[[", "]]", "+", "..", ">", "<", ">=", "<=", "~=", "==",
-	   "=", ":", ".", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
+	   "~", "=", ":", ".", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -278,10 +278,10 @@ function filter(str)
       end
    end
    astr = clean(astr)
-   -- Priority level 2 - Unary: - not [left-associative]
+   -- Priority level 2 - Unary: ~ - not [left-associative]
    mem = true
    for i = 1, #astr - 1 do
-      if mem and (astr[i] == "-" or astr[i] == "not") then
+      if mem and (astr[i] == "-" or astr[i] == "not" or astr[i] == "~") then
 	 astr[i + 1] = "(" .. astr[i] .. " " .. astr[i + 1] .. ")"
 	 astr[i] = nil
 	 mem = false
