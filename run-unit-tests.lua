@@ -1,6 +1,4 @@
 #! /usr/bin/env lua
---  Pass   Fail   Unct     Progress                       234 / 352     Prct       Time
---[    0 |    0 |    0 ]  [##############################----------]  [  68% ]  [ 312.7s ]
 
 function listlua()
    local proc, files, i = io.popen("ls ./unit-tests"), {}, 0
@@ -26,6 +24,13 @@ function listexe()
    return files
 end
 
+function gettime()
+   local file = io.popen("date +%s%N")
+   local ret = tonumber(file:read("all"))
+   file:close()
+   return ret
+end
+
 function progress()
    local completed, prop = pass + fail + unkn
    io.write("  Pass   Fail   Unkn     Progress                       " ..
@@ -44,7 +49,7 @@ function progress()
       end
    end
    io.write("]  [ " .. string.format("%3.0f", prop / 40 * 100) .. "% ]  [ " ..
-	       string.format("%5.1fs ]\n", os.clock() - time))
+	       string.format("%5.1fs ]\n", (gettime() - time) / 1000000000))
    io.write("\27[2A\27[90D\r")
 end
 
@@ -59,10 +64,13 @@ function getexpresult(filename)
 	 if line ~= nil then
 	    ret = ret .. "\n"
 	 end
+	 
       elseif line ~= "" then
 	 ret = ""
+	 line = file:read("line")
+      else
+	 line = file:read("line")
       end
-      line = file:read("line")
    end
    file:close()
    return ret
@@ -75,7 +83,7 @@ total = #names
 pass = 0
 fail = 0
 unkn = 0
-time = os.clock()
+time = gettime()
 failed = {}
 fsize = 0
 
@@ -96,10 +104,8 @@ for i = 1, #names do
    if present then
       local file = io.popen(sname)
       local result = file:read("all")
-      --print(result)
       file:close()
       local expected = getexpresult(name)
-      --print(expected)
       if result == expected then
 	 pass = pass + 1
       else

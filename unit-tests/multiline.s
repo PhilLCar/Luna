@@ -21,5 +21,5 @@ main:
 .data
 
 string1:
-	.quad	32
-	.asciz	"test"
+	.quad	352
+	.asciz	"Test :\n      - Element 1\n      - Element 2"

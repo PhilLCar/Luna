@@ -86,12 +86,13 @@ print_bool_end:
         popf
         ret     $8    #Return and pop parameter
 
-# print_scmstring permet d'imprimer un string situé dans le heap
+# print_str permet d'imprimer un string situé dans le heap
 
 print_str:
 
 	mov	24(%rsp), %rax
 	sar	$3, %rax
+	add	$8, %rax
 	push	%rax
 	call	print_string
 	pop	%rax

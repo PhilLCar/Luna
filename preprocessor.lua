@@ -51,7 +51,7 @@ end
 
 function isOperator(str)
    ops = { "^", "-", "*", "/", "[[", "]]", "+", "..", ">", "<", ">=", "<=", "~=", "==",
-	   "~", "=", ":", ".", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
+	   "~", "#", "=", ":", ".", "[", "]", "{", "}", ",", ";", "\"", "(", ")", "..." }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -175,7 +175,14 @@ function rmSelf(str)
 	 s = str:sub(i, i)
 	 spc = true
       end
-      if s == ":" then
+      if s == "\"" then
+	 repeat
+	   nstr = nstr .. s
+	   i = i + 1
+	   s = str:sub(i, i)
+	 until s == "\""
+	 nstr = nstr .. s
+      elseif s == ":" then
 	 nstr = nstr .. "."
 	 repeat
 	    i = i + 1
@@ -198,7 +205,15 @@ function rmDot(str)
    while i <= #str do
       i = i + 1
       s = str:sub(i, i + 2)
-      if s == "..." then
+      if s:sub(1, 1) == "\"" then
+	 s = s:sub(1, 1)
+	 repeat
+	   nstr = nstr .. s
+	   i = i + 1
+	   s = str:sub(i, i)
+	 until s == "\""
+	 nstr = nstr .. s
+      elseif s == "..." then
 	 nstr = nstr .. s
 	 i = i + 2
       elseif s:sub(1, 2) == ".." then
@@ -278,10 +293,10 @@ function filter(str)
       end
    end
    astr = clean(astr)
-   -- Priority level 2 - Unary: ~ - not [left-associative]
+   -- Priority level 2 - Unary: ~ - not # [left-associative]
    mem = true
    for i = 1, #astr - 1 do
-      if mem and (astr[i] == "-" or astr[i] == "not" or astr[i] == "~") then
+      if mem and (astr[i] == "-" or astr[i] == "not" or astr[i] == "~" or astr[i] == "#") then
 	 astr[i + 1] = "(" .. astr[i] .. " " .. astr[i + 1] .. ")"
 	 astr[i] = nil
 	 mem = false
@@ -389,9 +404,70 @@ function parenthesize(str)
    return nstr
 end
 
+function rmMultiline(str)
+   local parent, enter = 0, false
+   local ret, i = "", 1
+   while i <= #str do
+      local x = str:sub(i, i)
+      if str:sub(i, i + 1) == "[[" then
+	 i = i + 2
+	 ret = ret .. "\""
+	 while str:sub(i, i + 1) ~= "]]" do
+	    x = str:sub(i, i)
+	    if x == "\n" then
+	       ret = ret .. "\\n"
+	    elseif x == "\n" then
+	       ret = ret .. "\\t"
+	    else
+	       ret = ret .. x
+	    end
+	    i = i + 1
+	 end
+	 i = i + 1
+	 ret = ret .. "\""
+      elseif x == "\'" then
+	 repeat
+	    if x == "\"" then
+	       ret = ret .. "\\\""
+	    elseif x ~= "\t" or x ~= "\n" then
+	       ret = ret .. x
+	    end
+	    i = i + 1
+	    x = str:sub(i, i)
+	 until x == "\'"
+	 ret = ret .. x
+      elseif x == "\"" then
+	 repeat
+	    if x ~= "\t" or x ~= "\n" then
+	       ret = ret .. x
+	    end
+	    i = i + 1
+	    x = str:sub(i, i)
+	 until x == "\""
+	 ret = ret .. x
+      elseif x == "(" or x == "{" or x == "[" then
+	 parent = parent + 1
+	 enter = true
+	 ret = ret .. x
+      elseif x == ")" or x == "}" or x == "]" then
+	 parent = parent - 1
+	 enter = parent ~= 0
+	 ret = ret .. x
+      elseif enter then
+	 if x ~= "\n" then
+	    ret = ret .. x
+	 end
+      else
+	 ret = ret .. x
+      end
+      i = i + 1
+   end
+   return ret
+end
+   
 local file = io.open(comp_file .. ".lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open(comp_file .. ".pp.lua", "w+")
-file:write(parenthesize(rmComments(text)))
+file:write(parenthesize(rmMultiline(rmComments(text))))
 file:close()

@@ -27,7 +27,7 @@ end
 --duplicate!!!
 function isOperator(str)
    local ops = { "^", "-", "*", "/", "+", "..", ">", "<", ">=", "<=", "~=", "==",
-		 "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")" }
+		 "~", "#", "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")" }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -54,6 +54,7 @@ ops["and"] = "and"
 ops["or"]  = "or"
 ops["not"] = "not"
 ops["~"]   = "inv"
+ops["#"]   = "len"
 
 function isNum(str)
    local s = str:byte(1, 1)
@@ -71,6 +72,10 @@ end
 
 function isBracketed(str)
    return str:sub(1, 1) == "[" --and str:sub(#str, #str) == "]"
+end
+
+function isAccolade(str)
+   return str:sub(1, 1) == "{" --and str:sub(#str, #str) == "]"
 end
 
 function nexttoken(str, i)
@@ -92,6 +97,19 @@ function nexttoken(str, i)
 	    if s == "(" then
 	       j = j + 1
 	    elseif s == ")" then
+	       j = j - 1
+	    end
+	 until i > #str or j == 0
+      elseif s == "{" then
+	 j = 1
+	 word = word .. s
+	 repeat
+	    i = i + 1
+	    s = str:sub(i, i)
+	    word = word .. s
+	    if s == "{" then
+	       j = j + 1
+	    elseif s == "}" then
 	       j = j - 1
 	    end
 	 until i > #str or j == 0
@@ -134,6 +152,7 @@ end
 
 function peval(str)
    local i, k, s, op, final, call = 0, 0, "", "", "", false
+   local func = false
    while i <= #str do
       s, i = nexttoken(str, i)
       if not s then break
@@ -141,6 +160,7 @@ function peval(str)
       if isParenthesized(s) then
 	 if call then
 	    final = final .. feval(s)
+	    func = true
 	 else
 	    final = final .. peval(s:sub(2, #s - 1))
 	 end
@@ -148,6 +168,7 @@ function peval(str)
 	 call = false
       elseif isBracketed(s) then
 	 final = final .. peval(s:sub(2, #s - 1)) .. "index\n"
+	 stackdown()
 	 call = true
       elseif isNum(s) then
 	 stackup()
@@ -161,6 +182,22 @@ function peval(str)
 	    op = s
 	 end
 	 call = false
+      elseif isAccolade(s) then
+	 stackup()
+	 final = final .. "create\n"
+	 s = s:sub(2, #s)
+	 local t, j = nexttoken(s, 1)
+	 
+	 while t ~= false do
+	    if t == "," then
+	       final = final .. "next\n"
+	    elseif t == "}" then
+	       final = final .. "done\n"
+	    else
+	       final = final .. "item\n" .. peval(t)
+	    end
+	    t, j = nexttoken(s, j)
+	 end
       elseif isString(s) then
 	 stackup()
 	 final = final .. "string\t" .. s .. "\n"
@@ -186,7 +223,7 @@ function peval(str)
    end
    if ops[op] then
       final = final .. ops[op] .. "\n"
-      if op ~= "~" or op ~= "--" or op ~= "not" then
+      if op ~= "~" or op ~= "--" or op ~= "not" or op ~= "#" then
 	 stackdown()
       end
    end
@@ -226,7 +263,7 @@ function eeval(str)
 end
 
 function _eeval(str, forloop)
-   local i, j, k, final, token, tmp = 0, 0, 1, ""
+   local i, j, k, final, token, tmp1, tmp2 = 0, 0, 1, ""
    token, i = nexttoken(str, i)
    if token == "local" or forloop then
       -- def/local mode
@@ -241,7 +278,10 @@ function _eeval(str, forloop)
 	 end
 	 token, i = nexttoken(str, i)
       end
-      tmp = stack[level]["-"]
+      tmp1 = stack[level]["-"]
+      tmp2 = place
+      stack[level]["-"] = stack[level]["-"] - k
+      place = place - k
       final = "sets\t" .. tostring(k) .. "\n" .. final
       j = 0
       while j <= k do
@@ -250,26 +290,28 @@ function _eeval(str, forloop)
 	 if token ~= "," then
 	    final = final .. peval(token)
 	    j = j + 1
+	 else
+	    final = final .. "push\n"
 	 end
       end
-      stack[level]["-"] = tmp
+      final = final .. "push\n"
+      stack[level]["-"] = tmp1
+      place = tmp2
       return final .. "stack\n"
    else
       -- access/global mode
+      tmp1 = stack[level]["-"]
+      tmp2 = place
       while token and token ~= "=" do
 	 if token == "," then
 	    k = k + 1
+	    final = final .. "store\n"
 	 else
-	    j = get(token)
-	    if j then
-	       final = final .. "ref\t" .. tostring(j) .. "\n"
-	    else
-	       final = final .. "var\t" .. token .. "\n"
-	    end
+	    final = final .. peval(token)
 	 end
 	 token, i = nexttoken(str, i)
       end
-      tmp = stack[level]["-"]
+      final = final .. "store\n"
       final = "modif\t" .. tostring(k) .. "\n" .. final
       j = 0
       while j <= k do
@@ -278,9 +320,12 @@ function _eeval(str, forloop)
 	 if token ~= "," then
 	    final = final .. peval(token)
 	    j = j + 1
+	 else
+	    final = final .. "push\n"
 	 end
       end
-      stack[level]["-"] = tmp
+      stack[level]["-"] = tmp1
+      place = tmp2
       return final .. "place\n"
    end
 end
@@ -303,7 +348,7 @@ function get(name)
    for i = level, 1, -1 do
       s = stack[i][name]
       if s then
-	 return place - s - 1
+	 return place - s
       end
    end
    return false

@@ -171,7 +171,7 @@ function replace()
    rpush(n)
    for i = 1, vsize do
       if vstack[i] == n then
-	 vstack[i] = n
+	 vstack[i] = rsize
       end
    end
    return "\tpush\t" .. n .. "\n"
@@ -179,6 +179,22 @@ end
 
 -- *** Operating functions ***
 --------------------------------------------------------------------------------
+function realpush()
+   local ret = ""
+   if buf then
+      ret = "\tpush\t" .. buf .. "\n"
+      rpush("%rax")
+      vpush(rsize)
+      buf = false
+   else
+      rpush(vtop())
+      ret = "\tpush\t" .. vtop() .. "\n"
+      vstack[vsize] = rsize
+      vpop()
+   end
+   return ret
+end
+
 function push(value)
    local ret = ""
    if buf then
@@ -217,7 +233,11 @@ function pop()
 end
 
 function free(index)
-   if index == 0 then return "" end
+   if index == 0 then return ""
+   elseif index < 0 then
+      return "\tsub\t$" .. tostring(8 * -index) .. ", %rsp\n"
+   end
+   print(index)
    if buf then
       buf = false
       index = index - 1
@@ -289,6 +309,16 @@ function sub()
    return ret
 end
 
+function len()
+   local ret = ""
+   if buf then
+      ret = flatten()
+   end
+   ret = ret .. "\tsar\t$3, " .. vtop() .. "\n" ..
+      "\tmov\t(" .. vtop() .. "), " .. vtop() .. "\n"
+   return ret
+end
+
 notcount = 0
 function nt()
    notcount = notcount + 1
@@ -311,6 +341,7 @@ function st(value)
    need_data = true
    stringcount = stringcount + 1
    data = data .. "string" .. tostring(stringcount) .. ":\n" ..
+      "\t.quad\t" .. tostring((#value - 2) * 8) .. "\n" ..
       "\t.asciz\t" .. value .. "\n"
    vpush(register())
    return ret .. "\tlea\tstring" .. tostring(stringcount) .. "(%rip), " .. vtop() .. "\n" ..
@@ -368,6 +399,8 @@ function translate(text)
 	 ret = ret .. sub()
       elseif instr == "not" then
 	 ret = ret .. nt()
+      elseif instr == "len" then
+	 ret = ret .. len()
       elseif instr == "ref" then
 	 ret = ret .. push(get(tonumber(value)))
       elseif instr == "var" then
@@ -377,16 +410,14 @@ function translate(text)
 	       "\tcall\tprint_lua\n\tcall\tprint_ret\n"
 	    vpush(register())
 	 end
+      elseif instr == "push" then
+	 ret = ret .. realpush()
       elseif instr == "sets" then
 	 base = realsize()
 	 target = tonumber(value) + base - 1
       elseif instr == "stack" then
-	 if buf then
-	    ret = ret .. flatten()
-	 end
-	 for i = realsize(), target do
-	    ret = ret .. push(false)
-	 end
+	 ret = ret .. free (realsize() - target)
+	 print(ret)
       elseif instr == "modif" then
 	 modif = {}
 	 msize = tonumber(value)

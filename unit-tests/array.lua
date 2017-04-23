@@ -1,4 +1,6 @@
-local array = { 1, 2, 3, 4 }
-local test = array[2]
+local array = { 1+2, {2,2},
+		3, 4 }
+array["test"] = array
+local test = #array["test"]
 _print
---2
+--5
