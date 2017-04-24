@@ -294,13 +294,10 @@ function _eeval(str, forloop)
 	 token, i = nexttoken(str, i)
 	 if not token then break end
 	 if token ~= "," then
-	    final = final .. peval(token)
+	    final = final .. peval(token) .. "push\n"
 	    j = j + 1
-	 else
-	    final = final .. "push\n"
 	 end
       end
-      final = final .. "push\n"
       stack[level]["-"] = tmp1
       place = tmp2
       return final .. "stack\n"
@@ -312,28 +309,29 @@ function _eeval(str, forloop)
       while token and token ~= "=" do
 	 if token == "," then
 	    k = k + 1
-	    final = final .. "store\n"
 	 else
-	    final = final .. peval(token)
+	    local tmp = nexttoken(str, i)
+	    if tmp and isBracketed(tmp) then
+	       final = final .. peval(token)
+	    else
+	       final = final .. peval(token) .. "store\n"
+	    end
 	 end
 	 token, i = nexttoken(str, i)
       end
-      final = final .. "store\n"
       final = "modif\t" .. tostring(k) .. "\n" .. final
       j = 0
       while j <= k do
 	 token, i = nexttoken(str, i)
 	 if not token then break end
 	 if token ~= "," then
-	    final = final .. peval(token)
+	    final = final .. peval(token) .. "push\n"
 	    j = j + 1
-	 else
-	    final = final .. "push\n"
 	 end
       end
       stack[level]["-"] = tmp1
       place = tmp2
-      return final .. "push\nplace\n"
+      return final .. "place\n"
    end
 end
 
@@ -341,11 +339,8 @@ function leval(str, i)
    local j = 0
    str, i = nextline(str, i)
    if not str then return str end
-   while j < #str do
-      j = j + 1
-      if str:sub(j, j + 2) == " = " or str:sub(j, j + 5) == "local" then
-	 return eeval(str), i
-      end
+   if str:find("=") and (str:find("=") ~= str:find("==")) or str:find("local") then
+      return eeval(str), i
    end
    return peval(str), i
 end
@@ -392,6 +387,7 @@ function scope(str, i)
 	 count = scopes["if"]
 	 final = final .. "if\t" .. tostring(count) .. "\n" ..
 	 peval(s) .. "then\t" .. tostring(count) .. "\n"
+	 stackdown()
 	 --- Assertion
 	 s, i = nexttoken(str, i)
 	 if s ~= "then" then
@@ -400,6 +396,7 @@ function scope(str, i)
 	 s, i = scope(str, i)
 	 final = final .. s .. free()
 	 s, i = nexttoken(str, i)
+	 print(s)
 	 while s == "elseif" do
 	    alloc()
 	    s, i = nexttoken(str, i)
@@ -407,6 +404,7 @@ function scope(str, i)
 	    final = final .. "else\t" .. tostring(scopes["if"] - 1) .. "\n" ..
 	    "if\t" .. tostring(scopes["if"]) .. "\n" ..
 	    peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
+	    stackdown()
 	    --- Assertion
 	    s, i = nexttoken(str, i)
 	    if s ~= "then" then
@@ -419,11 +417,11 @@ function scope(str, i)
 	 if s == "else" then
 	    alloc()
 	    final = final .. "else\t" .. tostring(scopes["if"]) .. "\n"
-	    s, i = scope(str, i + 4)
+	    s, i = scope(str, i)
 	    final = final .. s .. free()
 	 end
 	 for j = scopes["if"], count, -1 do
-	    final = final .. "iend\t" .. tostring(j) .. "\n"
+	    final = final .. "iend\t" .. tostring(j) .. "\n" .. free()
 	 end
 
 	 
@@ -432,7 +430,7 @@ function scope(str, i)
 
 	 
       elseif s == "else" then
-	 return final, i - 7
+	 return final, i - 5
 
 	 
       elseif s == "repeat" then

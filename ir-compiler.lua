@@ -244,6 +244,11 @@ function free(index)
       if index == 0 then return "" end
    end
    for i = vsize - index + 1, vsize do
+      for j = 1, u_size do
+	 if u_name[j] == vstack[i] then
+	    release()
+	 end
+      end
       vstack[i] = nil
    end
    vsize = vsize - index
@@ -263,11 +268,11 @@ function restore()
       end
    end
    for i = max + 1, rsize do
-      for j = 1, u_size do
+      --[[for j = 1, u_size do
 	 if u_name[j] == rstack[i] then
 	    release()
 	 end
-      end
+      end]]
       rstack[i] = nil
    end
    if rsize - max ~= 0 then
@@ -302,9 +307,37 @@ end
 function op2(op)
    local ret = ""
    if not buf then
+      buf = get(0)
       ret = pop()
    end
    ret = ret .. "\t" .. op .. "\t" .. buf .. ", " .. vtop() .. "\n"
+   buf = false
+   return ret
+end
+
+function neg()
+   local ret = ""
+   if buf then
+      ret = "\tmov\t" .. buf .. ", %rsi\n" ..
+	 "\tneg\t%rsi\n"
+      buf = "%rsi"
+   else
+      ret = "\tneg\t" .. vtop() .. "\n"
+   end
+   return ret
+end
+
+function eq()
+   local ret = ""
+   if not buf then
+      local tmp = get(0)
+      ret = pop()
+      buf = tmp
+   end
+   ret = ret .. "\tmov\t" .. buf .. ", %rsi\n" .. 
+      "\tmov\t" .. vtop() .. ", %rdi\n" ..
+      "\tcall\tcompare\n" ..
+      "\tmov\t%rsi, " .. vtop() .. "\n"
    buf = false
    return ret
 end
@@ -380,6 +413,7 @@ function translate(text)
    local s, i = readline(text, 1)
    local instr, value
    local modif = 0
+   local elses = {}
    while s do
       instr, value = separate(s)
       ---------------------------
@@ -401,6 +435,31 @@ function translate(text)
 	 ret = ret .. nt()
       elseif instr == "len" then
 	 ret = ret .. len()
+      elseif instr == "neg" then
+	 ret = ret .. neg()
+      elseif instr == "neq" then
+	 --ret = ret .. neq()
+      elseif instr == "eq" then
+	 ret = ret .. eq()
+      elseif instr == "index" then
+	 
+      elseif instr == "then" then
+	 if buf then
+	    ret = ret .. "\tmov\t" .. buf .. ", %rsi\n"
+	    buf = "%rsi"
+	 end
+	 ret = ret .. "\tcmp\t$1, " .. get(0) .. "\n" ..
+	    "\tjz\telse" .. value .. "\n"
+	 pop()
+      elseif instr == "else" then
+	 ret = ret .. "\tjmp\tiend" .. value .. "\n" ..
+	 "else" .. value .. ":\n"
+	 elses[value] = false
+      elseif instr == "iend" then
+	 if elses[value] then
+	    ret = ret .. "else" .. value .. ":\n"
+	 end
+	 ret = ret .. "iend" .. value .. ":\n"
       elseif instr == "ref" then
 	 ret = ret .. push(get(tonumber(value)))
       elseif instr == "var" then
@@ -451,11 +510,7 @@ function translate(text)
 	       "\tmov\t" .. tostring(-8 * (target + j)) .. "(%rsp), %rsi\n" ..
 	       "\tmov\t%rsi, (%rdi)\n"
 	 end
-	 for j = vsize - target - 1, vsize do
-	    vstack[j] = nil
-	 end
-	 vsize = vsize - target - 2
-	 restore()
+	 free(target + 2)
 	 modif = false
       elseif instr == "create" then
 	 ret = ret .. push(false) ..
@@ -475,7 +530,7 @@ function translate(text)
 	 pop()
 	 ret = ret ..
 	    "\tmov\t" .. get(0) .. ", %rsi\n" ..
-	    "\tsal\t$3, %rsi\n" ..
+	    "\tsar\t$3, %rsi\n" ..
 	    "\tmov\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
 	 print(ret)
       elseif instr == "free" then
@@ -501,7 +556,7 @@ end
 
 function printstacks()
    print("\tREAL\t|\tVIRTUAL\t|\tBUF")
-   print("----------------------------------------")
+   print("--------------------------------------------------")
    local num, max = ""
    if vsize > rsize then
       max = vsize
