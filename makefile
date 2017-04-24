@@ -15,7 +15,7 @@ all: stdio.o
 
 test: ut
 
-ut:
+ut: clean
 	./run-unit-tests.lua
 
 clean: cleanrapport

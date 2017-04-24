@@ -1,6 +1,6 @@
 # File: exio.s
 #
-# Contient des fonctions standard pour l'I/O de data scheme
+# Contient des fonctions standard pour l'I/O de data lua
 
 	.text
 
@@ -24,7 +24,7 @@ print_lua:
 	and	$7, %rax
 	jz	print_int
 	cmp	$1, %rax
-	jz	print_bool
+	jz	print_special
 	cmp	$2, %rax
 	jz	print_str
 #	cmp	$3, %rax
@@ -60,28 +60,35 @@ print_int:
 # print_scmbool fonction qui envoie #t, ou #f à stdout
 # Un mot contenant la valeur 1 est true, la valeur 9 est false
 
-print_bool:
+print_special:
 
 	mov	24(%rsp), %rax		#Gets the bool value
 	cmp	$1, %rax		#The literal value 1 is false
 	je	print_bool_false
+	cmp	$9, %rax
+	je	print_bool_true
+	
 ################################################
 	# Check for special values here!
-	# (none for now)
+print_nil:
+	lea	string_nil(%rip), %rax
+	push	%rax
+	call	print_string
+	jmp	print_special_end
 ################################################
 	
 print_bool_true:
 	lea	string_true(%rip), %rax
 	push	%rax
 	call 	print_string
-	jmp 	print_bool_end
+	jmp 	print_special_end
 	
 print_bool_false:
 	lea	string_false(%rip), %rax
 	push	%rax
 	call 	print_string
 	
-print_bool_end:
+print_special_end:
         pop     %rax
         popf
         ret     $8    #Return and pop parameter
@@ -117,15 +124,10 @@ print_str:
 ############################################################################
 .data
 
-string_void:
-	.asciz	"!void"
-string_eof:	
-	.asciz	"!eof"
-string_proc:
-	.asciz	"#<procedure #"
 string_false:
 	.asciz	"false"
 string_true:
 	.asciz	"true"
-	
+string_nil:
+	.asciz	"nil"
 	

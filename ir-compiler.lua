@@ -6,11 +6,11 @@ r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
 
 -- Reserved: %rax, %rsp, %rbp
 
--- Usable registers (7)
+-- Usable registers (6)
 u_reg  = 1
-u_size = 7
-u_name = { "%rbx", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
-u_cont = {  0,      0,      0,      0,      0,      0,      0     }
+u_size = 6
+u_name = { "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
+u_cont = {  0,      0,      0,      0,      0,      0     }
 
 -- Calling registers (14)
 c = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%xmm0", "%xmm1",
@@ -187,10 +187,10 @@ function realpush()
       vpush(rsize)
       buf = false
    else
+      release()
       rpush(vtop())
       ret = "\tpush\t" .. vtop() .. "\n"
       vstack[vsize] = rsize
-      vpop()
    end
    return ret
 end
@@ -215,19 +215,16 @@ end
 
 function pop()
    local top, ret = vtop(), ""
+   if buf then
+      buf = false
+      return ""
+   end
    if type(top) == "number" then
       if top == rsize then
-	 buf = rpop()
-	 ret = "\tpop\t" .. buf .. "\n"
-	 vpop()
-      else
-	 buf = rat(top)
-	 ret = "\tmov\t" .. tostring(8 * (rsize - top)) .. "(%rsp), " .. buf .. "\n"
-	 vpop()
+	 ret = "\tadd\t$8, %rsp\n"
       end
-   else
-      buf = vpop()
    end
+   vpop()
    release()
    return ret
 end
@@ -235,9 +232,12 @@ end
 function free(index)
    if index == 0 then return ""
    elseif index < 0 then
+      for i = 1, -index do
+	 rpush("%rax")
+	 vpush(rsize)
+      end
       return "\tsub\t$" .. tostring(8 * -index) .. ", %rsp\n"
    end
-   print(index)
    if buf then
       buf = false
       index = index - 1
@@ -245,7 +245,6 @@ function free(index)
    end
    for i = vsize - index + 1, vsize do
       vstack[i] = nil
-      release()
    end
    vsize = vsize - index
    return restore()
@@ -254,7 +253,7 @@ end
 function restore()
    local max, ret = 0, ""
    if (vsize + 1) % u_size ~= u_reg then
-      print("Stack corruption")
+      print("Possible stack corruption")
    end
    for i = 1, vsize do
       if type(vstack[i]) == "number" then
@@ -264,6 +263,11 @@ function restore()
       end
    end
    for i = max + 1, rsize do
+      for j = 1, u_size do
+	 if u_name[j] == rstack[i] then
+	    release()
+	 end
+      end
       rstack[i] = nil
    end
    if rsize - max ~= 0 then
@@ -285,26 +289,22 @@ function get(index)
    if type(val) == "string" then
       return val
    else
-      return tostring(8 * (rsize - val)) .. "(%rsp)"
+      local num = 8 * (rsize - val)
+      if num == 0 then
+	 num = ""
+      else
+	 num = tostring(num)
+      end
+      return num .. "(%rsp)"
    end
 end
 
-function add()
+function op2(op)
    local ret = ""
    if not buf then
       ret = pop()
    end
-   ret = ret .. "\tadd\t" .. buf .. ", " .. vtop() .. "\n"
-   buf = false
-   return ret
-end
-
-function sub()
-   local ret = ""
-   if not buf then
-      ret = pop()
-   end
-   ret = ret .. "\tsub\t" .. buf .. ", " .. vtop() .. "\n"
+   ret = ret .. "\t" .. op .. "\t" .. buf .. ", " .. vtop() .. "\n"
    buf = false
    return ret
 end
@@ -379,6 +379,7 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
+   local modif = 0
    while s do
       instr, value = separate(s)
       ---------------------------
@@ -393,10 +394,9 @@ function translate(text)
 	 end
       elseif instr == "string" then
 	 ret = ret .. st(value)
-      elseif instr == "add" then
-	 ret = ret .. add()
-      elseif instr == "sub" then
-	 ret = ret .. sub()
+      elseif instr == "add" or instr == "sub" or instr == "sal" or instr == "sar"
+      or instr == "sll" or instr == "slr" then
+	 ret = ret .. op2(instr)
       elseif instr == "not" then
 	 ret = ret .. nt()
       elseif instr == "len" then
@@ -411,43 +411,78 @@ function translate(text)
 	    vpush(register())
 	 end
       elseif instr == "push" then
-	 ret = ret .. realpush()
+	 modif = modif + 1
+	 ret = ret .. restore() .. realpush()
       elseif instr == "sets" then
-	 base = realsize()
-	 target = tonumber(value) + base - 1
+	 target = tonumber(value) + realsize()
       elseif instr == "stack" then
-	 ret = ret .. free (realsize() - target)
-	 print(ret)
+	 for i = realsize() - target, -1 do
+	    rpush("%rax")
+	    vpush(rsize)
+	    ret = ret .. "\tpush\t$17\n"
+	 end
+	 ret = ret .. free(realsize() - target)
+      elseif instr == "store" then
+	 if buf then
+	    ret = ret .. 
+	       "\tlea\t" .. buf .. ", %rsi\n" ..
+	       "\tpush\t%rsi\n"
+	    rpush(buf)
+	    vpush(rsize)
+	    buf = false
+	 else
+	    ret = ret .. 
+	       "\tlea\t" .. vtop() .. ", %rsi\n" ..
+	       "\tpush\t%rsi\n"
+	    rpush(vtop())
+	    release()
+	    vstack[vsize] = rsize
+	 end
       elseif instr == "modif" then
-	 modif = {}
-	 msize = tonumber(value)
-	 mbase = realsize()
-	 for j = 1, msize do
-	    s, i = readline(text, i)
-	    instr, value = separate(s)
-	    if instr == "ref" then
-	       modif[j] = tonumber(value)
-	    elseif instr == "var" then
-	       -- TBD
-	    end
-	 end
+	 modif = 0
+	 ret = ret .. push("%rsp") .. flatten()
+	 target = tonumber(value)
       elseif instr == "place" then
-	 print(ret)
-	 local o1, o2
-	 for j = 1, msize do
-	    o1 = get(vsize - j - mbase)
-	    o2 = get(realsize() - mbase + modif[j])
-	    if (o1:sub(1, 1) ~= "%" or o1:sub(1, 1) ~= "$") and o2:sub(1, 1) ~= "%" then
-	       o1 = o1 .. ", %rax\n\tmov\t%rax"
-	    end
-	    ret = ret .. "\tmov\t" .. o1 .. ", " .. o2 .. "\n"
+	 target = target + modif - 1
+	 ret = ret .. 
+	    "\tmov\t" .. get(target) .. ", %rsp\n"
+	 for j = 1, target do
+	    ret = ret .. "\tmov\t" .. tostring(-8 * j) .. "(%rsp), %rdi\n" .. 
+	       "\tmov\t" .. tostring(-8 * (target + j)) .. "(%rsp), %rsi\n" ..
+	       "\tmov\t%rsi, (%rdi)\n"
 	 end
-	 modif = nil
-	 ret = ret .. free(realsize() - mbase)
+	 for j = vsize - target - 1, vsize do
+	    vstack[j] = nil
+	 end
+	 vsize = vsize - target - 2
+	 restore()
+	 modif = false
+      elseif instr == "create" then
+	 ret = ret .. push(false) ..
+	    "\tlea\t3(, %rbp, 8), " .. get(0) .. "\n" ..
+	    "\tadd\t$16, %rbp\n" .. push(false) ..
+	    "\tlea\t-8(%rbp), " .. get(0) .. "\n"
+      elseif instr == "item" then
+	 ret = ret ..
+	    "\tlea\t4(, %rbp, 8), %rsi\n" ..
+	    "\tmov\t%rsi, (" .. get(1) .. ")\n" ..
+	    "\tmov\t$" .. tostring(8 * tonumber(value)) .. ", (%rbp)\n" ..
+	    "\tmov\t" .. get(0) .. ", 8(%rbp)\n" ..
+	    "\tadd\t$24, %rbp\n" ..
+	    "\tlea\t-8(%rbp), " .. get(1) .. "\n"
+	 pop()
+      elseif instr == "done" then
+	 pop()
+	 ret = ret ..
+	    "\tmov\t" .. get(0) .. ", %rsi\n" ..
+	    "\tsal\t$3, %rsi\n" ..
+	    "\tmov\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
+	 print(ret)
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))
       end
-      --printv(instr)
+      print(ret)
+      printstacks()
       ---------------------------
       s, i = readline(text, i)
    end
@@ -462,6 +497,34 @@ function printv(text)
    for i = 1, #vstack do
       print(text .. ": " .. vstack[i])
    end
+end
+
+function printstacks()
+   print("\tREAL\t|\tVIRTUAL\t|\tBUF")
+   print("----------------------------------------")
+   local num, max = ""
+   if vsize > rsize then
+      max = vsize
+   else
+      max = rsize
+   end
+   for i = 1, max do
+      if rstack[i] ~= nil then
+	 num = "\t" .. tostring(rstack[i]) .. "\t|\t"
+      else
+	 num = "\t\t|\t"
+      end
+      if vstack[i] ~= nil then
+	 num = num .. tostring(vstack[i]) .. "\t|\t"
+      else
+	 num = num .. "\t|\t"
+      end
+      if buf then
+	 num = num .. buf
+      end
+      print(num)
+   end
+   print()
 end
 
 --------------------------------------------------------------------------------

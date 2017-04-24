@@ -8,10 +8,14 @@ main:
 	push	%rax
 	call	mmap
 	mov	%rax, %rbp
-	mov	$16, %r10
-	add	$24, %r10
-	push	%r10
+	push	$8
+	push	$16
+	push	$24
+	push	$32
+	add	$8, %rsp
+	push	8(%rsp)
 	call	print_lua
 	call	print_ret
+	add	$24, %rsp
 	mov	$0, %rax
 	ret

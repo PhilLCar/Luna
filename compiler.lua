@@ -187,16 +187,22 @@ function peval(str)
 	 final = final .. "create\n"
 	 s = s:sub(2, #s)
 	 local t, j = nexttoken(s, 1)
-	 
-	 while t ~= false do
-	    if t == "," then
-	       final = final .. "next\n"
-	    elseif t == "}" then
-	       final = final .. "done\n"
-	    else
-	       final = final .. "item\n" .. peval(t)
+	 if t == "}" then
+	    final = final .. "done\t0\n"
+	 else
+	    local count = 1
+	    while t ~= false do
+	       if t == "," then
+		  final = final .. "item\t" .. tostring(count) .. "\n"
+		  count = count + 1
+	       elseif t == "}" then
+		  final = final .. "item\t" .. tostring(count) .. "\n"
+		  final = final .. "done\t" .. tostring(count) .. "\n"
+	       else
+		  final = final .. peval(t)
+	       end
+	       t, j = nexttoken(s, j)
 	    end
-	    t, j = nexttoken(s, j)
 	 end
       elseif isString(s) then
 	 stackup()
@@ -302,6 +308,7 @@ function _eeval(str, forloop)
       -- access/global mode
       tmp1 = stack[level]["-"]
       tmp2 = place
+      stackup()
       while token and token ~= "=" do
 	 if token == "," then
 	    k = k + 1
@@ -326,7 +333,7 @@ function _eeval(str, forloop)
       end
       stack[level]["-"] = tmp1
       place = tmp2
-      return final .. "place\n"
+      return final .. "push\nplace\n"
    end
 end
 
