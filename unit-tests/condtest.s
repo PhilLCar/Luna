@@ -10,18 +10,25 @@ main:
 	mov	%rax, %rbp
 	mov	$8, %r10
 	mov	$16, %rsi
-	cmp	$1, %rsi
-	jz	else1
-	mov	$8, %r11
-	mov	$16, %rsi
-	mov	%r11, %rdi
+	mov	%r10, %rdi
 	call	compare
-	mov	%rsi, %r11
-	push	%r11
+	mov	%rsi, %r10
+	xor	$8, %r10
+	cmp	$1, %r10
+	jz	else1
+	cmp	$17, %r10
+	jz	else1
+	mov	$8, %r10
+	mov	$16, %rsi
+	mov	%r10, %rdi
+	call	compare
+	mov	%rsi, %r10
+	push	%r10
 	push	(%rsp)
 	call	print_lua
 	call	print_ret
 	add	$8, %rsp
+else1:
 iend1:
 	mov	$0, %rax
 	ret

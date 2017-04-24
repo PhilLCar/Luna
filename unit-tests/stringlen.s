@@ -15,10 +15,10 @@ main:
 	mov	%rsp, %r10
 	lea	(%rsp), %rsi
 	push	%rsi
-	mov	16(%rsp), %r11
-	sar	$3, %r11
-	mov	(%r11), %r11
-	push	%r11
+	mov	16(%rsp), %rsi
+	sar	$3, %rsi
+	mov	(%rsi), %rsi
+	push	%rsi
 	mov	8(%rsp), %rsp
 	mov	-8(%rsp), %rdi
 	mov	-16(%rsp), %rsi

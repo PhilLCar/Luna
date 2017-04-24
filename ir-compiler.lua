@@ -342,13 +342,53 @@ function eq()
    return ret
 end
 
+function index(new)
+   local ret = ""
+   if not buf then
+      local tmp = get(0)
+      ret = pop()
+      buf = tmp
+   end
+   ret = ret ..
+      "\tmov\t" .. buf .. ", %r8\n" .. 
+      "\tmov\t" .. vtop() .. ", %r9\n"
+   if new then
+      ret = ret .. "\tcall\tnew\n"
+   else
+      ret = ret .. "\tcall\tindex\n"
+   end
+   buf = false
+   pop()
+   buf = "(%rsi)"
+   return ret
+end
+
+function check()
+   local ret = ""
+   if not buf then
+      local tmp = get(0)
+      ret = pop()
+      buf = tmp
+   end
+   ret = ret ..
+      "\tmov\t" .. buf .. ", %rsi\n" .. 
+      "\tcall\tcheck\n"
+   buf = false
+   return ret
+end
+
 function len()
    local ret = ""
    if buf then
-      ret = flatten()
+      ret =
+	 "\tmov\t" .. buf .. ", %rsi\n" ..
+	 "\tsar\t$3, %rsi\n" ..
+	 "\tmov\t(%rsi), %rsi\n"
+      buf = "%rsi"
+   else
+      ret = ret .. "\tsar\t$3, " .. vtop() .. "\n" ..
+	 "\tmov\t(" .. vtop() .. "), " .. vtop() .. "\n"
    end
-   ret = ret .. "\tsar\t$3, " .. vtop() .. "\n" ..
-      "\tmov\t(" .. vtop() .. "), " .. vtop() .. "\n"
    return ret
 end
 
@@ -412,12 +452,14 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
-   local modif = 0
+   local modif = false
    local elses = {}
    while s do
       instr, value = separate(s)
       ---------------------------
-      if instr == "int" then
+      if instr == "nil" then
+	 ret = ret .. push("$17")
+      elseif instr == "int" then
 	 value = 8 * tonumber(value)
 	 ret = ret .. push("$" .. tostring(value))
       elseif instr == "bool" then
@@ -438,17 +480,24 @@ function translate(text)
       elseif instr == "neg" then
 	 ret = ret .. neg()
       elseif instr == "neq" then
-	 --ret = ret .. neq()
+	 ret = ret .. eq() ..
+	    "\txor\t$8, " .. get(0) .. "\n"
       elseif instr == "eq" then
 	 ret = ret .. eq()
       elseif instr == "index" then
-	 
+	 ret = ret .. index(false)
+      elseif instr == "new" then
+	 ret = ret .. index(true)
+      elseif instr == "check" then
+	 ret = ret .. check()
       elseif instr == "then" then
 	 if buf then
 	    ret = ret .. "\tmov\t" .. buf .. ", %rsi\n"
 	    buf = "%rsi"
 	 end
 	 ret = ret .. "\tcmp\t$1, " .. get(0) .. "\n" ..
+	    "\tjz\telse" .. value .. "\n" ..
+	    "\tcmp\t$17, " .. get(0) .. "\n" ..
 	    "\tjz\telse" .. value .. "\n"
 	 pop()
       elseif instr == "else" then
@@ -456,7 +505,7 @@ function translate(text)
 	 "else" .. value .. ":\n"
 	 elses[value] = false
       elseif instr == "iend" then
-	 if elses[value] then
+	 if elses[value] == nil then
 	    ret = ret .. "else" .. value .. ":\n"
 	 end
 	 ret = ret .. "iend" .. value .. ":\n"
@@ -470,7 +519,7 @@ function translate(text)
 	    vpush(register())
 	 end
       elseif instr == "push" then
-	 modif = modif + 1
+	 if modif then modif = modif + 1 end
 	 ret = ret .. restore() .. realpush()
       elseif instr == "sets" then
 	 target = tonumber(value) + realsize()
@@ -521,17 +570,18 @@ function translate(text)
 	 ret = ret ..
 	    "\tlea\t4(, %rbp, 8), %rsi\n" ..
 	    "\tmov\t%rsi, (" .. get(1) .. ")\n" ..
-	    "\tmov\t$" .. tostring(8 * tonumber(value)) .. ", (%rbp)\n" ..
-	    "\tmov\t" .. get(0) .. ", 8(%rbp)\n" ..
+	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rbp)\n" ..
+	    "\tmovq\t" .. get(0) .. ", 8(%rbp)\n" ..
 	    "\tadd\t$24, %rbp\n" ..
 	    "\tlea\t-8(%rbp), " .. get(1) .. "\n"
 	 pop()
       elseif instr == "done" then
-	 pop()
 	 ret = ret ..
-	    "\tmov\t" .. get(0) .. ", %rsi\n" ..
+	    "\tmovq\t$17, (" .. get(0) .. ")\n" ..
+	    "\tmov\t" .. get(1) .. ", %rsi\n" ..
 	    "\tsar\t$3, %rsi\n" ..
-	    "\tmov\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
+	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
+	 pop()
 	 print(ret)
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))

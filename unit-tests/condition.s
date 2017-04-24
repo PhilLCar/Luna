@@ -12,6 +12,8 @@ main:
 	mov	$1, %rsi
 	cmp	$1, %rsi
 	jz	else1
+	cmp	$17, %rsi
+	jz	else1
 	mov	%rsp, %r10
 	lea	(%rsp), %rsi
 	push	%rsi

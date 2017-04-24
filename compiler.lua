@@ -12,10 +12,12 @@ scopes["repeat"] = 0
 scopes["do"] = 0
 scopes["function"] = 0
 
+new = false
+
 --duplicate!!!
 function isReserved(str)
    local ops = { "local", "or", "and", "not", "for", "in", "do", "while", "repeat",
-		 "until", "if", "elseif", "else", "then", "end", "function" }
+		 "until", "if", "elseif", "else", "then", "end", "function", "nil" }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -55,6 +57,7 @@ ops["or"]  = "or"
 ops["not"] = "not"
 ops["~"]   = "inv"
 ops["#"]   = "len"
+ops["nil"] = "nil"
 
 function isNum(str)
    local s = str:byte(1, 1)
@@ -167,7 +170,12 @@ function peval(str)
 	 k = k + 1
 	 call = false
       elseif isBracketed(s) then
-	 final = final .. peval(s:sub(2, #s - 1)) .. "index\n"
+	 if new then
+	    new = false
+	    final = final .. peval(s:sub(2, #s - 1)) .. "new\n"
+	 else
+	    final = final .. peval(s:sub(2, #s - 1)) .. "index\n"
+	 end
 	 stackdown()
 	 call = true
       elseif isNum(s) then
@@ -229,7 +237,7 @@ function peval(str)
    end
    if ops[op] then
       final = final .. ops[op] .. "\n"
-      if op ~= "~" or op ~= "--" or op ~= "not" or op ~= "#" then
+      if op ~= "~" and op ~= "--" and op ~= "not" and op ~= "#" and op ~= "nil" then
 	 stackdown()
       end
    end
@@ -306,12 +314,17 @@ function _eeval(str, forloop)
       tmp1 = stack[level]["-"]
       tmp2 = place
       stackup()
+      local check = false
       while token and token ~= "=" do
 	 if token == "," then
 	    k = k + 1
 	 else
 	    local tmp = nexttoken(str, i)
 	    if tmp and isBracketed(tmp) then
+	       if not new then
+		  check = token
+	       end
+	       new = true
 	       final = final .. peval(token)
 	    else
 	       final = final .. peval(token) .. "store\n"
@@ -329,9 +342,14 @@ function _eeval(str, forloop)
 	    j = j + 1
 	 end
       end
+      final = final .. "place\n"
       stack[level]["-"] = tmp1
       place = tmp2
-      return final .. "place\n"
+      if check then
+	 final = final .. peval(check) .. "check\n"
+	 stackdown()
+      end
+      return final
    end
 end
 
