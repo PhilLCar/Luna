@@ -13,44 +13,61 @@ main:
 	movq	$0, (%rbx)
 	movq	$17, 8(%rbx)
 	lea	3(, %rbx, 8), %rbx
-	lea	3(, %rbp, 8), %r10
+	push	$17
+	mov	%rsp, %r10
+	lea	3(, %rbp, 8), %r11
 	add	$16, %rbp
-	lea	-8(%rbp), %r11
+	lea	-8(%rbp), %r12
 	lea	4(, %rbp, 8), %rsi
-	mov	%rsi, (%r11)
+	mov	%rsi, (%r12)
 	movq	$8, (%rbp)
 	movq	$8, 8(%rbp)
 	add	$24, %rbp
-	lea	-8(%rbp), %r11
+	lea	-8(%rbp), %r12
 	lea	4(, %rbp, 8), %rsi
-	mov	%rsi, (%r11)
+	mov	%rsi, (%r12)
 	movq	$16, (%rbp)
 	movq	$24, 8(%rbp)
 	add	$24, %rbp
-	lea	-8(%rbp), %r11
+	lea	-8(%rbp), %r12
 	lea	4(, %rbp, 8), %rsi
-	mov	%rsi, (%r11)
+	mov	%rsi, (%r12)
 	movq	$24, (%rbp)
 	movq	$32, 8(%rbp)
 	add	$24, %rbp
-	lea	-8(%rbp), %r11
-	movq	$17, (%r11)
-	mov	%r10, %rsi
+	lea	-8(%rbp), %r12
+	movq	$17, (%r12)
+	mov	%r11, %rsi
 	sar	$3, %rsi
 	movq	$24, (%rsi)
-	push	%r10
-	mov	%rsp, %r10
-	mov	(%rsp), %r11
+	movq	$4, (%rbp)
+	movq	%r11, 8(%rbp)
+	movq	$17, 16(%rbp)
+	lea	4(, %rbp, 8), %rsi
+	mov	%rsi, (%r10)
+	lea	16(%rbp), %r10
+	add	$24, %rbp
+	pop	%rsi
+	mov	$1, %rdi
+	call	stack
+	mov	(%rsp), %r10
 	mov	$8, %r8
-	mov	%r11, %r9
+	mov	%r10, %r9
 	call	new
 	lea	(%rsi), %rsi
 	push	%rsi
 	push	$17
-	mov	%r10, %rsp
-	mov	-8(%rsp), %rdi
-	mov	-16(%rsp), %rsi
-	mov	%rsi, (%rdi)
+	mov	%rsp, %r10
+	movq	$4, (%rbp)
+	movq	$17, 8(%rbp)
+	movq	$17, 16(%rbp)
+	lea	4(, %rbp, 8), %rsi
+	mov	%rsi, (%r10)
+	lea	16(%rbp), %r10
+	add	$24, %rbp
+	pop	%rsi
+	mov	$1, %rdi
+	call	place
 	mov	(%rsp), %rsi
 	call	check
 	mov	(%rsp), %rsi

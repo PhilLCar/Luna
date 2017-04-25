@@ -13,6 +13,7 @@ scopes["do"] = 0
 scopes["function"] = 0
 
 new = false
+outside = false
 
 --duplicate!!!
 function isReserved(str)
@@ -278,19 +279,24 @@ function eeval(str)
    return _eeval(str, false)
 end
 
-function _eeval(str, forloop)
-   local i, j, k, final, token, tmp1, tmp2 = 0, 0, 1, ""
+function _eeval(str, flag)
+   local i, j, k, final, token, tmp1, tmp2 = 0, 0, 0, ""
    token, i = nexttoken(str, i)
-   if token == "local" or forloop then
+   local localmode = token == "local" or flag == "forloop"
+   local check = {}
+   if localmode then
       -- def/local mode
       if token == "local" then token, i = nexttoken(str, i) end
-      while token and token ~= "=" do
-	 if token == "," then
-	    k = k + 1
-	 else
+      while token do
+	 if token ~= "," then
 	    place = place + 1
 	    stack[level]["-"] = stack[level]["-"] + 1
 	    stack[level][token] = place
+	    k = k + 1
+	 end
+	 token, i = nexttoken(str, i)
+	 if token ~= "," then
+	    break
 	 end
 	 token, i = nexttoken(str, i)
       end
@@ -299,69 +305,88 @@ function _eeval(str, forloop)
       stack[level]["-"] = stack[level]["-"] - k
       place = place - k
       final = "sets\t" .. tostring(k) .. "\n" .. final
-      j = 0
-      while j <= k do
-	 token, i = nexttoken(str, i)
-	 if not token then break end
-	 if token ~= "," then
-	    final = final .. peval(token) .. "push\n"
-	    j = j + 1
-	 end
-      end
-      stack[level]["-"] = tmp1
-      place = tmp2
-      return final .. "stack\n"
    else
       -- access/global mode
       tmp1 = stack[level]["-"]
       tmp2 = place
-      stackup()
-      local check = false
-      while token and token ~= "=" do
-	 if token == "," then
-	    k = k + 1
-	 else
-	    local tmp = nexttoken(str, i)
-	    if tmp and isBracketed(tmp) then
-	       if not new then
-		  check = token
+      while token do
+	 if token ~= "," then
+	    final = final .. peval(token)
+	    local tmp = token
+	    token, i = nexttoken(str, i)
+	    while token and (isBracketed(token) or isParenthesized(token)) do
+	       if isBracketed(token) then
+		  print("check: " .. tmp)
+		  check[#check + 1] = tmp
 	       end
-	       new = true
 	       final = final .. peval(token)
-	    else
-	       final = final .. peval(token) .. "store\n"
+	       tmp = token
+	       token, i = nexttoken(str, i)
 	    end
+	    final = final .. "store\n"
+	    k = k + 1
+	 end
+	 if token ~= "," then
+	    break
 	 end
 	 token, i = nexttoken(str, i)
       end
-      final = "modif\t" .. tostring(k) .. "\n" .. final
-      j = 0
-      while j <= k do
-	 token, i = nexttoken(str, i)
-	 if not token then break end
+      final = "modif\n" .. final .. "sets\t" .. tostring(k) .. "\n"
+   end
+   j = 0
+   stackup()
+   stackup()
+   if token == "=" then
+      token, i = nexttoken(str, i)
+      while token do
 	 if token ~= "," then
-	    final = final .. peval(token) .. "push\n"
+	    if token == "function" then
+	       local tmp
+	       tmp, i = scope(str, i - 9)
+	       final = final .. tmp
+	    else
+	       final = final .. peval(token)
+	    end
+	    token, i = nexttoken(str, i)
+	    while token and (isBracketed(token) or isParenthesized(token)) do  
+	       final = final .. peval(token)
+	       token, i = nexttoken(str, i)
+	    end
+	    final = final .. "push\n"
 	    j = j + 1
 	 end
+	 if token ~= "," then
+	    break
+	 end
+	 token, i = nexttoken(str, i)
       end
-      final = final .. "place\n"
-      stack[level]["-"] = tmp1
-      place = tmp2
-      if check then
-	 final = final .. peval(check) .. "check\n"
-	 stackdown()
-      end
-      return final
    end
+   if token then
+      j = #token + 1
+      print("\"" .. token .. "\"")
+   end
+   if localmode then
+      final = final .. "stack\n"
+   else
+      final = final .. "place\n"
+   end
+   stack[level]["-"] = tmp1
+   place = tmp2
+   for j = 1, #check do
+      final = final .. peval(check[j]) .. "check\n"
+      stackdown()
+   end
+   return final, i - j
 end
 
 function leval(str, i)
-   local j = 0
+   local j, k = 0, i
    local s, i = nextline(str, i)
    print("«" .. s .. "»")
    if not s then return s end
    if s:find("=") and (s:find("=") ~= s:find("==")) or s:find("local") then
-      return eeval(s), i
+      s, i = eeval(str:sub(k, #str))
+      return s, i + k - 1
    end
    return peval(s), i
 end
@@ -508,12 +533,14 @@ function scope(str, i)
 	 ain = str:sub(j, i - 3)
 	 scopes["for"] = scopes["for"] + 1
 	 if bin then
+	    local t = _eeval(bin, "forloop")
 	    final = final .. "forin\t" .. tostring(scopes["for"]) .. "\n" ..
-	       _eeval(bin, true) .. peval(ain) ..
+	       t .. peval(ain) ..
 	       "fdo\t" .. tostring(scopes["for"]) .. "\n" 
 	 else
+	    local t = _eeval(args[0], "forloop")
 	    final = final .. "for\t" .. tostring(scopes["for"]) .. "\n" ..
-	    _eeval(args[0], true) .. peval(args[1]) .. "cond\n"
+	    t .. peval(args[1]) .. "cond\n"
 	    if args[2] ~= nil then
 	       final = final .. peval(args[2])
 	    else
@@ -524,13 +551,13 @@ function scope(str, i)
 	 s, i = scope(str, i)
 	 final = final .. s .. free() .. "fend\t" .. tostring(scopes["for"]) .. "\n"
 	 
---[[
+
       elseif s == "function" then
 	 s, i = nexttoken(str, i)
 	 scopes["function"] = scopes["function"] + 1
 	 final = final .. "func\t" .. tostring(scopes["function"]) .. "\n"
 	 s, i = scope(str, i)
-   final = final .. s]]
+	 final = final .. s
 
 	 
       elseif s == "do" then

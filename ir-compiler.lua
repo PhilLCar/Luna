@@ -230,9 +230,8 @@ function pop()
       return ""
    end
    if type(top) == "number" then
-      if top == rsize then
-	 ret = "\tadd\t$8, %rsp\n"
-      end
+      vpop()
+      return ret
    end
    vpop()
    release()
@@ -466,6 +465,36 @@ function st(value)
       "\tlea\t2(, " .. vtop() .. ", 8), " .. vtop() .. "\n"
 end
 
+function concat()
+   local ret, reg = ""
+   if not buf then
+      local tmp = get(0)
+      ret = pop()
+      buf = tmp
+   end
+   if buf:sub(#buf, #buf) == ")" then
+      ret = ret .. "\tmov\t" .. buf .. ", %rsi\n"
+      buf = "%rsi"
+   end
+   reg = get(1)
+   if reg:sub(#reg, #reg) == ")" then
+      ret = ret .. "\tmov\t" .. reg .. ", %rdi\n"
+      reg = "%rdi"
+   end
+   ret = ret ..
+      "\tmovq\t$4, (%rbp)\n" ..
+      "\tmovq\t" .. buf .. ", 8(%rbp)\n" ..
+      "\tmovq\t$17, 16(%rbp)\n" ..
+      "\tlea\t4(, %rbp, 8), %rsi\n" ..
+      "\tmov\t%rsi, (" .. reg .. ")\n" ..
+      "\tlea\t16(%rbp), " .. reg .. "\n" ..
+      "\tadd\t$24, %rbp\n"
+      --"\tlea\t132(, %rbp, 8), " .. get(1) .. "\n"
+   buf = false
+   return ret
+end
+      
+
 -- Parsing functions
 --------------------------------------------------------------------------------
 function readline(str, i)
@@ -497,46 +526,57 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
-   local modif = false
+   local modif, target = false
    local elses = {}
    while s do
       instr, value = separate(s)
       ---------------------------
       if instr == "nil" then
 	 ret = ret .. push("$17")
+	 
       elseif instr == "int" then
 	 value = 8 * tonumber(value)
 	 ret = ret .. push("$" .. tostring(value))
+	 
       elseif instr == "bool" then
 	 if value == "true" then
 	    ret = ret .. push("$9")
 	 else
 	    ret = ret .. push("$1")
 	 end
+	 
       elseif instr == "string" then
 	 ret = ret .. st(value)
+	 
       elseif instr == "add" or instr == "sub" or instr == "sal" or instr == "sar"
       or instr == "sll" or instr == "slr" then
 	 ret = ret .. op2(instr)
+	 
       elseif instr == "mul" then
 	 ret = ret .. mul()
+	 
       elseif instr == "not" then
 	 ret = ret .. nt()
+	 
       elseif instr == "len" then
 	 ret = ret .. len()
+	 
       elseif instr == "neg" then
 	 ret = ret .. neg()
+	 
       elseif instr == "neq" then
 	 ret = ret .. eq() ..
 	    "\txor\t$8, " .. get(0) .. "\n"
+	 
       elseif instr == "eq" then
 	 ret = ret .. eq()
+	 
       elseif instr == "index" then
-	 ret = ret .. index(false)
-      elseif instr == "new" then
-	 ret = ret .. index(true)
+	 ret = ret .. index(modif)
+	 
       elseif instr == "check" then
 	 ret = ret .. check()
+	 
       elseif instr == "then" then
 	 if buf then
 	    ret = ret .. "\tmov\t" .. buf .. ", %rsi\n"
@@ -547,38 +587,52 @@ function translate(text)
 	    "\tcmp\t$17, " .. get(0) .. "\n" ..
 	    "\tjz\telse" .. value .. "\n"
 	 pop()
+	 
       elseif instr == "else" then
 	 ret = ret .. "\tjmp\tiend" .. value .. "\n" ..
 	 "else" .. value .. ":\n"
 	 elses[value] = false
+	 
       elseif instr == "iend" then
 	 if elses[value] == nil then
 	    ret = ret .. "else" .. value .. ":\n"
 	 end
 	 ret = ret .. "iend" .. value .. ":\n"
+	 
       elseif instr == "ref" then
-	 print("v: --- " .. value)
-	 print("p: --- " .. get(tonumber(value)))
 	 ret = ret .. push(get(tonumber(value)))
+	 
       elseif instr == "var" then
 	 ret = ret .. var(value)
+	 
       elseif instr == "push" then
-	 if modif then modif = modif + 1 end
-	 ret = ret .. restore() .. realpush()
+	 ret = ret .. concat()
+	 
       elseif instr == "sets" then
-	 target = tonumber(value) + realsize()
+	 modif = false
+	 target = tonumber(value)
+	 ret = ret ..
+	    push("$17") .. realpush() ..
+	    push("%rsp") .. flatten()
+	 
       elseif instr == "stack" then
-	 for i = realsize() - target, -1 do
+	 if type(get(0)) == "number" then
+	    rpop()
+	 end
+	 pop()
+	 pop()
+	 rpop()
+	 for i = 1, target do
 	    rpush("%rax")
 	    vpush(rsize)
-	    ret = ret .. "\tpush\t$17\n"
 	 end
-	 ret = ret .. free(realsize() - target)
+	 ret = ret ..
+	    "\tpop\t%rsi\n" ..
+	    "\tmov\t$" .. tostring(target) .. ", %rdi\n" ..
+	    "\tcall\tstack\n"
+	 
       elseif instr == "store" then
 	 if buf then
-	    --[[if buf:sub(#buf, #buf) ~= ")" then
-	       buf = "(" .. buf .. ")"
-	       end]]
 	    ret = ret .. 
 	       "\tlea\t" .. buf .. ", %rsi\n" ..
 	       "\tpush\t%rsi\n"
@@ -593,26 +647,32 @@ function translate(text)
 	    release()
 	    vstack[vsize] = rsize
 	 end
+	 
       elseif instr == "modif" then
-	 modif = 0
-	 ret = ret .. push("%rsp") .. flatten()
-	 target = tonumber(value)
+	 modif = true
+	 
       elseif instr == "place" then
-	 target = target + modif
-	 ret = ret .. 
-	    "\tmov\t" .. get(target) .. ", %rsp\n"
-	 for j = 1, target - 1 do
-	    ret = ret .. "\tmov\t" .. tostring(-8 * j) .. "(%rsp), %rdi\n" .. 
-	       "\tmov\t" .. tostring(-8 * (target + j - 1)) .. "(%rsp), %rsi\n" ..
-	       "\tmov\t%rsi, (%rdi)\n"
+	 if type(get(0)) == "number" then
+	    rpop()
 	 end
-	 free(target + 1)
-	 modif = false
+	 pop()
+	 pop()
+	 rpop()
+	 ret = ret ..
+	    "\tpop\t%rsi\n" ..
+	    "\tmov\t$" .. tostring(target) .. ", %rdi\n" ..
+	    "\tcall\tplace\n"
+	 for i = 1, target do
+	    vpop()
+	    rpop()
+	 end
+	 
       elseif instr == "create" then
 	 ret = ret .. push(false) ..
 	    "\tlea\t3(, %rbp, 8), " .. get(0) .. "\n" ..
 	    "\tadd\t$16, %rbp\n" .. push(false) ..
 	    "\tlea\t-8(%rbp), " .. get(0) .. "\n"
+	 
       elseif instr == "item" then
 	 ret = ret ..
 	    "\tlea\t4(, %rbp, 8), %rsi\n" ..
@@ -622,6 +682,7 @@ function translate(text)
 	    "\tadd\t$24, %rbp\n" ..
 	    "\tlea\t-8(%rbp), " .. get(1) .. "\n"
 	 pop()
+	 
       elseif instr == "done" then
 	 ret = ret ..
 	    "\tmovq\t$17, (" .. get(0) .. ")\n" ..
@@ -629,11 +690,11 @@ function translate(text)
 	    "\tsar\t$3, %rsi\n" ..
 	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
 	 pop()
-	 --print(ret)
+
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))
+	 
       end
-      --print(ret)
       printstacks()
       ---------------------------
       s, i = readline(text, i)

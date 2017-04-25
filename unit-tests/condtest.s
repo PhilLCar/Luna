@@ -23,12 +23,23 @@ main:
 	jz	else1
 	cmp	$17, %r10
 	jz	else1
-	mov	$8, %r10
+	push	$17
+	mov	%rsp, %r10
+	mov	$8, %r11
 	mov	$16, %rsi
-	mov	%r10, %rdi
+	mov	%r11, %rdi
 	call	compare
-	mov	%rsi, %r10
-	push	%r10
+	mov	%rsi, %r11
+	movq	$4, (%rbp)
+	movq	%r11, 8(%rbp)
+	movq	$17, 16(%rbp)
+	lea	4(, %rbp, 8), %rsi
+	mov	%rsi, (%r10)
+	lea	16(%rbp), %r10
+	add	$24, %rbp
+	pop	%rsi
+	mov	$1, %rdi
+	call	stack
 	push	(%rsp)
 	call	print_lua
 	call	print_ret

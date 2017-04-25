@@ -104,3 +104,40 @@ var:
 	call	check
 	mov	%r9, %rsi
 	ret
+
+	.global stack
+stack:
+	pop	%rcx
+st_lp:	cmp	$0, %rdi
+	jz	st_dn
+	dec	%rdi
+	cmp	$17, %rsi
+	jz	st_em
+	sar	$3, %rsi
+	push	8(%rsi)
+	mov	16(%rsi), %rsi
+	jmp	st_lp
+st_em:	push	%rsi
+	jmp	st_lp
+st_dn:	jmp	*%rcx
+
+	.global place
+place:
+	pop	%rcx
+	lea	(%rsp, %rdi, 8), %rdx
+pl_lp:	cmp	$0, %rdi
+	jz	pl_dn
+	dec	%rdi
+	mov	(%rsp, %rdi, 8), %r9
+	cmp	$17, %rsi
+	jz	pl_em
+	sar	$3, %rsi
+	mov	8(%rsi), %r8
+	mov	%r8, (%r9)
+	mov	16(%rsi), %rsi
+	jmp	pl_lp
+pl_em:	mov	%rsi, (%r9)
+	jmp	pl_lp
+pl_dn:	#jmp	*%rcx
+	mov	%rdx, %rsp
+	jmp	*%rcx
