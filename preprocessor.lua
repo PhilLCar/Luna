@@ -464,10 +464,40 @@ function rmMultiline(str)
    end
    return ret
 end
-   
+
+function rmFunctions(text)
+   local i, token, nexttoken = 1, ""
+   local ret, s = ""
+   while i <= #text do
+      s = text:sub(i, i)
+      if s == " " or s == "\n" or s == "\t" then
+	 if token == "function" then
+	    if text:sub(i + 1, i + 1) ~= "(" then
+	       nexttoken = ""
+	       i = i + 1
+	       while i <= #text do
+		  s = text:sub(i, i)
+		  if s == " " or s == "\n" or s == "\t" then
+		     break
+		  end
+		  nexttoken = nexttoken .. s
+		  i = i + 1
+	       end
+	       ret = ret .. nexttoken .. " = "
+	    end
+	 end
+	 ret = ret .. token
+	 token = ""
+      end
+      token = token .. s
+      i = i + 1
+   end
+   return ret
+end
+		     
 local file = io.open(comp_file .. ".lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open(comp_file .. ".pp.lua", "w+")
-file:write(parenthesize(rmMultiline(rmComments(text))))
+file:write(rmFunctions(parenthesize(rmMultiline(rmComments(text)))))
 file:close()

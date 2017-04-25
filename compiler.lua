@@ -17,7 +17,7 @@ new = false
 --duplicate!!!
 function isReserved(str)
    local ops = { "local", "or", "and", "not", "for", "in", "do", "while", "repeat",
-		 "until", "if", "elseif", "else", "then", "end", "function", "nil" }
+		 "until", "if", "elseif", "else", "then", "end", "function", "nil", "return" }
    for i, v in ipairs(ops) do
       if str == v then
 	 return v
@@ -59,6 +59,7 @@ ops["not"] = "not"
 ops["~"]   = "inv"
 ops["#"]   = "len"
 ops["nil"] = "nil"
+ops["return"] = "return"
 
 function isNum(str)
    local s = str:byte(1, 1)
@@ -356,13 +357,13 @@ end
 
 function leval(str, i)
    local j = 0
-   str, i = nextline(str, i)
-   print("«" .. str .. "»")
-   if not str then return str end
-   if str:find("=") and (str:find("=") ~= str:find("==")) or str:find("local") then
-      return eeval(str), i
+   local s, i = nextline(str, i)
+   print("«" .. s .. "»")
+   if not s then return s end
+   if s:find("=") and (s:find("=") ~= s:find("==")) or s:find("local") then
+      return eeval(s), i
    end
-   return peval(str), i
+   return peval(s), i
 end
 
 function get(name)
@@ -523,15 +524,13 @@ function scope(str, i)
 	 s, i = scope(str, i)
 	 final = final .. s .. free() .. "fend\t" .. tostring(scopes["for"]) .. "\n"
 	 
-
+--[[
       elseif s == "function" then
 	 s, i = nexttoken(str, i)
-	 scopes["repeat"] = scopes["repeat"] + 1
-	 final = final .. "repeat\t" .. tostring(scopes["repeat"]) .. "\n"
-	 stack.level = stack.level + 1
-	 stack[stack.level] = {}
-	 s, i = scope(str, i, tostring(scopes["repeat"]), level)
-	 final = final .. s
+	 scopes["function"] = scopes["function"] + 1
+	 final = final .. "func\t" .. tostring(scopes["function"]) .. "\n"
+	 s, i = scope(str, i)
+   final = final .. s]]
 
 	 
       elseif s == "do" then
