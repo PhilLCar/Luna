@@ -229,7 +229,7 @@ function rmDot(str)
 	    nstr = nstr .. s
 	    i = i + 1
 	    s = str:sub(i, i)
-	 until s == "(" or s == " " or s == "\t" or s == "\n"
+	 until s == "(" or s == " " or s == "\t" or s == "\n" or i > #str
 	 nstr = nstr .. "\"] "
 	 if s == "(" then
 	    nstr = nstr .. "("

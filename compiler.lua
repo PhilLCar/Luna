@@ -28,7 +28,7 @@ end
 
 --duplicate!!!
 function isOperator(str)
-   local ops = { "^", "-", "*", "/", "+", "..", ">", "<", ">=", "<=", "~=", "==",
+   local ops = { "^", "-", "*", "/", "+", "..", ">", "<", ">=", "<=", "~=", "==", "%",
 		 "~", "#", "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")" }
    for i, v in ipairs(ops) do
       if str == v then
@@ -41,6 +41,7 @@ end
 ops = {}
 ops["+"]   = "add"
 ops["-"]   = "sub"
+ops["%"]   = "mod"
 ops["--"]  = "neg"
 ops["*"]   = "mul"
 ops["/"]   = "div"
@@ -135,7 +136,7 @@ function nexttoken(str, i)
 end
 
 function nextline(str, i)
-   local j, word, s = 0, ""
+   local word, s = ""
    while i <= #str do
       i = i + 1
       s = str:sub(i, i)
@@ -356,6 +357,7 @@ end
 function leval(str, i)
    local j = 0
    str, i = nextline(str, i)
+   print("«" .. str .. "»")
    if not str then return str end
    if str:find("=") and (str:find("=") ~= str:find("==")) or str:find("local") then
       return eeval(str), i
@@ -414,7 +416,9 @@ function scope(str, i)
 	 s, i = scope(str, i)
 	 final = final .. s .. free()
 	 s, i = nexttoken(str, i)
-	 print(s)
+	 if s and s ~= "else" and s ~= "elseif" then
+	    i = i - #s - 1
+	 end
 	 while s == "elseif" do
 	    alloc()
 	    s, i = nexttoken(str, i)
@@ -439,7 +443,7 @@ function scope(str, i)
 	    final = final .. s .. free()
 	 end
 	 for j = scopes["if"], count, -1 do
-	    final = final .. "iend\t" .. tostring(j) .. "\n" .. free()
+	    final = final .. "iend\t" .. tostring(j) .. "\n" --.. free()
 	 end
 
 	 

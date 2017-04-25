@@ -1,5 +1,6 @@
 local x = {}
-x[1]=3
-x[1]
+x["test"] = 3
+x["test"]
+_print
 --3
 

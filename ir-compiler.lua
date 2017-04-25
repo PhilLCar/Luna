@@ -29,7 +29,12 @@ intro =
    --"\tmov\t%rax, _mem_size(%rip)\n" ..
    "\tpush\t%rax\n" ..
    "\tcall\tmmap\n" ..
-   "\tmov\t%rax, %rbp\n" 
+   "\tmov\t%rax, %rbp\n" ..
+   "\tmov\t%rbp, %rbx\n" ..
+   "\tadd\t$16, %rbp\n" ..
+   "\tmovq\t$0, (%rbx)\n" ..
+   "\tmovq\t$17, 8(%rbx)\n" ..
+   "\tlea\t3(, %rbx, 8), %rbx\n"
    --"\tmov\t%rbp, _mem_base(%rip)\n" ..
    --"\tmov\t%rsp, _stack_base(%rip)\n"
 
@@ -41,6 +46,8 @@ need_data = false
 data =
    "\n\n################################################################################\n" ..
    ".data\n\n"
+
+variables = {}
 
 -- Internal structures and functions
 --------------------------------------------------------------------------------
@@ -93,10 +100,13 @@ end
 
 function flatten()
    if buf then
-      local r, ret = register()
-      vsize = vsize + 1
-      vstack[vsize] = r
-      ret = "\tmov\t" .. buf .. ", " .. r .. "\n"
+      if available() then
+	 ret = "\tmov\t" .. buf .. ", " .. register() .. "\n"
+      else
+	 ret = replace()
+	 ret = ret .. "\tmov\t" .. buf .. ", " .. register() .. "\n"
+      end
+      vpush(current())
       buf = false
       return ret
    end
@@ -315,6 +325,19 @@ function op2(op)
    return ret
 end
 
+function mul()
+   local ret = ""
+   if not buf then
+      buf = get(0)
+      ret = pop()
+   end
+   ret = ret ..
+      "\timul\t" .. buf .. ", " .. vtop() .. "\n" ..
+      "\tsar\t$3, " .. vtop() .. "\n"
+   buf = false
+   return ret
+end
+
 function neg()
    local ret = ""
    if buf then
@@ -339,6 +362,28 @@ function eq()
       "\tcall\tcompare\n" ..
       "\tmov\t%rsi, " .. vtop() .. "\n"
    buf = false
+   return ret
+end
+
+function var(value)
+   local ret = ""
+   -- PRIMITIVES
+   if value == "_print" then
+      ret = ret .. "\tpush\t" .. get(0) .. "\n" ..
+	 "\tcall\tprint_lua\n\tcall\tprint_ret\n"
+      vpush(register())
+   else
+      if not variables[value] then
+	 variables[value] = tostring(#variables)
+      end
+      if buf then
+	 ret = flatten()
+      end
+      ret = ret ..
+	 "\tmov\t$" .. variables[value] .. ", %r8\n" ..
+	 "\tcall\tvar\n" ..
+	 push("(%rsi)")
+   end
    return ret
 end
 
@@ -463,7 +508,7 @@ function translate(text)
 	 value = 8 * tonumber(value)
 	 ret = ret .. push("$" .. tostring(value))
       elseif instr == "bool" then
-	 if value == true then
+	 if value == "true" then
 	    ret = ret .. push("$9")
 	 else
 	    ret = ret .. push("$1")
@@ -473,6 +518,8 @@ function translate(text)
       elseif instr == "add" or instr == "sub" or instr == "sal" or instr == "sar"
       or instr == "sll" or instr == "slr" then
 	 ret = ret .. op2(instr)
+      elseif instr == "mul" then
+	 ret = ret .. mul()
       elseif instr == "not" then
 	 ret = ret .. nt()
       elseif instr == "len" then
@@ -510,14 +557,11 @@ function translate(text)
 	 end
 	 ret = ret .. "iend" .. value .. ":\n"
       elseif instr == "ref" then
+	 print("v: --- " .. value)
+	 print("p: --- " .. get(tonumber(value)))
 	 ret = ret .. push(get(tonumber(value)))
       elseif instr == "var" then
-	 -- TEMPORAIRE
-	 if value == "_print" then
-	    ret = ret .. "\tpush\t" .. get(0) .. "\n" ..
-	       "\tcall\tprint_lua\n\tcall\tprint_ret\n"
-	    vpush(register())
-	 end
+	 ret = ret .. var(value)
       elseif instr == "push" then
 	 if modif then modif = modif + 1 end
 	 ret = ret .. restore() .. realpush()
@@ -532,6 +576,9 @@ function translate(text)
 	 ret = ret .. free(realsize() - target)
       elseif instr == "store" then
 	 if buf then
+	    --[[if buf:sub(#buf, #buf) ~= ")" then
+	       buf = "(" .. buf .. ")"
+	       end]]
 	    ret = ret .. 
 	       "\tlea\t" .. buf .. ", %rsi\n" ..
 	       "\tpush\t%rsi\n"
@@ -551,15 +598,15 @@ function translate(text)
 	 ret = ret .. push("%rsp") .. flatten()
 	 target = tonumber(value)
       elseif instr == "place" then
-	 target = target + modif - 1
+	 target = target + modif
 	 ret = ret .. 
 	    "\tmov\t" .. get(target) .. ", %rsp\n"
-	 for j = 1, target do
+	 for j = 1, target - 1 do
 	    ret = ret .. "\tmov\t" .. tostring(-8 * j) .. "(%rsp), %rdi\n" .. 
-	       "\tmov\t" .. tostring(-8 * (target + j)) .. "(%rsp), %rsi\n" ..
+	       "\tmov\t" .. tostring(-8 * (target + j - 1)) .. "(%rsp), %rsi\n" ..
 	       "\tmov\t%rsi, (%rdi)\n"
 	 end
-	 free(target + 2)
+	 free(target + 1)
 	 modif = false
       elseif instr == "create" then
 	 ret = ret .. push(false) ..
@@ -582,11 +629,11 @@ function translate(text)
 	    "\tsar\t$3, %rsi\n" ..
 	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
 	 pop()
-	 print(ret)
+	 --print(ret)
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))
       end
-      print(ret)
+      --print(ret)
       printstacks()
       ---------------------------
       s, i = readline(text, i)

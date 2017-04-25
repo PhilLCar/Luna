@@ -27,10 +27,12 @@ print_lua:
 	jz	print_special
 	cmp	$2, %rax
 	jz	print_str
-#	cmp	$3, %rax
-#	jz	print_table
+	cmp	$3, %rax
+	jz	print_table
+##### not printable #####
 #	cmp	$4, %rax
-#	jz	print_func
+#	jz	print_pair
+#########################
 #	cmp	$5, %rax
 #	jz	print_io
 #	cmp	$6, %rax
@@ -106,6 +108,18 @@ print_str:
 	popf
 	ret	$8
 
+print_table:
+	lea	string_table(%rip), %rax
+	push	%rax
+	call 	print_string
+	mov	24(%rsp), %rax
+	sar	$3, %rax
+	push	%rax
+	call	print_word_hex
+	pop	%rax
+	popf
+	ret	$8
+
 #print_func:
 #	lea	string_proc(%rip), %rax
 #	push	%rax
@@ -130,4 +144,7 @@ string_true:
 	.asciz	"true"
 string_nil:
 	.asciz	"nil"
+
+string_table:
+	.asciz	"table: " 
 	
