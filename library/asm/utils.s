@@ -176,3 +176,26 @@ not:
 	ret
 nt_t:	mov	$9, %rax
 	ret
+
+	.global expand
+expand:
+	push	%r10
+	push	%r11
+	push	%r12
+	push	%r13
+	push	%r14
+	push	%r15
+	mov	$1, %r14
+	mov	%rbp, %r15
+	mov	%r14, (%r15)
+	mov	$17, 8(%r15)
+	mov	$17, 16(%r15)
+	lea	16(%r15), %r13
+	add	$24, %rbp
+	mov	%rsi, %r11
+	and	$7, %r11
+	cmp	$4, %r11
+	jnz	ex_n1
+	cmp	$0, %rax
+	jmp	ex_en
+	

@@ -4,7 +4,7 @@
 r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
       "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
 
--- Reserved: %rax, %rsp, %rbp
+-- Reserved: %rax, %rbx, %rsp, %rbp
 
 -- Usable registers (6)
 u_reg  = 1
@@ -12,9 +12,9 @@ u_size = 6
 u_name = { "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
 u_cont = {  0,      0,      0,      0,      0,      0     }
 
--- Calling registers (14)
-c = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9", "%xmm0", "%xmm1",
-      "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7" }
+-- Calling registers (6)
+c_size = 6
+c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
@@ -43,8 +43,8 @@ outro =
    "\tret\n"
 
 need_data = false
-data =
-   "\n\n################################################################################\n" ..
+data = "\n# DATA" ..	    
+   "\n################################################################################\n" ..
    ".data\n\n"
 
 variables = {}
@@ -208,7 +208,7 @@ end
 function push(value, ...)
    local ret = ""
    if buf then
-      if buf:sub(#buf, #buf) == ")" then
+      if type(vtop()) == "number" and buf:sub(#buf, #buf) == ")" then
 	 ret = "\tmov\t" .. buf .. ", %rax\n"
 	 buf = "%rax"
       end
@@ -514,14 +514,39 @@ end
 
 function gen(size)
    local i = 1
-   while i <= 8 and i <= size do
-      vpush(c[i])
+   while i <= c_size and i <= size do
+      vpush(c_name[i])
       i = i + 1
    end
    while i <= size do
       push(false)
+      realpush()
       i = i + 1
    end
+end
+
+ident = 0
+function prepandret(args)
+   ident = ident + 1
+   local i, ret = 1, "\tpush\t%rcx\n" ..
+      "\tpush\treturn" .. tostring(ident) .. "(%rip)\n"
+   while i <= c_size and i <= args do
+      ret = ret .. "\tmov\t" .. get(0) .. ", " .. c_name[i] .. "\n"
+      pop()
+      i = i + 1
+   end
+   while i <= args do
+      ret = ret .. push(get(0))
+      pop()
+      i = i + 1
+   end
+   ret = ret ..
+      "\tmov\t$" .. tostring(args) .. ", %rax\n" ..
+      "\tlea\treturn" .. ident .. "(%rip), %rcx\n" ..
+      "\tjmp\t*%rcx\n" ..
+      "return" .. ident .. ":\n" ..
+      "\tpop\t%rax\n".. push("%rax")
+   return ret
 end
 
 -- Parsing functions
@@ -555,7 +580,7 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
-   local modif, target, defs, args = false, false, false
+   local modif, target, args = false, false
    local elses = {}
    while s do
       instr, value = separate(s)
@@ -606,14 +631,11 @@ function translate(text)
 	    "\tlea\t7(, " .. get(0) .. ", 8), " .. get(0) .. "\n"
 
       elseif instr == "def" then
-	 if not defs then
-	    ret = ret ..
-	       "################################################################################\n"
-	 end
 	 ret = ret .. "function" .. value .. ":\n"
 
       elseif instr == "gen" then
 	 gen(tonumber(value))
+	 ret = ret .. "\tcall\texpand\n"
 
       elseif instr == "vargs" then
 	 
@@ -632,10 +654,11 @@ function translate(text)
 	    -- TBD
 	    target = false
 	 end
-	 ret = ret .. endfunc()
+	 --ret = ret .. endfunc()
 
       elseif instr == "fend" then
-	 ret = ret .. endfunc()
+	 ret = ret .. "\tmov\t$17, %rax\n"..
+	    "\tret\n"
 	 
       elseif instr == "index" then
 	 ret = ret .. index(modif)
@@ -778,6 +801,11 @@ function translate(text)
 
       elseif instr == "free" then
 	 ret = ret .. free(tonumber(value))
+
+      elseif instr == "exit" then
+	 ret = ret .. outro ..
+	    "\n# FUNCTIONS" ..
+	    "\n################################################################################\n"
 	 
       end
       printstacks()
@@ -785,9 +813,9 @@ function translate(text)
       s, i = readline(text, i)
    end
    if need_data then
-      outro = outro .. data
+      ret = ret .. data
    end
-   return ret .. outro
+   return ret
 end
 
 --- TEMP ---

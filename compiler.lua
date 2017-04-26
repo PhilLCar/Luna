@@ -650,7 +650,7 @@ function scope(str, i, ...)
       s, i = nexttoken(str, i)
    end
    
-   return final .. free() .. functions
+   return final .. free() .. "exit\n" .. functions
 end
 
 local file = io.open(comp_file .. ".pp.lua", "r")
