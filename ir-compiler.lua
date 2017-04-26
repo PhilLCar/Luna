@@ -80,7 +80,7 @@ function vtop()
 end
 
 function vat(index)
-   return vstack[index]
+   return vstack[vsize - index]
 end
 
 function vfree(index)
@@ -158,12 +158,12 @@ end
 
 function register()
    u_cont[u_reg] = u_cont[u_reg] + 1
-   u_reg = (u_reg + 1) % u_size
-   return u_name[(u_reg - 1) % u_size]
+   u_reg = u_reg % u_size + 1
+   return u_name[(u_reg - 2) % u_size + 1]
 end
 
 function current()
-   return u_name[u_reg - 1]
+   return u_name[(u_reg - 2) % u_size + 1]
 end
 
 function future()
@@ -171,7 +171,7 @@ function future()
 end
 
 function release()
-   u_reg = (u_reg - 1) % u_size
+   u_reg = (u_reg - 2) % u_size + 1
    u_cont[u_reg] = u_cont[u_reg] - 1
    return u_name[u_reg]
 end
@@ -184,6 +184,7 @@ function replace()
 	 vstack[i] = rsize
       end
    end
+   u_cont[u_reg] = 0
    return "\tpush\t" .. n .. "\n"
 end
 
@@ -193,11 +194,10 @@ function realpush()
    local ret = ""
    if buf then
       ret = "\tpush\t" .. buf .. "\n"
-      rpush("%rax")
+      rpush(register())
       vpush(rsize)
       buf = false
    else
-      release()
       rpush(vtop())
       ret = "\tpush\t" .. vtop() .. "\n"
       vstack[vsize] = rsize
@@ -205,47 +205,89 @@ function realpush()
    return ret
 end
 
-function push(value)
+function push(value, ...)
    local ret = ""
    if buf then
-      if available() then
-	 ret = "\tmov\t" .. buf .. ", " .. register() .. "\n"
-      else
-	 ret = replace()
-	 ret = ret .. "\tmov\t" .. buf .. ", " .. register() .. "\n"
+      if buf:sub(#buf, #buf) == ")" then
+	 ret = "\tmov\t" .. buf .. ", %rax\n"
+	 buf = "%rax"
       end
+      if not available() then
+	 ret = ret .. replace()
+      end
+      ret = ret .. "\tmov\t" .. buf .. ", " .. register() .. "\n"
       vpush(current())
    end
-   if not value then
+   if arg[1] and value then
+      buf = value
+   elseif value then
+      if not available() then
+	 ret = ret .. replace()
+      end
+      ret = ret .. "\tmov\t" .. value .. ", " .. register() .. "\n"
+      vpush(current())
+   else
       vpush(register())
    end
-   buf = value
+   return ret
+end
+
+function promote(index)
+   local ret, swap = "", false
+   local virtual, real = get(index)
+   if type(virtual) == "number" then
+      real = rstack[virtual]
+      for i = 1, vsize do
+	 if vstack[i] == real then
+	    swap = i
+	 end
+      end
+      if swap then
+	 vstack[i] = virtual
+	 local tmp = rsize - virtual
+	 if tmp > 0 then
+	    tmp = tostring(8 * tmp)
+	 else
+	    tmp = ""
+	 end
+	 ret = "\txchg\t" .. tmp .. "(%rsp), " .. real .. "\n"
+      elseif virtual == rsize then
+	 ret = "\tpop\t" .. real .. "\n"
+	 rpop()
+      else
+	 local tmp = rsize - virtual
+	 if tmp > 0 then
+	    tmp = tostring(8 * tmp)
+	 else
+	    tmp = ""
+	 end
+	 ret = "\tmov\t" .. tmp .. "(%rsp), " .. real .. "\n"
+      end
+      set(index, real)
+   end
    return ret
 end
 
 function pop()
-   local top, ret = vtop(), ""
    if buf then
+      local tmp = buf
       buf = false
-      return ""
+      return tmp
    end
-   if type(top) == "number" then
-      vpop()
-      return ret
-   end
-   vpop()
+   release()
+   return vpop()
+end
+
+function popin()
+   if buf then return "" end
+   local ret = promote(0)
+   buf = vpop()
    release()
    return ret
 end
 
 function free(index)
    if index == 0 then return ""
-   elseif index < 0 then
-      for i = 1, -index do
-	 rpush("%rax")
-	 vpush(rsize)
-      end
-      return "\tsub\t$" .. tostring(8 * -index) .. ", %rsp\n"
    end
    if buf then
       buf = false
@@ -253,11 +295,7 @@ function free(index)
       if index == 0 then return "" end
    end
    for i = vsize - index + 1, vsize do
-      for j = 1, u_size do
-	 if u_name[j] == vstack[i] then
-	    release()
-	 end
-      end
+      release()
       vstack[i] = nil
    end
    vsize = vsize - index
@@ -277,11 +315,6 @@ function restore()
       end
    end
    for i = max + 1, rsize do
-      --[[for j = 1, u_size do
-	 if u_name[j] == rstack[i] then
-	    release()
-	 end
-      end]]
       rstack[i] = nil
    end
    if rsize - max ~= 0 then
@@ -299,7 +332,7 @@ function get(index)
 	 index = index - 1
       end
    end
-   local val = vat(vsize - index)
+   local val = vat(index)
    if type(val) == "string" then
       return val
    else
@@ -313,26 +346,28 @@ function get(index)
    end
 end
 
-function op2(op)
-   local ret = ""
-   if not buf then
-      buf = get(0)
-      ret = pop()
+function set(index, value)
+   if buf then
+      if index == 0 then
+	 buf = value
+      else
+	 index = index - 1
+      end
    end
-   ret = ret .. "\t" .. op .. "\t" .. buf .. ", " .. vtop() .. "\n"
+   vstack[vsize - index] = value
+end
+
+function op2(op)
+   local ret = popin() ..
+      "\t" .. op .. "\t" .. buf .. ", " .. get(1) .. "\n"
    buf = false
    return ret
 end
 
 function mul()
-   local ret = ""
-   if not buf then
-      buf = get(0)
-      ret = pop()
-   end
-   ret = ret ..
-      "\timul\t" .. buf .. ", " .. vtop() .. "\n" ..
-      "\tsar\t$3, " .. vtop() .. "\n"
+   local ret = popin() ..
+      "\timul\t" .. buf .. ", " .. get(1) .. "\n" ..
+      "\tsar\t$3, " .. get(1) .. "\n"
    buf = false
    return ret
 end
@@ -340,37 +375,35 @@ end
 function neg()
    local ret = ""
    if buf then
-      ret = "\tmov\t" .. buf .. ", %rsi\n" ..
-	 "\tneg\t%rsi\n"
-      buf = "%rsi"
+      ret = "\tmov\t" .. buf .. ", %rax\n" ..
+	 "\tneg\t%rax\n"
+      buf = "%rax"
    else
-      ret = "\tneg\t" .. vtop() .. "\n"
+      ret = "\tneg\t" .. get(0) .. "\n"
    end
    return ret
 end
 
 function eq()
-   local ret = ""
-   if not buf then
-      local tmp = get(0)
-      ret = pop()
-      buf = tmp
-   end
-   ret = ret .. "\tmov\t" .. buf .. ", %rsi\n" .. 
-      "\tmov\t" .. vtop() .. ", %rdi\n" ..
+   local ret = popin() ..
+      "\tpush\t%rcx\n" ..
+      "\tmov\t" .. buf .. ", %rax\n" .. 
+      "\tmov\t" .. get(1) .. ", %rcx\n" ..
       "\tcall\tcompare\n" ..
-      "\tmov\t%rsi, " .. vtop() .. "\n"
+      "\tmov\t%rax, " .. get(1) .. "\n" ..
+      "\tpop\t%rcx\n"
    buf = false
    return ret
 end
 
 function var(value)
    local ret = ""
-   -- PRIMITIVES
+   ------- PRIMITIVES -------
    if value == "_print" then
       ret = ret .. "\tpush\t" .. get(0) .. "\n" ..
 	 "\tcall\tprint_lua\n\tcall\tprint_ret\n"
       vpush(register())
+   --------------------------
    else
       if not variables[value] then
 	 variables[value] = tostring(#variables)
@@ -379,43 +412,35 @@ function var(value)
 	 ret = flatten()
       end
       ret = ret ..
-	 "\tmov\t$" .. variables[value] .. ", %r8\n" ..
+	 "\tmov\t$" .. variables[value] .. ", %rax\n" ..
 	 "\tcall\tvar\n" ..
-	 push("(%rsi)")
+	 push("(%rax)", true)
    end
    return ret
 end
 
 function index(new)
-   local ret = ""
-   if not buf then
-      local tmp = get(0)
-      ret = pop()
-      buf = tmp
-   end
-   ret = ret ..
-      "\tmov\t" .. buf .. ", %r8\n" .. 
-      "\tmov\t" .. vtop() .. ", %r9\n"
+   rpush("%rcx")
+   local ret = popin() ..
+      "\tpush\t%rcx\n" ..
+      "\tmov\t" .. buf .. ", %rax\n" .. 
+      "\tmov\t" .. get(1) .. ", %rcx\n"
    if new then
       ret = ret .. "\tcall\tnew\n"
    else
       ret = ret .. "\tcall\tindex\n"
    end
+   ret = ret .. "\tpop\t%rcx\n"
+   rpop()
    buf = false
    pop()
-   buf = "(%rsi)"
+   buf = "(%rax)"
    return ret
 end
 
 function check()
-   local ret = ""
-   if not buf then
-      local tmp = get(0)
-      ret = pop()
-      buf = tmp
-   end
-   ret = ret ..
-      "\tmov\t" .. buf .. ", %rsi\n" .. 
+   local ret = popin() ..
+      "\tmov\t" .. buf .. ", %rax\n" .. 
       "\tcall\tcheck\n"
    buf = false
    return ret
@@ -424,31 +449,30 @@ end
 function len()
    local ret = ""
    if buf then
-      ret =
-	 "\tmov\t" .. buf .. ", %rsi\n" ..
-	 "\tsar\t$3, %rsi\n" ..
-	 "\tmov\t(%rsi), %rsi\n"
-      buf = "%rsi"
+      if buf ~= "%rax" then
+	 ret = "\tmov\t" .. buf .. ", %rax\n"
+      end
+      ret = ret ..
+	 "\tsar\t$3, %rax\n" ..
+	 "\tmov\t(%rax), %rax\n"
+      buf = "%rax"
    else
-      ret = ret .. "\tsar\t$3, " .. vtop() .. "\n" ..
-	 "\tmov\t(" .. vtop() .. "), " .. vtop() .. "\n"
+      ret = popin() .. 
+	 "\tsar\t$3, " .. buf .. "\n" ..
+	 "\tmov\t(" .. buf .. "), " .. buf .. "\n"
    end
    return ret
 end
 
-notcount = 0
 function nt()
-   notcount = notcount + 1
    local ret, addr = "", tostring(notcount)
    if buf then
       ret = flatten()
    end
-   ret = ret .. "\tcmp\t$1, " .. vtop() .. "\n" ..
-      "\tjz\tnot" .. addr .. "\n" ..
-      "\tmov\t$1, " .. vtop() .. "\n" ..
-      "\tjmp\tnt" .. addr .. "\n" ..
-      "not" .. addr .. ":\tmov\t$9, " .. vtop() .. "\n" ..
-      "nt" .. addr .. ":"
+   ret = ret ..
+      "\tmov\t" .. get(0) .. ", %rax\n" ..
+      "\tcall\tnot\n" ..
+      "\tmov\t%rax, " .. get(0) .. "\n"
    return ret
 end
 
@@ -466,34 +490,39 @@ function st(value)
 end
 
 function concat()
-   local ret, reg = ""
-   if not buf then
-      local tmp = get(0)
-      ret = pop()
-      buf = tmp
-   end
+   local ret, reg, mov = "", "", ""
+   ret = popin()
    if buf:sub(#buf, #buf) == ")" then
-      ret = ret .. "\tmov\t" .. buf .. ", %rsi\n"
-      buf = "%rsi"
+      ret = ret .. "\tmov\t" .. buf .. ", %rax\n"
+      buf = "%rax"
    end
-   reg = get(1)
-   if reg:sub(#reg, #reg) == ")" then
-      ret = ret .. "\tmov\t" .. reg .. ", %rdi\n"
-      reg = "%rdi"
-   end
+   rpush("%rcx")
    ret = ret ..
+      "\tpush\t%rcx\n" ..
       "\tmovq\t$4, (%rbp)\n" ..
       "\tmovq\t" .. buf .. ", 8(%rbp)\n" ..
       "\tmovq\t$17, 16(%rbp)\n" ..
-      "\tlea\t4(, %rbp, 8), %rsi\n" ..
-      "\tmov\t%rsi, (" .. reg .. ")\n" ..
-      "\tlea\t16(%rbp), " .. reg .. "\n" ..
-      "\tadd\t$24, %rbp\n"
-      --"\tlea\t132(, %rbp, 8), " .. get(1) .. "\n"
+      "\tlea\t4(, %rbp, 8), %rcx\n" ..
+      "\tmov\t%rcx, (" .. get(1) .. ")\n" ..
+      "\tlea\t16(%rbp), " .. get(1) .. "\n" ..
+      "\tadd\t$24, %rbp\n" ..
+      "\tpop\t%rcx\n"
+   rpop("%rcx")
    buf = false
    return ret
 end
-      
+
+function gen(size)
+   local i = 1
+   while i <= 8 and i <= size do
+      vpush(c[i])
+      i = i + 1
+   end
+   while i <= size do
+      push(false)
+      i = i + 1
+   end
+end
 
 -- Parsing functions
 --------------------------------------------------------------------------------
@@ -526,23 +555,23 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
-   local modif, target = false
+   local modif, target, defs, args = false, false, false
    local elses = {}
    while s do
       instr, value = separate(s)
       ---------------------------
       if instr == "nil" then
-	 ret = ret .. push("$17")
+	 ret = ret .. push("$17", true)
 	 
       elseif instr == "int" then
 	 value = 8 * tonumber(value)
-	 ret = ret .. push("$" .. tostring(value))
+	 ret = ret .. push("$" .. tostring(value), true)
 	 
       elseif instr == "bool" then
 	 if value == "true" then
-	    ret = ret .. push("$9")
+	    ret = ret .. push("$9", true)
 	 else
-	    ret = ret .. push("$1")
+	    ret = ret .. push("$1", true)
 	 end
 	 
       elseif instr == "string" then
@@ -570,6 +599,43 @@ function translate(text)
 	 
       elseif instr == "eq" then
 	 ret = ret .. eq()
+
+      elseif instr == "func" then
+	 ret = ret .. push(false) ..
+	    "\tlea\tfunction" .. value .. "(%rip), " .. get(0) .. "\n" ..
+	    "\tlea\t7(, " .. get(0) .. ", 8), " .. get(0) .. "\n"
+
+      elseif instr == "def" then
+	 if not defs then
+	    ret = ret ..
+	       "################################################################################\n"
+	 end
+	 ret = ret .. "function" .. value .. ":\n"
+
+      elseif instr == "gen" then
+	 gen(tonumber(value))
+
+      elseif instr == "vargs" then
+	 
+
+      elseif instr == "args" then
+	 args = tonumber(value)
+
+      elseif instr == "call" then
+	 ret = ret .. prepandret(args)
+	 if modif then
+	    integrate()
+	 end
+
+      elseif instr == "return" then
+	 if target then
+	    -- TBD
+	    target = false
+	 end
+	 ret = ret .. endfunc()
+
+      elseif instr == "fend" then
+	 ret = ret .. endfunc()
 	 
       elseif instr == "index" then
 	 ret = ret .. index(modif)
@@ -579,8 +645,8 @@ function translate(text)
 	 
       elseif instr == "then" then
 	 if buf then
-	    ret = ret .. "\tmov\t" .. buf .. ", %rsi\n"
-	    buf = "%rsi"
+	    ret = ret .. "\tmov\t" .. buf .. ", %rax\n"
+	    buf = "%rax"
 	 end
 	 ret = ret .. "\tcmp\t$1, " .. get(0) .. "\n" ..
 	    "\tjz\telse" .. value .. "\n" ..
@@ -623,30 +689,40 @@ function translate(text)
 	 pop()
 	 rpop()
 	 for i = 1, target do
-	    rpush("%rax")
-	    vpush(rsize)
+	    print("BEFORE")
+	    printstacks()
+	    push(false)
+	    realpush()
+	    print("AFTER")
 	 end
 	 ret = ret ..
-	    "\tpop\t%rsi\n" ..
-	    "\tmov\t$" .. tostring(target) .. ", %rdi\n" ..
-	    "\tcall\tstack\n"
+	    "\tmov\t%rcx, (%rbp)\n" .. 
+	    "\tmov\t%rdx, 8(%rbp)\n" ..
+	    "\tpop\t%rax\n" ..
+	    "\tmov\t$" .. tostring(target) .. ", %rcx\n" ..
+	    "\tcall\tstack\n" ..
+	    "\tmov\t8(%rbp), %rdx\n" ..
+	    "\tmov\t(%rbp), %rcx\n"
+	 target = false
 	 
       elseif instr == "store" then
-	 if buf then
-	    ret = ret .. 
-	       "\tlea\t" .. buf .. ", %rsi\n" ..
-	       "\tpush\t%rsi\n"
-	    rpush(buf)
-	    vpush(rsize)
-	    buf = false
+	 local tmp = get(0)
+	 if tmp:sub(#tmp, #tmp) == ")" then
+	    ret = ret .. popin() ..
+	       "\tlea\t" .. tmp .. ", %rax\n"
+	    buf = "%rax"
+	 end
+	 ret = ret .. realpush()
+	 --[[if buf then
+	    ret = ret .. realpush()
 	 else
 	    ret = ret .. 
-	       "\tlea\t" .. vtop() .. ", %rsi\n" ..
-	       "\tpush\t%rsi\n"
+	       "\tlea\t" .. get(0) .. ", %rax\n" ..
+	       
 	    rpush(vtop())
 	    release()
 	    vstack[vsize] = rsize
-	 end
+	    end]]
 	 
       elseif instr == "modif" then
 	 modif = true
@@ -659,13 +735,22 @@ function translate(text)
 	 pop()
 	 rpop()
 	 ret = ret ..
-	    "\tpop\t%rsi\n" ..
-	    "\tmov\t$" .. tostring(target) .. ", %rdi\n" ..
-	    "\tcall\tplace\n"
+	    "\tmov\t%rcx, (%rbp)\n" .. 
+	    "\tmov\t%rdx, 8(%rbp)\n" ..
+	    "\tmov\t%rdi, 16(%rbp)\n" ..
+	    "\tmov\t%rsi, 24(%rbp)\n" ..
+	    "\tpop\t%rax\n" ..
+	    "\tmov\t$" .. tostring(target) .. ", %rcx\n" ..
+	    "\tcall\tplace\n" ..
+	    "\tmov\t24(%rbp), %rsi\n" ..
+	    "\tmov\t16(%rbp), %rdi\n" ..
+	    "\tmov\t8(%rbp), %rdx\n" ..
+	    "\tmov\t(%rbp), %rcx\n"
 	 for i = 1, target do
-	    vpop()
+	    pop()
 	    rpop()
 	 end
+	 target = false
 	 
       elseif instr == "create" then
 	 ret = ret .. push(false) ..
@@ -675,8 +760,8 @@ function translate(text)
 	 
       elseif instr == "item" then
 	 ret = ret ..
-	    "\tlea\t4(, %rbp, 8), %rsi\n" ..
-	    "\tmov\t%rsi, (" .. get(1) .. ")\n" ..
+	    "\tlea\t4(, %rbp, 8), %rax\n" ..
+	    "\tmov\t%rax, (" .. get(1) .. ")\n" ..
 	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rbp)\n" ..
 	    "\tmovq\t" .. get(0) .. ", 8(%rbp)\n" ..
 	    "\tadd\t$24, %rbp\n" ..
@@ -686,9 +771,9 @@ function translate(text)
       elseif instr == "done" then
 	 ret = ret ..
 	    "\tmovq\t$17, (" .. get(0) .. ")\n" ..
-	    "\tmov\t" .. get(1) .. ", %rsi\n" ..
-	    "\tsar\t$3, %rsi\n" ..
-	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rsi)\n"
+	    "\tmov\t" .. get(1) .. ", %rax\n" ..
+	    "\tsar\t$3, %rax\n" ..
+	    "\tmovq\t$" .. tostring(8 * tonumber(value)) .. ", (%rax)\n"
 	 pop()
 
       elseif instr == "free" then

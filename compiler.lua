@@ -12,6 +12,8 @@ scopes["repeat"] = 0
 scopes["do"] = 0
 scopes["function"] = 0
 
+functions = ""
+
 new = false
 outside = false
 
@@ -253,6 +255,7 @@ function feval(str)
    if str == "" then
       return "args\t0\n"
    end
+   local tmp1, tmp2 = place, stack[level]["-"]
    repeat
       s, i = nexttoken(str, i)
       if not s then break
@@ -262,6 +265,7 @@ function feval(str)
 	 final = final .. peval(s)
       end
    until false
+   place, stack[level]["-"] = tmp1, tmp2
    return "args\t" .. tostring(k) .. "\n" .. final .. "call\n"
 end
 
@@ -342,7 +346,7 @@ function _eeval(str, flag)
 	 if token ~= "," then
 	    if token == "function" then
 	       local tmp
-	       tmp, i = scope(str, i - 9)
+	       tmp, i = scope(str, i - 9, true)
 	       final = final .. tmp
 	    else
 	       final = final .. peval(token)
@@ -379,6 +383,63 @@ function _eeval(str, flag)
    return final, i - j
 end
 
+function concat(str)
+   local final, token, i = "", nexttoken(str, 0)
+   local k = 0
+   if token and token == "return" then
+      token, i = nexttoken(str, i)
+   end
+   while token do
+      if token ~= "," then
+	 final = final .. peval(token)
+	 token, i = nexttoken(str, i)
+	 while token and (isBracketed(token) or isParenthesized(token)) do
+	    final = final .. peval(token)
+	    token, i = nexttoken(str, i)
+	 end
+	 final = final .. "push\n"
+	 k = k + 1
+      end
+      if token ~= "," then
+	    break
+      end
+      token, i = nexttoken(str, i)
+   end
+   if token then
+      i = i - #token - 1
+   end
+   return "sets\t" .. tostring(k) .. "\n" .. final .. "return\n", i
+end
+
+function func(str)
+   local final, token, i = "", nexttoken(str, 0)
+   local k = 0
+   local varargs = false
+   while token do
+      if token == "..." then
+	 token = "arg"
+	 varargs = true
+	 k = k - 1
+      end
+      if token ~= "," then
+	 place = place + 1
+	 stack[level]["-"] = stack[level]["-"] + 1
+	 stack[level][token] = place
+	 k = k + 1
+      end
+      token, i = nexttoken(str, i)
+      if token ~= "," then
+	 break
+      end
+      token, i = nexttoken(str, i)
+   end
+   local ret = "gen\t" .. tostring(k) .. "\n"
+   if varargs then
+      ret = ret .. "vargs\n"
+   end
+   return ret
+end
+
 function leval(str, i)
    local j, k = 0, i
    local s, i = nextline(str, i)
@@ -386,6 +447,9 @@ function leval(str, i)
    if not s then return s end
    if s:find("=") and (s:find("=") ~= s:find("==")) or s:find("local") then
       s, i = eeval(str:sub(k, #str))
+      return s, i + k - 1
+   elseif s:find("return") and s:find(",") then
+      s, i = concat(str:sub(k, #str))
       return s, i + k - 1
    end
    return peval(s), i
@@ -419,7 +483,7 @@ function alloc()
    stack[level]["-"] = 0
 end
 
-function scope(str, i)
+function scope(str, i, ...)
    local final, s = ""
    s, i = nexttoken(str, i)
    alloc()
@@ -556,8 +620,13 @@ function scope(str, i)
 	 s, i = nexttoken(str, i)
 	 scopes["function"] = scopes["function"] + 1
 	 final = final .. "func\t" .. tostring(scopes["function"]) .. "\n"
+	 functions = functions .. "def\t" .. tostring(scopes["function"]) ..
+	    "\n" .. func(s:sub(2, #s - 1))
 	 s, i = scope(str, i)
-	 final = final .. s
+	 functions = functions .. s .. free() .. "fend\n"
+	 if arg[1] then
+	    return final, i
+	 end
 
 	 
       elseif s == "do" then
@@ -581,7 +650,7 @@ function scope(str, i)
       s, i = nexttoken(str, i)
    end
    
-   return final .. free()
+   return final .. free() .. functions
 end
 
 local file = io.open(comp_file .. ".pp.lua", "r")

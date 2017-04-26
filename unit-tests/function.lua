@@ -1,5 +1,5 @@
 function test(param)
-   return param + 2
+   return param + 2, 1
 end
 
 test(2)
