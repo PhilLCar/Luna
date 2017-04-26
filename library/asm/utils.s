@@ -120,14 +120,12 @@ ck_en:	sal	$3, %rcx
 
 	.global var
 var:
-	push	%rcx
 	mov	%rbx, %rcx
 	call	new
 	mov	%rax, %rcx
 	mov	%rbx, %rax
 	call	check
 	mov	%rcx, %rax
-	pop	%rcx
 	ret
 
 	.global stack
