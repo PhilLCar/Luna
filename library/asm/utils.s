@@ -179,23 +179,231 @@ nt_t:	mov	$9, %rax
 
 	.global expand
 expand:
-	push	%r10
-	push	%r11
-	push	%r12
-	push	%r13
-	push	%r14
-	push	%r15
-	mov	$1, %r14
+	pop	%r12
+	mov	%rax, %r14
 	mov	%rbp, %r15
-	mov	%r14, (%r15)
-	mov	$17, 8(%r15)
-	mov	$17, 16(%r15)
-	lea	16(%r15), %r13
-	add	$24, %rbp
-	mov	%rsi, %r11
+	mov	%r15, %r13
+rg_0:	mov	%rdi, %r10
+	jmp	rg_fl
+rg_1:	mov	%rsi, %r10
+	jmp	rg_fl	
+rg_2:	mov	%rdx, %r10
+	jmp	rg_fl
+rg_3:	mov	%rcx, %r10
+	jmp	rg_fl
+rg_4:	mov	%r8, %r10
+	jmp	rg_fl
+rg_5:	mov	%r9, %r10
+	jmp	rg_fl
+rg_st:	pop	%r10
+rg_fl:	cmp	$0, %r14
+	jz	ex_en
+	dec	%r14
+	mov	%r10, %r11
 	and	$7, %r11
 	cmp	$4, %r11
-	jnz	ex_n1
-	cmp	$0, %rax
-	jmp	ex_en
+	jnz	ex_n
+	mov	%r10, (%r13)
+	sar	$3, %r10
+	mov	(%r10), %r13
+	jmp	ex_f
+ex_n:	mov	%r10, 8(%rbp)
+	lea	4(, %rbp, 8), %r11
+	mov	%r11, (%r13)
+	lea	16(%rbp), %r13
+	add	$24, %rbp
+ex_f:	mov	%rax, %r11
+	sub	%r14, %r11
+	cmp	$1, %r11
+	jz	rg_1
+	cmp	$2, %r11
+	jz	rg_2
+	cmp	$3, %r11
+	jz	rg_3
+	cmp	$4, %r11
+	jz	rg_4
+	cmp	$5, %r11
+	jz	rg_5
+	jmp	rg_st
+ex_en:	movq	$17, 8(%rbp)
+	movq	$17, 16(%rbp)
+	lea	4(,%rbp, 8), %r11
+	mov	%r11, (%r13)
+	add	$24, %rbp
+	jmp	*%r12
+
+		.global	distribute
+distribute:
+	mov	%r15, %rdi
+	pop	(%rbp)
+	lea	(%rdi), %rsi
+	mov	%r9, %rdi
+	jmp	ds_fl
+ds_0:	push	%r10
+dn_0:	mov	%r8, %r10
+	jmp	ds_fl
+ds_1:	push	%r11
+dn_1:	mov	%r8, %r11
+	jmp	ds_fl
+ds_2:	push	%r12	
+dn_2:	mov	%r8, %r12
+	jmp	ds_fl
+ds_3:	push	%r13
+dn_3:	mov	%r8, %r13
+	jmp	ds_fl
+ds_4:	push	%r14
+dn_4:	mov	%r8, %r14
+	jmp	ds_fl
+ds_5:	push	%r15
+dn_5:	mov	%r8, %r15
+ds_fl:	cmp	$0, %r9
+	jz	ds_ar
+	cmp	$0, %r9
+	js	ds_en
+	cmpq	$17, 8(%rsi)
+	jz	ds_em
+	dec	%r9
+	mov	8(%rsi), %r8
+	mov	16(%rsi), %rsi
+	sar	$3, %rsi
+ds_f:	mov	%rdi, %rax
+	sub	%r9, %rax
+	cmp	$6, %rax
+	jg	dn_f
+	cmp	$1, %rax
+	jz	dn_0
+	cmp	$2, %rax
+	jz	dn_1
+	cmp	$3, %rax
+	jz	dn_2
+	cmp	$4, %rax
+	jz	dn_3
+	cmp	$5, %rax
+	jz	dn_4
+	cmp	$6, %rax
+	jz	dn_5	
+dn_f:	xor	%rdx, %rdx
+	mov	$6, %rcx
+	idiv	%rax
+	cmp	$1, %rdx
+	jz	ds_0
+	cmp	$2, %rdx
+	jz	ds_1
+	cmp	$3, %rdx
+	jz	ds_2
+	cmp	$4, %rdx
+	jz	ds_3
+	cmp	$5, %rdx
+	jz	ds_4
+	cmp	$0, %rdx
+	jz	ds_5
+ds_em:	mov	$17, %r8
+	jmp	ds_f
+ds_ar:	lea	131(, %rbp, 8), %r8
+	mov	%r8, 8(%rbp)
+	dec	%r9
+	jmp	ds_f
+ds_en:	mov	%rdi, %rax
+	mov	(%rbp), %rdx
+	lea	8(, %rax, 8), %rcx
+	mov	%rcx, (%rbp)
+	add	$16, %rbp
+	lea	string_n(%rip), %rdi
+	lea	2(, %rax, 8), %rdi
+	mov	%rdi, (%rbp)
+	mov	%rax, 8(%rbp)
+	lea	4(, %rsi, 8), %rax
+	mov	%rax, 16(%rbp)
+	add	$24, %rbp
+ds_fn:	jmp	*%rdx
 	
+#	.global	distribute
+#distribute:
+#	mov	%r15, %rdi
+#	pop	(%rbp)
+#	lea	(%rdi), %rsi
+#	mov	%r9, %rdi
+#	jmp	ds_fl
+#ds_0:	push	%r10
+#dn_0:	mov	%r8, %r10
+#	jmp	ds_fl
+#ds_1:	push	%r11
+#dn_1:	mov	%r8, %r11
+#	jmp	ds_fl
+#ds_2:	push	%r12	
+#dn_2:	mov	%r8, %r12
+#	jmp	ds_fl
+#ds_3:	push	%r13
+#dn_3:	mov	%r8, %r13
+#	jmp	ds_fl
+#ds_4:	push	%r14
+#dn_4:	mov	%r8, %r14
+#	jmp	ds_fl
+#ds_5:	push	%r15
+#dn_5:	mov	%r8, %r15
+#ds_fl:	cmp	$0, %r9
+#	jz	ds_ar
+#	cmp	$0, %r9
+#	js	ds_en
+#	cmpq	$17, 8(%rsi)
+#	jz	ds_em
+#	dec	%r9
+#	mov	8(%rsi), %r8
+#	mov	16(%rsi), %rsi
+#	sar	$3, %rsi
+#ds_f:	mov	%rdi, %rax
+#	sub	%r9, %rax
+#	cmp	$6, %rax
+#	jg	dn_f
+#	cmp	$1, %rax
+#	jz	dn_0
+#	cmp	$2, %rax
+#	jz	dn_1
+#	cmp	$3, %rax
+#	jz	dn_2
+#	cmp	$4, %rax
+#	jz	dn_3
+#	cmp	$5, %rax
+#	jz	dn_4
+#	cmp	$6, %rax
+#	jz	dn_5	
+#dn_f:	xor	%rdx, %rdx
+#	mov	$6, %rcx
+#	idiv	%rax
+#	cmp	$1, %rdx
+#	jz	ds_0
+#	cmp	$2, %rdx
+#	jz	ds_1
+#	cmp	$3, %rdx
+#	jz	ds_2
+#	cmp	$4, %rdx
+#	jz	ds_3
+#	cmp	$5, %rdx
+#	jz	ds_4
+#	cmp	$0, %rdx
+#	jz	ds_5
+#ds_em:	mov	$17, %r8
+#	jmp	ds_f
+#ds_ar:	lea	131(, %rbp, 8), %r8
+#	mov	%r8, 8(%rbp)
+#	dec	%r9
+#	jmp	ds_f
+#ds_en:	mov	%rdi, %rax
+#	mov	(%rbp), %rdx
+#	lea	8(, %rax, 8), %rcx
+#	mov	%rcx, (%rbp)
+#	add	$16, %rbp
+#	lea	string_n(%rip), %rdi
+#	lea	2(, %rax, 8), %rdi
+#	mov	%rdi, (%rbp)
+#	mov	%rax, 8(%rbp)
+#	lea	4(, %rsi, 8), %rax
+#	mov	%rax, 16(%rbp)
+#	add	$24, %rbp
+#ds_fn:	jmp	*%rdx
+	
+	.data
+	
+string_n:
+	.quad	8
+	.asciz	"n"

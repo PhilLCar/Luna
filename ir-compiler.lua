@@ -514,13 +514,8 @@ end
 
 function gen(size)
    local i = 1
-   while i <= c_size and i <= size do
-      vpush(c_name[i])
-      i = i + 1
-   end
    while i <= size do
       push(false)
-      realpush()
       i = i + 1
    end
 end
@@ -528,7 +523,14 @@ end
 ident = 0
 function prepandret(args)
    ident = ident + 1
-   local i, ret = 1, "\tpush\t%rcx\n" ..
+   local i, ret = 1
+   ret =
+      "\tpush\t%r10\n" .. 
+      "\tpush\t%r11\n" ..
+      "\tpush\t%r12\n" ..
+      "\tpush\t%r13\n" ..
+      "\tpush\t%r14\n" .. 
+      "\tpush\t%r15\n" ..
       "\tpush\treturn" .. tostring(ident) .. "(%rip)\n"
    while i <= c_size and i <= args do
       ret = ret .. "\tmov\t" .. get(0) .. ", " .. c_name[i] .. "\n"
@@ -542,10 +544,15 @@ function prepandret(args)
    end
    ret = ret ..
       "\tmov\t$" .. tostring(args) .. ", %rax\n" ..
-      "\tlea\treturn" .. ident .. "(%rip), %rcx\n" ..
-      "\tjmp\t*%rcx\n" ..
+      "\tsar\t$3, " .. get(0) .. "\n" ..
+      "\tjmp\t*" .. get(0) .. "\n" ..
       "return" .. ident .. ":\n" ..
-      "\tpop\t%rax\n".. push("%rax")
+      "\tpop\t%r15\n" .. 
+      "\tpop\t%r14\n" ..
+      "\tpop\t%r13\n" ..
+      "\tpop\t%r12\n" ..
+      "\tpop\t%r11\n" .. 
+      "\tpop\t%r10\n"
    return ret
 end
 
@@ -635,10 +642,14 @@ function translate(text)
 
       elseif instr == "gen" then
 	 gen(tonumber(value))
-	 ret = ret .. "\tcall\texpand\n"
+	 ret = ret .. "\tcall\texpand\n" ..
+	    "\tmov\t$" .. value .. ", %r9\n" ..
+	    "\tcall\tdistribute\n"
 
-      elseif instr == "vargs" then
-	 
+      elseif instr == "arg" then
+	 if value == "true" then
+	    push(false)
+	 end
 
       elseif instr == "args" then
 	 args = tonumber(value)
@@ -650,11 +661,22 @@ function translate(text)
 	 end
 
       elseif instr == "return" then
-	 if target then
-	    -- TBD
-	    target = false
+	 if type(get(0)) == "number" then
+	    rpop()
 	 end
-	 --ret = ret .. endfunc()
+	 pop()
+	 pop()
+	 rpop()
+	 for i = 1, target do
+	    printstacks()
+	    pop()
+	    --rpop()
+	 end
+	 push(false)
+	 ret = ret ..
+	    "\tpop\t%rax\n" ..
+	    "\tret\n"
+	 target = false
 
       elseif instr == "fend" then
 	 ret = ret .. "\tmov\t$17, %rax\n"..

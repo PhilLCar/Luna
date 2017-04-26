@@ -389,6 +389,8 @@ function concat(str)
    if token and token == "return" then
       token, i = nexttoken(str, i)
    end
+   stackup()
+   stackup()
    while token do
       if token ~= "," then
 	 final = final .. peval(token)
@@ -408,18 +410,18 @@ function concat(str)
    if token then
       i = i - #token - 1
    end
+   stackdown()
    return "sets\t" .. tostring(k) .. "\n" .. final .. "return\n", i
 end
 
 function func(str)
    local final, token, i = "", nexttoken(str, 0)
    local k = 0
-   local varargs = false
+   local arg = false
    while token do
       if token == "..." then
 	 token = "arg"
-	 varargs = true
-	 k = k - 1
+	 arg = true
       end
       if token ~= "," then
 	 place = place + 1
@@ -434,9 +436,7 @@ function func(str)
       token, i = nexttoken(str, i)
    end
    local ret = "gen\t" .. tostring(k) .. "\n"
-   if varargs then
-      ret = ret .. "vargs\n"
-   end
+   ret = ret .. "arg\t" .. tostring(arg) .. "\n"
    return ret
 end
 
