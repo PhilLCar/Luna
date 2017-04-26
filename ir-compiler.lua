@@ -711,7 +711,7 @@ function translate(text)
 	    push(false)
 	    end]]
 	 if target ~= 0 then
-	    target = tostring(8 * (target + 5))
+	    target = tostring(8 * (target - 9))
 	 else
 	    target = ""
 	 end

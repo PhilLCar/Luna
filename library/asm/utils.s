@@ -226,7 +226,7 @@ distribute:
 	pop	(%rbp)
 	lea	(%rdi), %rsi
 	xor	%rdi, %rdi
-	movq	%r9, %rdi
+	xor	%r9, %rdi
 	jmp	ds_fl
 ds_0:	push	%r10
 dn_0:	mov	%r8, %r10
