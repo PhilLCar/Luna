@@ -73,49 +73,42 @@ ix_nl:	lea	8(%rcx), %rax
 
 	.global new
 new:
-	push	%rax
+	mov	%rax, %r8
 	call	index
 	cmp	$17, (%rax)
 	jnz	nw_rt
 	lea	4(, %rbp, 8), %rcx
 	mov	%rcx, (%rax)
-	mov	(%rsp), %rax
-	mov	%rax, (%rbp)
+	mov	%r8, (%rbp)
 	lea	8(%rbp), %rax
 	movq	$17, 16(%rbp)
 	add	$24, %rbp
-nw_rt:	add	$8, %rsp
-	ret
+nw_rt:	ret
 
 	.global check
 check:
-	push	%rax
-	push	%rbx
-	push	%rcx
-	push	%rdx
+	push	%rdi
+	mov	%rax, %rdi
 	sar	$3, %rax
 	lea	8(%rax), %rdx
-	xor	%rcx, %rcx
+	xor	%r9, %r9
 ck_lp:	cmp	$17, (%rdx)
 	jz	ck_en
-	inc	%rcx
+	inc	%r9
 	mov	(%rdx), %rax
 	sar	$3, %rax
 	cmp	$17, 8(%rax)
 	jnz	ck_rm
-	dec	%rcx
-	mov	16(%rax), %rbx
-	mov	%rbx, (%rdx)
+	dec	%r9
+	mov	16(%rax), %rsi
+	mov	%rsi, (%rdx)
 ck_rm:	lea	16(%rax), %rdx
 	jmp	ck_lp
-ck_en:	sal	$3, %rcx
-	mov	24(%rsp), %rax
+ck_en:	sal	$3, %r9
+	mov	%rdi, %rax
 	sar	$3, %rax
-	mov	%rcx, (%rax)
-	pop	%rdx
-	pop	%rcx
-	pop	%rbx
-	pop	%rax
+	mov	%r9, (%rax)
+	pop	%rdi
 	ret
 
 	.global var
