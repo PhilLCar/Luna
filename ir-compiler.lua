@@ -268,6 +268,28 @@ function promote(index)
    return ret
 end
 
+function realpop()
+   local ret = ""
+   if rsize > 0 then
+      local doable = true
+      for i = 1, vsize do
+	 if vstack[i] == rtop() then
+	    doable = false
+	 end
+      end
+      if doable then
+	 for i = 1, vsize do
+	    if vstack[i] == rsize then
+	       vstack[i] = rtop()
+	    end
+	 end
+      end
+      ret = "\tpop\t" .. rtop() .. "\n"
+      rpop()
+   end
+   return ret
+end
+
 function pop()
    if buf then
       local tmp = buf
@@ -287,6 +309,7 @@ function popin()
 end
 
 function free(index)
+   --local ret = rearrange()
    if index == 0 then return ""
    end
    if buf then
@@ -302,6 +325,25 @@ function free(index)
    return restore()
 end
 
+function rearrange()
+   local i, ret = vsize, ""
+   while i >= 1 do
+      if type(vstack[i]) == "number" then
+	 if vstack[i] > rsize then
+	    vstack[i] = u_name[u_reg % 8]
+	 elseif vstack[i] == rsize then
+	    ret = "\tpop\t" .. rtop() .. "\n"
+	    rpop()
+	 else
+	    ret = "\tmov\t" .. tostring(8 * (rsize - vstack[i])) .. ", " .. rstack[vstack[i]] .. "\n"
+	 end
+	 vstack[i] = rstack[i]
+      end
+   i = i - 1
+   end
+   return ret
+end
+
 function restore()
    local max, ret = 0, ""
    if (vsize + 1) % u_size ~= u_reg then
@@ -309,7 +351,9 @@ function restore()
    end
    for i = 1, vsize do
       if type(vstack[i]) == "number" then
-	 if vstack[i] > max then
+	 if vstack[i] > rsize then
+	    vstack[i] = u_name[i % 8]
+	 elseif vstack[i] > max then
 	    max = vstack[i]
 	 end
       end
@@ -317,7 +361,7 @@ function restore()
    for i = max + 1, rsize do
       rstack[i] = nil
    end
-   if rsize - max ~= 0 then
+   if rsize - max ~= 0 and rsize > 0 then
       ret = "\tadd\t$" .. tostring((rsize - max) * 8) .. ", %rsp\n"
    end
    rsize = max
@@ -386,12 +430,10 @@ end
 
 function eq()
    local ret = popin() ..
-      "\tpush\t%rcx\n" ..
       "\tmov\t" .. buf .. ", %rax\n" .. 
       "\tmov\t" .. get(1) .. ", %rcx\n" ..
       "\tcall\tcompare\n" ..
-      "\tmov\t%rax, " .. get(1) .. "\n" ..
-      "\tpop\t%rcx\n"
+      "\tmov\t%rax, " .. get(1) .. "\n"
    buf = false
    return ret
 end
@@ -420,9 +462,7 @@ function var(value)
 end
 
 function index(new)
-   rpush("%rcx")
    local ret = popin() ..
-      "\tpush\t%rcx\n" ..
       "\tmov\t" .. buf .. ", %rax\n" .. 
       "\tmov\t" .. get(1) .. ", %rcx\n"
    if new then
@@ -430,8 +470,7 @@ function index(new)
    else
       ret = ret .. "\tcall\tindex\n"
    end
-   ret = ret .. "\tpop\t%rcx\n"
-   rpop()
+   --ret = ret .. realpop()
    buf = false
    pop()
    buf = "(%rax)"
@@ -498,23 +537,21 @@ function concat()
    end
    rpush("%rcx")
    ret = ret ..
-      "\tpush\t%rcx\n" ..
       "\tmovq\t$4, (%rbp)\n" ..
       "\tmovq\t" .. buf .. ", 8(%rbp)\n" ..
       "\tmovq\t$17, 16(%rbp)\n" ..
       "\tlea\t4(, %rbp, 8), %rcx\n" ..
       "\tmov\t%rcx, (" .. get(1) .. ")\n" ..
       "\tlea\t16(%rbp), " .. get(1) .. "\n" ..
-      "\tadd\t$24, %rbp\n" ..
-      "\tpop\t%rcx\n"
-   rpop("%rcx")
+      "\tadd\t$24, %rbp\n"
+   rpop()
    buf = false
    return ret
 end
 
 function gen(size)
    local i = 1
-   while i <= size do
+   while i <= size + 1 do
       push(false)
       i = i + 1
    end
@@ -587,7 +624,7 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
-   local modif, target, args = false, false
+   local modif, target, funcs, args = false, false, false
    local elses = {}
    while s do
       instr, value = separate(s)
@@ -638,6 +675,7 @@ function translate(text)
 	    "\tlea\t7(, " .. get(0) .. ", 8), " .. get(0) .. "\n"
 
       elseif instr == "def" then
+	 funcs = true
 	 ret = ret .. "function" .. value .. ":\n"
 
       elseif instr == "gen" then
@@ -667,13 +705,19 @@ function translate(text)
 	 pop()
 	 pop()
 	 rpop()
-	 for i = 1, target do
+	 
+	 --[[for i = 1, target do
 	    printstacks()
-	    pop()
-	    --rpop()
+	    push(false)
+	    end]]
+	 if target ~= 0 then
+	    target = tostring(8 * (target + 5))
+	 else
+	    target = ""
 	 end
 	 push(false)
 	 ret = ret ..
+	    "\tadd\t$" .. target .. ", %rsp\n" ..
 	    "\tpop\t%rax\n" ..
 	    "\tret\n"
 	 target = false
@@ -733,6 +777,12 @@ function translate(text)
 	 pop()
 	 pop()
 	 rpop()
+	 
+	 ret = ret ..
+	    "\tpop\t%rax\n" ..
+	    "\tmov\t$" .. tostring(target) .. ", %rcx\n" ..
+	    "\tcall\tstack\n"
+	 
 	 for i = 1, target do
 	    print("BEFORE")
 	    printstacks()
@@ -740,14 +790,6 @@ function translate(text)
 	    realpush()
 	    print("AFTER")
 	 end
-	 ret = ret ..
-	    "\tmov\t%rcx, (%rbp)\n" .. 
-	    "\tmov\t%rdx, 8(%rbp)\n" ..
-	    "\tpop\t%rax\n" ..
-	    "\tmov\t$" .. tostring(target) .. ", %rcx\n" ..
-	    "\tcall\tstack\n" ..
-	    "\tmov\t8(%rbp), %rdx\n" ..
-	    "\tmov\t(%rbp), %rcx\n"
 	 target = false
 	 
       elseif instr == "store" then
@@ -758,16 +800,6 @@ function translate(text)
 	    buf = "%rax"
 	 end
 	 ret = ret .. realpush()
-	 --[[if buf then
-	    ret = ret .. realpush()
-	 else
-	    ret = ret .. 
-	       "\tlea\t" .. get(0) .. ", %rax\n" ..
-	       
-	    rpush(vtop())
-	    release()
-	    vstack[vsize] = rsize
-	    end]]
 	 
       elseif instr == "modif" then
 	 modif = true
@@ -780,17 +812,10 @@ function translate(text)
 	 pop()
 	 rpop()
 	 ret = ret ..
-	    "\tmov\t%rcx, (%rbp)\n" .. 
-	    "\tmov\t%rdx, 8(%rbp)\n" ..
-	    "\tmov\t%rdi, 16(%rbp)\n" ..
-	    "\tmov\t%rsi, 24(%rbp)\n" ..
 	    "\tpop\t%rax\n" ..
 	    "\tmov\t$" .. tostring(target) .. ", %rcx\n" ..
-	    "\tcall\tplace\n" ..
-	    "\tmov\t24(%rbp), %rsi\n" ..
-	    "\tmov\t16(%rbp), %rdi\n" ..
-	    "\tmov\t8(%rbp), %rdx\n" ..
-	    "\tmov\t(%rbp), %rcx\n"
+	    "\tcall\tplace\n"
+	    
 	 for i = 1, target do
 	    pop()
 	    rpop()
@@ -825,9 +850,12 @@ function translate(text)
 	 ret = ret .. free(tonumber(value))
 
       elseif instr == "exit" then
-	 ret = ret .. outro ..
-	    "\n# FUNCTIONS" ..
-	    "\n################################################################################\n"
+	 ret = ret .. outro
+	 if funcs then
+	    ret = ret ..
+	       "\n# FUNCTIONS" ..
+	       "\n################################################################################\n"
+	 end
 	 
       end
       printstacks()

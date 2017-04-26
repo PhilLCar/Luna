@@ -411,7 +411,10 @@ function concat(str)
       i = i - #token - 1
    end
    stackdown()
-   return "sets\t" .. tostring(k) .. "\n" .. final .. "return\n", i
+   return "sets\t" .. tostring(k) .. "\n" ..
+      final ..
+      "free\t" .. tostring(stack[level]["-"]) .. "\n" ..
+      "return\n", i
 end
 
 function func(str)
