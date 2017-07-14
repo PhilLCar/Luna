@@ -624,6 +624,7 @@ function translate(text)
    local ret = intro
    local s, i = readline(text, 1)
    local instr, value
+   local sets = false
    local modif, target, funcs, args = false, false, false
    local elses = {}
    while s do
@@ -761,47 +762,32 @@ function translate(text)
 	 ret = ret .. var(value)
 	 
       elseif instr == "push" then
-	 ret = ret .. concat()
+	 sets = sets + 1
+	 ret = ret .. realpush()
 	 
       elseif instr == "sets" then
+	 push("%rsp")
 	 modif = false
+	 sets = 0
 	 target = tonumber(value)
-	 ret = ret ..
-	    push("$17") .. realpush() ..
-	    push("%rsp") .. flatten()
 	 
       elseif instr == "stack" then
-	 if type(get(0)) == "number" then
-	    rpop()
+	 for i = 1, target - sets do
+	    ret = ret .. push("$17", true) .. realpush()
 	 end
-	 pop()
-	 pop()
-	 rpop()
 	 
-	 ret = ret ..
-	    "\tpop\t%rax\n" ..
-	    "\tmov\t$" .. tostring(target) .. ", %rcx\n" ..
-	    "\tcall\tstack\n"
-	 
-	 for i = 1, target do
-	    print("BEFORE")
-	    printstacks()
-	    push(false)
-	    realpush()
-	    print("AFTER")
-	 end
-	 target = false
 	 
       elseif instr == "store" then
-	 local tmp = get(0)
+	 --[[local tmp = get(0)
 	 if tmp:sub(#tmp, #tmp) == ")" then
 	    ret = ret .. popin() ..
 	       "\tlea\t" .. tmp .. ", %rax\n"
 	    buf = "%rax"
-	 end
+	    end]]
 	 ret = ret .. realpush()
 	 
       elseif instr == "modif" then
+	 push("%rsp")
 	 modif = true
 	 
       elseif instr == "place" then

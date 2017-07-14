@@ -14,17 +14,23 @@ io.write("\n")
    un autre test
 ]==]
 do
-   print("Hello World!")
+   print('"Hello World!"')
    local x,y =(2+ 3) - --[[INLINE!!]]((4 * -4) ^ 5)^9 > 2 and 1, "test" .. "a"
       test = 1 + 3 + 4 + -- MULTILINE!
       5 + 6
-   y = y  : sub(1, 2)
+   y = y  : sub(1, 3)
+   t = {}
+   t.a = "allo"
+   t = t.a:sub(1, 2)
    function test2(prm, ...)
       x = x + 1
       return prm
    end
    if x == 1 and y == "test" or y ~= 2 then
-      print("yo")
+      print([=[Waddup
+ mo fo
+]=])
+      
    elseif x == 2 then
       print("wow")
    else
