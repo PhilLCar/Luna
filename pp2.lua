@@ -137,7 +137,7 @@ function nexttoken(str, i)
 
    -- String parsing [[]]
    if s == "[=" or s == "[[" then
-      return strpar(str, i)
+      return strpar(str, i, true)
       
    elseif isOperator(s) then
       chnum = chnum + 1
@@ -154,39 +154,9 @@ function nexttoken(str, i)
 
       -- String parsing "" and ''
    elseif s == "\"" or s == "'" then
-      local t = s
-      local ti, tl = i, 0
-      ret = ret .. "\""
+      return strpar(str, i, s)
       
-      while true do
-	 i = i + 1
-	 if i > #str then
-	    typerr = "String decleration reached end of file. Expected closing " .. t .. "."
-	    helperror()
-	    break
-	 end
-	 s = str:sub(i, i)
-	 if t == "'" and s == "\"" then
-	    ret = ret .. "\\\""
-	 elseif t == "\n" then
-	    ret = ret .. "\n"
-	    tl = tl + 1
-	    ti = i
-	 elseif s == t then
-	    ret = ret .. "\""
-	    break
-	    break
-	 else
-	    ret = ret .. s
-	 end
-      end
-      
-      linum = linum + tl
-      chnum = i - ti
-      return ret, i + 1
-      ---------------------------
-      
-   elseif isOperator(s) or isDelimiter(s) then
+   elseif isOperator(s) or isDelimiter(s) or isPunctuation(s) then
       return s, i + 1
    end
 
@@ -204,9 +174,6 @@ function nexttoken(str, i)
    return ret, i
 end
 
-function scan(arr, dir, op)
-end
-
 function readline(str, i, indent)
    local tl, tc, j = linum, chnum
    local ret, token = ""
@@ -216,19 +183,96 @@ function readline(str, i, indent)
 	 if ret == "" then
 	    return token, j
 	 else
-	    linum = tl
-	    chnum = tc
+	    linum, chnum = tl, tc
 	    return ret, i
 	 end
       else
 	 ret = ret .. token
 	 i = j
-	 tl = linum
-	 tc = chnum
+	 tl, tc = linum, chnum
       end
       token, j = nexttoken(str, i)
    end
    return false, i
+end
+
+function associate(arr, left, unary, op)
+end
+
+function scan(array, left, unary, start, stop)
+   local i, j = start, 0
+   local newarr = {}
+   while i < #array do
+      if array[i] == stop then
+	 break
+      end
+      if array[i] != nil then
+	 if array[i] == "(" then
+	    array = scan(array, left, unary, i + 1, ")")
+	    if i > 1 then
+	       array[i - 1] = "(" .. array[i - 1] .. " " .. array[i] .. ")"
+	       array[i] = nil
+	    end
+	 elseif array[i] == "[" then
+	    array = scan(array, left, unary, i + 1, "]")
+	    if i > 1 then
+	       array[i - 1] = "(" .. array[i - 1] .. " " .. array[i] .. ")"
+	       array[i] = nil
+	    end
+	 end
+      end
+      i = i + 1
+   end
+end
+
+function readexpr(str, i, indent)
+   local ret, token = ""
+   local expr, j = {}, 0
+   local last, k = "", i
+   local tl, tc  = linum, chnum
+   
+   while true do
+      tl, tc = chnum, linum
+      token, k = nexttoken(str, i)
+      j = j + 1
+      
+      if isReserved(token) or isEnv(token) or isPunctuation or token == "{" or token = "}" then
+	 if j == 1 then
+	    return token, k
+	 elseif last == "var" then
+	    linum, chnum = tl, tc
+	    break
+	 else
+	    linum, chnum = tl, tc
+	    typerr = "Unexpected token \"" .. token .. "\""
+	    helperror()
+	 end
+      elseif isOperator(token) or isDelimiter(token) then
+	 expr[j] = token
+	 last = "op"
+      elseif token == "\n" then
+	 if last == "var" then
+	    linum, chnum = tl, tc
+	    break
+	 elseif last == "" then
+	    return token, k
+	 else
+	    expr[j] = token
+	 end
+      else
+	 if last == "var" then
+	    typerr = "Syntax error, possibly missing an operator?"
+	    helperror()
+	 end
+	 expr[j] = token
+	 last = "var"
+      end
+	 
+      i = k
+   end
+
+   
+   
 end
 
 -- Comment parsing
@@ -250,22 +294,27 @@ function compar(str, i)
 end
 
 -- String parsing
--- *** Maybe integrate other [very similar] string parsing ("", '')
-function strpar(str, i)
+function strpar(str, i, t)
       local n, ret = 1, "\""
       local ti, tl = i, 0
       chnum = chnum + 1
-      
-      repeat
-	 n = n + 1
-	 i = i + 1
-	 s = str:sub(i, i)
-      until s == "["
+
+      if not t then
+	 repeat
+	    n = n + 1
+	    i = i + 1
+	    s = str:sub(i, i)
+	 until s == "["
+      end
       
       while true do
 	 i = i + 1
 	 if i > #str then
-	    typerr = "Reached end of file, expected closing brackets"
+	    if t then
+	       typerr = "String decleration reached end of file. Expected closing " .. t .. "."
+	    else
+	       typerr = "Reached end of file, expected closing brackets."
+	    end
 	    helperror()
 	    break
 	 end
@@ -273,12 +322,13 @@ function strpar(str, i)
 	 if s == "\n" then
 	    tl = tl + 1
 	    ti = i
-	    ret = ret .. "\\n\n"
-	 elseif s == "\t" then
+	    if not t then ret = ret .. "\\n" end
+	    ret = ret .. "\n"
+	 elseif s == "\t" and not t then
 	    ret = ret .. "\\t"
-	 elseif s == "\"" then
+	 elseif s == "\"" and not t then
 	    ret = ret .. "\\\""
-	 elseif s == "]" then
+	 elseif s == "]" and not t then
 	    local m, tmp = 1, s
 	    repeat
 	       m = m + 1
@@ -293,6 +343,9 @@ function strpar(str, i)
 	    else
 	       ret = ret .. tmp
 	    end
+	 elseif s == t then
+	    ret = ret .. "\""
+	    break
 	 else
 	    ret = ret .. s
 	 end
