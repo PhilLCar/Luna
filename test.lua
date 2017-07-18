@@ -1,4 +1,4 @@
-if test then
+if [[woohoo "yo"]] == 'woohoo "yo"' then
    test
 elseif test then
    for i = 0, 1 do
