@@ -265,10 +265,14 @@ function scan(array, start, stop, indent)
 	    break
 	 elseif array[i] == "(" then
 	    ret, i = scan(array, i + 1, ")", indent)
-	    for k = 1, #ret do
-	       if ret:sub(i, i) == "," then
-		  ret = "(" .. ret .. ")"
-		  break
+	    if ret:sub(1, 1) ~= "(" then
+	       ret = "(" .. ret .. ")"
+	    else
+	       for k = 1, #ret do
+		  if ret:sub(i, i) == "," then
+		     ret = "(" .. ret .. ")"
+		     break
+		  end
 	       end
 	    end
 	    newarr[j] = ret
@@ -418,6 +422,7 @@ function readexpr(str, i, indent)
    while true do
       tc, tl = chnum, linum
       token, k = nexttoken(str, i)
+      if not token then return token, k end
       j = j + 1
       
       if isReserved(token)    or
@@ -480,7 +485,7 @@ function readexpr(str, i, indent)
    expr = removeMacros(expr)
    --for i, v in ipairs(expr) do print(v) end
    ret = scan(expr, 1, nil, indent)
-   return ret
+   return ret, i
 end
 
 -- Comment parsing
@@ -594,6 +599,7 @@ function ifenv(str, i, line, indent, elif)
       ret = ret .. tmp .. line .. " "
    end
    if elif then
+      linum = linum - 1
       return ret, i - 4
    else
       return ret, i
@@ -637,7 +643,7 @@ function _preprocess(str, i, indent, stops)
    local tl, tc = linum, chnum
    local nl = 0 -- strgen("  ", indent)
    while line do
-      line, i = readline(str, i, indent)
+      line, i = readexpr(str, i, indent)
       if not line then break end
       
       for n, stop in ipairs(stops) do
@@ -741,8 +747,5 @@ local file = io.open("test.lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open("test.pp.lua", "w+")
---file:write(preprocess(text))
-local test, t = readexpr(text, 1, 0)
-test, t = readexpr(text, t, 0)
-file:write(test)
+file:write(preprocess(text))
 file:close()
