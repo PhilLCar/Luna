@@ -1,6 +1,6 @@
 if [[woohoo "yo"]] == --[[fuck
 you]] 'woohoo "yo"' then
-   test
+   test -- [[yoyoyoyo
 elseif test then
    for i = 0, 1 do
       blabla
@@ -16,6 +16,13 @@ elseif test then
 	 bong
       end
    yolo
-else
+   else
+      function test(p1, p2, ...)
+	 function yolo()
+	    repeat
+	       p1 + p2
+	    until p1 == p2
+	 end
+      end
    test2
 end

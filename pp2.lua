@@ -2,13 +2,24 @@
 comp_file = "unit-tests/test"
 _SPACE = "   "
 
+--------------------------------------------------------------------------------
 -- Error managment values
 --------------------------------------------------------------------------------
 local linum, chnum = 1, 1
 local typerr = "Unknown"
 
--- Boolean functions
 --------------------------------------------------------------------------------
+-- Miscellaneous functions
+--------------------------------------------------------------------------------
+-- String generation function
+function strgen(str, n)
+   local ret = ""
+   for i = 1, n do
+      ret = ret .. str
+   end
+   return ret
+end
+
 function isWhitespace(str)
    if str == " "  or
       --str == "\n" or !!Conserver les choix de l'utilisateur dans le placement de "\n"
@@ -103,8 +114,12 @@ function isReserved(str)
    return false
 end
 
+--------------------------------------------------------------------------------
 -- Parsing functions
 --------------------------------------------------------------------------------
+
+-- This function retrieves the next token from the file ignoring user format.
+-- A token can be a value, a variable, an operator, etc...
 function nexttoken(str, i)
    local ret, s = ""
 
@@ -123,7 +138,7 @@ function nexttoken(str, i)
       s = str:sub(i, i)
    end
 
-   -- Special cases (3)
+   -- ***Special cases*** (3 char)
    s = str:sub(i, i + 2)
    
    if s == "..." or isOperator(s) then
@@ -131,13 +146,14 @@ function nexttoken(str, i)
       return s, i + 3
    end
 
-   -- Special cases (2)
+   -- ***Special cases*** (2 char)
    s = s:sub(1, 2)
 
-   -- String parsing [[]]
+   -- String parsing: [[]]
    if s == "[=" or s == "[[" then
       return strpar(str, i, false)
 
+   -- Comment parsing
    elseif s == "--" then
       return compar(str, i)
       
@@ -146,7 +162,7 @@ function nexttoken(str, i)
       return s, i + 2
    end
 
-   -- Special cases (1)
+   -- ***Special cases*** (1 char)
    s = s:sub(1, 1)
 
    if s == "\n" then
@@ -154,7 +170,7 @@ function nexttoken(str, i)
       chnum = 1
       return s, i + 1
 
-      -- String parsing "" and ''
+   -- String parsing: "" ''
    elseif s == "\"" or s == "'" then
       return strpar(str, i, s)
       
@@ -162,7 +178,7 @@ function nexttoken(str, i)
       return s, i + 1
    end
 
-   -- Regular case
+   -- ***Regular case***
    while
       not isWhitespace(s) and
       not isOperator(s) and
@@ -182,10 +198,100 @@ function nexttoken(str, i)
    return ret, i
 end
 
+-- This function will ensure the expression read isn't empty
+function readline(str, i, indent)
+   local ret = ""
+   local tmp, k = readexpr(str, i, indent)
+   while tmp == "\n" do
+      ret = ret .. "\n" .. strgen(_SPACE, indent + 1)
+      i = k
+      tmp, k = readexpr(str, i, indent)
+   end
+   return ret, i
+end
+
+-- This function parses the single next expression to be preprocessed
+function readexpr(str, i, indent)
+   local ret, token = ""
+   local expr, j, c = {}, 0, 0
+   local last, k = "", i
+   local tl, tc  = linum, chnum
+   
+   while true do
+      tc, tl = chnum, linum
+      token, k = nexttoken(str, i)
+      --print(token)
+      if not token then return token, k end
+      j = j + 1
+      
+      if isReserved(token)    or
+	 isEnv(token)         or
+	 isPunctuation(token) or
+	 token == "{"         or
+	 token == "}"
+      then
+	 if c == 0 then
+	    if j == 1 then
+	       return token, k
+	    elseif last ~= "op" then
+	       linum, chnum = tl, tc
+	       break
+	    else
+	       linum, chnum = tl, tc
+	       typerr = "Unexpected token \"" .. token .. "\""
+	       helperror()
+	    end
+	 else
+	    expr[j] = token
+	    last = "op"
+	 end
+      elseif isDelimiter(token) then
+	 if token == "(" then c = c + 1
+	 elseif token == ")" then c = c - 1
+	 end
+	 expr[j] = token
+	 last = "del"
+      elseif isOperator(token) then
+	 expr[j] = token
+	 last = "op"
+      elseif token == "\n" then
+	 if last == "" then
+	    return token, k
+	 elseif last ~= "op" then
+	    linum, chnum = tl, tc
+	    break
+	 else
+	    expr[j] = token
+	 end
+      else
+	 if last == "var" then
+	    linum, chnum = tl, tc
+	    typerr = "Syntax error, possibly missing an operator?"
+	    helperror()
+	 end
+	 expr[j] = token
+	 last = "var"
+      end
+	 
+      i = k
+   end
+
+   if c ~= 0 then
+      typerr = "Parenthesis mismatch."
+      helperror()
+   end
+   
+   expr = removeMacros(expr)
+   ret = scan(expr, 1, nil, indent)
+   return ret, i
+end
+
+-- Priority parenthesizing function.
 function associate(arr, left, unary, indent, ...)
    local ops = {...}
    local start, stop, inc
    local mem, newarr, j = true, {}
+   -- Unary operators
    if unary then
       local i = 1
       while i <= #arr do
@@ -211,7 +317,9 @@ function associate(arr, left, unary, indent, ...)
 	 end
 	 i = i + 1
       end
+   -- Binary operators
    else
+      -- Associativity
       if left then
 	 start = 2
 	 stop = #arr - 1
@@ -256,6 +364,8 @@ function associate(arr, left, unary, indent, ...)
    return newarr
 end
 
+-- The scanning function allows to correctly parenthesize expressions while keeping
+-- user specified parentheses in place
 function scan(array, start, stop, indent)
    local i, j = start, 1
    local newarr, ret = {}, ""
@@ -323,6 +433,7 @@ function scan(array, start, stop, indent)
    return ret, i
 end
 
+-- This function removes lua macros '.' and ':'
 function removeMacros(array)
    local nex, pre
    local i = 1
@@ -413,81 +524,6 @@ function removeMacros(array)
    return array
 end
 
-function readexpr(str, i, indent)
-   local ret, token = ""
-   local expr, j, c = {}, 0, 0
-   local last, k = "", i
-   local tl, tc  = linum, chnum
-   
-   while true do
-      tc, tl = chnum, linum
-      token, k = nexttoken(str, i)
-      if not token then return token, k end
-      j = j + 1
-      
-      if isReserved(token)    or
-	 isEnv(token)         or
-	 isPunctuation(token) or
-	 token == "{"         or
-	 token == "}"
-      then
-	 if c == 0 then
-	    if j == 1 then
-	       return token, k
-	    elseif last ~= "op" then
-	       --linum, chnum = tl, tc
-	       break
-	    else
-	       --linum, chnum = tl, tc
-	       typerr = "Unexpected token \"" .. token .. "\""
-	       helperror()
-	    end
-	 else
-	    expr[j] = token
-	    last = "op"
-	 end
-      elseif isDelimiter(token) then
-	 if token == "(" then c = c + 1
-	 elseif token == ")" then c = c - 1
-	 end
-	 expr[j] = token
-	 last = "del"
-      elseif isOperator(token) then
-	 expr[j] = token
-	 last = "op"
-      elseif token == "\n" then
-	 if last == "var" then
-	    linum, chnum = tl, tc
-	    break
-	 elseif last == "" then
-	    return token, k
-	 else
-	    expr[j] = token
-	 end
-      else
-	 if last == "var" then
-	    linum, chnum = tl, tc
-	    typerr = "Syntax error, possibly missing an operator?"
-	    helperror()
-	 end
-	 expr[j] = token
-	 last = "var"
-      end
-	 
-      i = k
-   end
-
-   if c ~= 0 then
-      typerr = "Parenthesis mismatch."
-      helperror()
-   end
-   
-   expr = removeMacros(expr)
-   --for i, v in ipairs(expr) do print(v) end
-   ret = scan(expr, 1, nil, indent)
-   return ret, i
-end
-
 -- Comment parsing
 function compar(str, i)
    local s = str:sub(i + 2, i + 3)
@@ -497,9 +533,13 @@ function compar(str, i)
       s, i = nexttoken(str, i + 2)
       s, i = nexttoken(str, i)
    else
-      while s and s ~= "\n" do
-	 s, i = nexttoken(str, i)
-      end
+      i = i + 3
+      repeat
+	 i = i + 1
+	 chnum = chnum + 1
+	 s = str:sub(i, i)
+      until i >= #str or s == "\n"
+      s, i = nexttoken(str, i)
    end
    if line then
       if s ~= "\n" then
@@ -575,23 +615,28 @@ function strpar(str, i, t)
       return ret, i
 end
 
+--------------------------------------------------------------------------------
 -- Preprocessing
 --------------------------------------------------------------------------------
-function strgen(str, n)
-   local ret = ""
-   for i = 1, n do
-      ret = ret .. str
-   end
-   return ret
-end
-
 ----------------------------------------
 -- Environment functions
 ----------------------------------------
+-- These functions handle the various environments in which the preprocessor
+-- can be run
 function ifenv(str, i, line, indent, elif)
    local ret, tmp = line
-   tmp, i, line = _preprocess(str, i, indent + 1, { "then" })
-   ret = ret .. tmp .. line .. " "
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = readexpr(str, i, indent)
+   ret = ret .. tmp .. " "
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = readexpr(str, i, indent)
+   if tmp ~= "then" then
+      typerr = "Syntax error, 'then' expected."
+      helperror()
+   end
+   ret = ret .. tmp .. " "
    tmp, i, line = _preprocess(str, i, indent + 1, { "else", "end" })
    ret = ret .. tmp .. line .. " "
    if line:sub(#line - 3, #line) == "else" then
@@ -627,12 +672,57 @@ end
 
 function wenv(str, i, line, indent, elif)
    local ret, tmp = line
-   tmp, i, line = _preprocess(str, i, indent + 1, { "do" })
-   ret = ret .. tmp .. line .. " "
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = readexpr(str, i, indent)
+   ret = ret .. tmp .. " "
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = readexpr(str, i, indent)
+   if tmp ~= "do" then
+      typerr = "Syntax error, 'do' expected."
+      helperror()
+   end
+   ret = ret .. tmp
    tmp, i = doenv(str, i, "", indent, elif)
    return ret .. tmp, i
-   end
+end
 
+function repenv(str, i, line, indent, elif)
+   local ret, tmp = line
+   tmp, i, line = _preprocess(str, i, indent + 1, { "until" })
+   ret = ret .. tmp .. line .. " "
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = readexpr(str, i, indent)
+   ret = ret .. tmp .. " "
+   return ret, i
+end
+
+function funenv(str, i, line, indent, elif)
+   local ret, tmp = line
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = nexttoken(str, i)
+   if isOperator(tmp) or isEnv(tmp) or isReserved(tmp) or isPunctuation(tmp) then
+      typerr = "Name expected."
+      helperror()
+   end
+   ret = ret .. tmp .. " "
+   tmp, i = readline(str, i, indent)
+   ret = ret .. tmp
+   tmp, i = readexpr(str, i, indent)
+   if tmp:sub(1, 1) ~= "(" then
+      typerr = "No parameter declaration"
+      helperror()
+   end
+   ret = ret .. tmp .. " "
+   tmp, i, line = _preprocess(str, i, indent + 1, { "end" })
+   ret = ret .. tmp .. line .. " "
+   return ret, i
+end
+
+-- Preprocessing function (Main function)
 function preprocess(str)
    return _preprocess(str, 1, 0, {})
 end
@@ -645,6 +735,7 @@ function _preprocess(str, i, indent, stops)
    while line do
       line, i = readexpr(str, i, indent)
       if not line then break end
+      print(line)
       
       for n, stop in ipairs(stops) do
 	 if line == stop then
@@ -653,7 +744,7 @@ function _preprocess(str, i, indent, stops)
       end
 
       if line == "end" then
-	 if not stops then
+	 if #stops == 0 then
 	    typerr = "<eof> expected near 'end'."
 	 else
 	    typerr = "Unexpectedly reached \"end\"; was expecting \"" .. stops[1] .. "\""
@@ -675,6 +766,7 @@ function _preprocess(str, i, indent, stops)
 	 line = strgen(_SPACE, nl) .. line .. " "
 	 tmp, i = ifenv(str, i, line, indent, false)
 	 ret = ret .. tmp
+	 
       elseif line == "elseif" then
 	 line = strgen(_SPACE, nl - 1) .. "else if "
 	 tmp, i = ifenv(str, i, line, indent + 1, true)
@@ -700,9 +792,15 @@ function _preprocess(str, i, indent, stops)
 
       ---------- RPT ----------
       elseif line == "repeat" then
+	 line = strgen(_SPACE, nl) .. line .. " "
+	 tmp, i = repenv(str, i, line, indent, false)
+	 ret = ret .. tmp
 
       ---------- FCT ----------
       elseif line == "function" then
+	 line = strgen(_SPACE, nl) .. line .. " "
+	 tmp, i = funenv(str, i, line, indent, false)
+	 ret = ret .. tmp
 
       ---------- GEN ----------
       else
@@ -723,10 +821,11 @@ function _preprocess(str, i, indent, stops)
    return ret
 end
 
+--------------------------------------------------------------------------------
 -- Error handling
 --------------------------------------------------------------------------------
 function helperror()
-   local file, text = io.open("test.lua", "r")
+   local file, text = io.open("pp2.lua", "r")
    for i = 1, linum do
       text = file:read("line")
    end
@@ -741,9 +840,10 @@ function helperror()
    os.exit()
 end
 
+--------------------------------------------------------------------------------
 -- Program
 --------------------------------------------------------------------------------
-local file = io.open("test.lua", "r")
+local file = io.open("pp2.lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open("test.pp.lua", "w+")
