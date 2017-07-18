@@ -387,7 +387,10 @@ function scan(array, start, stop, indent)
 	       end
 	    end
 	    newarr[j] = ret
-	    if j > 1 and not isOperator(newarr[j - 1]) then
+	    if j > 1 and
+	       not isOperator(newarr[j - 1]) and
+	       newarr[j - 1] ~= "\n"
+	    then
 	       -- À SURVEILLER (autrefois entre parenthèse)
 	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
 	       newarr[j] = nil
@@ -396,7 +399,10 @@ function scan(array, start, stop, indent)
 	 elseif array[i] == "[" then
 	    ret, i = scan(array, i + 1, "]", indent)
 	    newarr[j] = "[" .. ret .. "]"
-	    if j > 1 and not isOperator(newarr[j - 1]) then
+	    if j > 1 and
+	       not isOperator(newarr[j - 1]) and
+	       newarr[j - 1] ~= "\n"
+	    then
 	       -- À SURVEILLER (autrefois entre parenthèse)
 	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
 	       newarr[j] = nil
@@ -631,6 +637,13 @@ end
 ----------------------------------------
 -- These functions handle the various environments in which the preprocessor
 -- can be run
+function arrenv(str, i, line, indent, elif)
+   local ret, tmp = line
+   tmp, i, line = _preprocess(str, i, indent + 1, { "}" })
+   ret = ret .. tmp .. line .. " "
+   return ret, i
+end
+
 function ifenv(str, i, line, indent, elif)
    local ret, tmp = line
    tmp, i = readline(str, i, indent)
@@ -710,15 +723,7 @@ end
 function funenv(str, i, line, indent, elif)
    local ret, tmp = line
    tmp, i = readline(str, i, indent)
-   ret = ret .. tmp
-   tmp, i = nexttoken(str, i)
-   if isOperator(tmp) or isEnv(tmp) or isReserved(tmp) or isPunctuation(tmp) then
-      typerr = "Name expected."
-      helperror()
-   end
-   ret = ret .. tmp .. " "
-   tmp, i = readline(str, i, indent)
-   ret = ret .. tmp
+   ret = ret .. " " .. tmp
    tmp, i = readexpr(str, i, indent)
    if tmp:sub(1, 1) ~= "(" then
       typerr = "No parameter declaration"
@@ -739,7 +744,7 @@ function _preprocess(str, i, indent, stops)
    local ret = "", 1
    local line, tmp = true
    local tl, tc = linum, chnum
-   local nl = 0 -- strgen("  ", indent)
+   local nl, rval = 0, false -- strgen("  ", indent)
    while line do
       line, i = readexpr(str, i, indent)
       if not line then break end
@@ -761,12 +766,16 @@ function _preprocess(str, i, indent, stops)
 	    typerr = typerr .. "."
 	 end
 	 helperror()
+      elseif line == "}" then
+	 typerr = "Closing non-existant table declaration."
+	 helperror()
       end
 
       ---------- NL ----------
       if line == "\n" then
 	 ret = ret .. line
 	 nl = indent
+	 rval = false
       
       ---------- IF  ----------
       elseif line == "if" then
@@ -805,12 +814,32 @@ function _preprocess(str, i, indent, stops)
 
       ---------- FCT ----------
       elseif line == "function" then
-	 line = strgen(_SPACE, nl) .. line .. " "
+	 if not rval then
+	    tmp, i = readline(str, i, indent)
+	    tmp, i = nexttoken(str, i)
+	    if isOperator(tmp)      or
+	       isEnv(tmp)           or
+	       isReserved(tmp)      or
+	       isPunctuation(tmp)   or
+	       tmp:sub(1, 1) == "("
+	    then
+	       typerr = "Name expected."
+	       helperror()
+	    end
+	    line = strgen(_SPACE, nl) .. tmp .. " = function"
+	 end
 	 tmp, i = funenv(str, i, line, indent, false)
+	 ret = ret .. tmp
+
+      ---------- ARR ----------
+      elseif line == "{" then
+	 line = strgen(_SPACE, nl) .. line .. " "
+	 tmp, i = arrenv(str, i, line, indent, false)
 	 ret = ret .. tmp
 
       ---------- GEN ----------
       else
+	 if line == "=" then rval = true end
 	 ret = ret .. strgen(_SPACE, nl) .. line .. " "
 	 nl = 0
       end
@@ -832,7 +861,7 @@ end
 -- Error handling
 --------------------------------------------------------------------------------
 function helperror()
-   local file, text = io.open("pp2.lua", "r")
+   local file, text = io.open("preprocessor.lua", "r")
    for i = 1, linum do
       text = file:read("line")
    end
@@ -850,7 +879,7 @@ end
 --------------------------------------------------------------------------------
 -- Program
 --------------------------------------------------------------------------------
-local file = io.open("pp2.lua", "r")
+local file = io.open("preprocessor.lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open("test.pp.lua", "w+")
