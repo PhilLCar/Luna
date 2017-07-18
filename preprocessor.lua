@@ -745,7 +745,7 @@ function _preprocess(str, i, indent, stops)
    local line, tmp = true
    local tl, tc = linum, chnum
    local nl, rval = 0, false -- strgen("  ", indent)
-   while line do
+   while true do
       line, i = readexpr(str, i, indent)
       if not line then break end
       
