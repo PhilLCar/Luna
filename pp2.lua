@@ -77,16 +77,16 @@ end
 
 function isEnv(str)
    if str == "function"  or
-      str == "if" or
-      str == "then"  or
-      str == "else"  or
-      str == "elseif" or
-      str == "end"  or
-      str == "for"  or
-      str == "while" or
-      str == "do"  or
-      str == "in" or
-      str == "repeat"  or
+      str == "if"        or
+      str == "then"      or
+      str == "else"      or
+      str == "elseif"    or
+      str == "end"       or
+      str == "for"       or
+      str == "while"     or
+      str == "do"        or
+      str == "in"        or
+      str == "repeat"    or
       str == "until"  
    then
       return true
@@ -173,13 +173,13 @@ function nexttoken(str, i)
 
    return ret, i
 end
-
+--[[
 function readline(str, i, indent)
-   local tl, tc, j = linum, chnum
-   local ret, token = ""
-   token, j = nexttoken(str, i)
-   while token do
-      if isEnv(token) or token == "\n" then
+   local tl, tc = linum, chnum
+   local ret, expr = ""
+   expr, i = readexpr(str, i, indent)
+   while expr do
+      if isEnv(expr) or expr == "\n" then
 	 if ret == "" then
 	    return token, j
 	 else
@@ -194,40 +194,194 @@ function readline(str, i, indent)
       token, j = nexttoken(str, i)
    end
    return false, i
-end
+   end]]
 
-function associate(arr, left, unary, op)
-end
-
-function scan(array, left, unary, start, stop)
-   local i, j = start, 0
-   local newarr = {}
-   while i < #array do
-      if array[i] == stop then
-	 break
+function associate(arr, left, unary, ...)
+   local start, stop, inc
+   local mem, newarr, j = true, {}, 0
+   if unary then
+      for i = 1, #astr - 1 do
+	 if mem and (arr[i] == "-" or arr[i] == "not" or arr[i] == "~" or arr[i] == "#") then
+	    arr[i + 1] = "(" .. arr[i] .. " " .. arr[i + 1] .. ")"
+	    arr[i] = nil
+	    mem = false
+	 else
+	    mem = arr[i]
+	    mem = isOperator(mem) or isReserved(mem) or isPunctuation(mem)
+	 end
       end
-      if array[i] != nil then
+   else
+      if left then
+	 start = 2
+	 stop = #arr - 1
+	 inc = 1
+      else
+	 start = #arr - 1
+	 stop = 2
+	 inc = -1
+      end
+      mem = false
+      for i = start, stop, inc do
+	 for k, v in ipairs(arg) do
+	    if v == arr[i] then
+	       mem = v
+	       break
+	    end
+	 end
+	 if mem then
+	    arr[i - 1] = "(" .. arr[i - 1] .. " " .. mem .. " " .. arr[i + 1] .. ")"
+	    arr[i + 1] = nil
+	    arr[i] = nil
+	 end
+      end
+   end
+   for i, v in pairs(arr) do
+      j = j + 1
+      newarr[j] = v
+   end
+   return newarr
+end
+
+function scan(array, start, stop)
+   local i, j = start, 0
+   local newarr, ret = {}, ""
+   while i < #array do
+      if array[i] ~= nil then
+	 j = j + 1
+	 if array[i] == stop then
+	    newarr[j] = array[i]
+	    break
+	 end
 	 if array[i] == "(" then
-	    array = scan(array, left, unary, i + 1, ")")
-	    if i > 1 then
-	       array[i - 1] = "(" .. array[i - 1] .. " " .. array[i] .. ")"
-	       array[i] = nil
+	    newarr[j], i = scan(array, left, unary, i, ")")
+	    if j > 1 and not isOperator(newarr[j - 1]) then
+	       newarr[j - 1] = "(" .. newarr[j - 1] .. " " .. newarr[j] .. ")"
+	       newarr[j] = nil
+	       j = j - 1
 	    end
 	 elseif array[i] == "[" then
-	    array = scan(array, left, unary, i + 1, "]")
-	    if i > 1 then
-	       array[i - 1] = "(" .. array[i - 1] .. " " .. array[i] .. ")"
-	       array[i] = nil
+	    newarr[j], i = scan(array, left, unary, i, "]")
+	    if j > 1 and not isOperator(newarr[j - 1]) then
+	       newarr[j - 1] = "[" .. newarr[j - 1] .. " " .. newarr[j] .. "]"
+	       newarr[j] = nil
+	       j = j - 1
 	    end
 	 end
       end
       i = i + 1
    end
+   -- PRIORITY LEVELS --
+   -- Level 1 - Power         : ^               [right-associative]
+   newarr = associate(newarr, false, false, "^")
+   -- Level 2 - Unary         : ~ - not #       [left-associative ]
+   newarr = associate(newarr, true , true)
+   -- Level 3 - Multiplicative: * /             [left-associative ]
+   newarr = associate(newarr, true , false, "*", "/")
+   -- Level 4 - Additive      : + -             [left-associative ]
+   newarr = associate(newarr, true , false, "+", "-")
+   -- Level 5 - Concatenation : ..              [right-associative]
+   newarr = associate(newarr, false, false, "..")
+   -- Level 6 - Boolean       : == ~= <= >= < > [left-associative ]
+   newarr = associate(newarr, true , false, "==", "~=", "<=", ">=", "<", "<")
+   -- Level 7 - Conjunction   : and             [left-associative ]
+   newarr = associate(newarr, true , false, "and")
+   -- Level 8 - Disjunction   : or              [left-associative ]
+   newarr = associate(newarr, true , false, "or")
+
+   for i, v in ipairs(newarr) do
+      ret = ret .. v
+   end
+   return ret, i
+end
+
+function removeMacros(array)
+   local tmp
+   for i, v in ipairs(array) do
+      if v == nil then
+	 if v == "." then
+	    if i == 1 then
+	       typerr = "No table to be referenced by \".\"."
+	       helperror()
+	    end
+	    nex = array[i + 1]
+	    pre = array[i - 1]
+	    if 
+	       isDelimiter(pre) or
+	       isOperator(pre)  or
+	       isReserved(pre)  or
+	       isEnv(pre)       or
+	       pre == "true"    or
+	       pre == "false"
+	    then
+	       typerr = "\"" .. pre .. "\" is not a valid table name."
+	       helperror()
+	    end
+	    if isDelimiter(nex) or
+	       isOperator(nex)  or
+	       isReserved(nex)  or
+	       isEnv(nex)       or
+	       nex == "true"    or
+	       nex == "false"  
+	    then
+	       typerr = "\"" .. nex .. "\" is not a valid table reference."
+	       helperror()
+	    end
+	    array[i - 1] = "(" .. pre .. "[\"" .. nex .. "\"])"
+	    for j = i, #array - 2 do
+	       array[j] = array[j + 2]
+	    end
+	 elseif v == ":" then
+	    if i == 1 then
+	       typerr = "No table to be referenced by \":\"."
+	       helperror()
+	    end
+	    nex = array[i + 1]
+	    pre = array[i - 1]
+	    if 
+	       isDelimiter(pre) or
+	       isOperator(pre)  or
+	       isReserved(pre)  or
+	       isEnv(pre)       or
+	       pre == "true"    or
+	       pre == "false"
+	    then
+	       typerr = "\"" .. pre .. "\" is not a valid table name."
+	       helperror()
+	    end
+	    if isDelimiter(nex) or
+	       isOperator(nex)  or
+	       isReserved(nex)  or
+	       isEnv(nex)       or
+	       nex == "true"    or
+	       nex == "false"  
+	    then
+	       typerr = "\"" .. nex .. "\" is not a valid table reference."
+	       helperror()
+	    end
+	    if array[i + 2] ~= "(" then
+	       typerr = "Expected a function call after \"" .. nex .. "\"."
+	       helperror()
+	    end
+	    array[i - 1] = "(" .. pre .. "[\"" .. nex .. "\"])"
+	    array[i    ] = "("
+	    if array[i + 3] == ")" then
+	       array[i + 1] = array[i - 1]
+	       for j = i, #array - 1 do
+		  array[j] = array[j + 1]
+	       end
+	    else
+	       array[i + 1] = array[i - 1]
+	       array[i + 2] = ","
+	    end
+	 end
+      end
+   end
+   return array
 end
 
 function readexpr(str, i, indent)
    local ret, token = ""
-   local expr, j = {}, 0
+   local expr, j, c = {}, 0, 0
    local last, k = "", i
    local tl, tc  = linum, chnum
    
@@ -236,18 +390,31 @@ function readexpr(str, i, indent)
       token, k = nexttoken(str, i)
       j = j + 1
       
-      if isReserved(token) or isEnv(token) or isPunctuation or token == "{" or token = "}" then
-	 if j == 1 then
-	    return token, k
-	 elseif last == "var" then
-	    linum, chnum = tl, tc
-	    break
+      if isReserved(token)    or
+	 isEnv(token)         or
+	 isPunctuation(token) or
+	 token == "{"         or
+	 token == "}"
+      then
+	 if c == 0 then
+	    if j == 1 then
+	       return token, k
+	    elseif last == "var" then
+	       linum, chnum = tl, tc
+	       break
+	    else
+	       linum, chnum = tl, tc
+	       typerr = "Unexpected token \"" .. token .. "\""
+	       helperror()
+	    end
 	 else
-	    linum, chnum = tl, tc
-	    typerr = "Unexpected token \"" .. token .. "\""
-	    helperror()
+	    expr[j] = token
+	    last = "op"
 	 end
       elseif isOperator(token) or isDelimiter(token) then
+	 if token == "(" then c = c + 1
+	 elseif token == ")" then c = c - 1
+	 end
 	 expr[j] = token
 	 last = "op"
       elseif token == "\n" then
@@ -271,8 +438,14 @@ function readexpr(str, i, indent)
       i = k
    end
 
+   if c ~= 0 then
+      typerr = "Parenthesis mismatch."
+      helperror()
+   end
    
-   
+   expr = removeMacros(expr)
+   ret = scan(expr)
+   return ret
 end
 
 -- Comment parsing
@@ -433,11 +606,15 @@ function _preprocess(str, i, indent, stops)
       end
 
       if line == "end" then
-	 typerr = "Unexpectedly reached \"end\"; was expecting \"" .. stops[1] .. "\""
-	 for j = 2, #stops do
-	    typerr = typerr .. ", or \"" .. stops[j] .. "\""
+	 if not stops then
+	    typerr = "<eof> expected near 'end'."
+	 else
+	    typerr = "Unexpectedly reached \"end\"; was expecting \"" .. stops[1] .. "\""
+	    for j = 2, #stops do
+	       typerr = typerr .. ", or \"" .. stops[j] .. "\""
+	    end
+	    typerr = typerr .. "."
 	 end
-	 typerr = typerr .. "."
 	 helperror()
       end
 
@@ -523,5 +700,6 @@ local file = io.open("test.lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open("test.pp.lua", "w+")
-file:write(preprocess(text))
+--file:write(preprocess(text))
+file:write(readexpr(text))
 file:close()
