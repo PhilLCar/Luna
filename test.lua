@@ -1,4 +1,5 @@
-if [[woohoo "yo"]] == 'woohoo "yo"' then
+if [[woohoo "yo"]] == --[[fuck
+you]] 'woohoo "yo"' then
    test
 elseif test then
    for i = 0, 1 do

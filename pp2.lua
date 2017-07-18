@@ -39,7 +39,6 @@ function isOperator(str)
       str == "<=" or
       str == "==" or
       str == ".." or
-      str == "--" or
       str == "or" or
       -- 3 char operators
       str == "and"  or
@@ -138,6 +137,9 @@ function nexttoken(str, i)
    -- String parsing [[]]
    if s == "[=" or s == "[[" then
       return strpar(str, i, false)
+
+   elseif s == "--" then
+      return compar(str, i)
       
    elseif isOperator(s) then
       chnum = chnum + 1
@@ -483,10 +485,11 @@ end
 
 -- Comment parsing
 function compar(str, i)
-   local s = str:sub(i, i + 1)
-   local line = chnum == 2
+   local s = str:sub(i + 2, i + 3)
+   local line = chnum == 0
+   chnum = chnum + 2
    if s == "[=" or s == "[[" then
-      s, i = nexttoken(str, i)
+      s, i = nexttoken(str, i + 2)
       s, i = nexttoken(str, i)
    else
       while s and s ~= "\n" do
@@ -494,6 +497,10 @@ function compar(str, i)
       end
    end
    if line then
+      if s ~= "\n" then
+	 typerr = "Unexpected symbol " .. s .. "."
+	 helperror()
+      end
       s, i = nexttoken(str, i)
    end
    return s, i
