@@ -1,665 +1,387 @@
-stack = {}
-level = 1
-place = 0
-stack[level] = {}
-stack[level]["-"] = 0
-
-scopes = {}
-scopes["if"] = 0
-scopes["while"] = 0
-scopes["for"] = 0
-scopes["repeat"] = 0
-scopes["do"] = 0
-scopes["function"] = 0
-
-functions = ""
-
-new = false
-outside = false
-
---duplicate!!!
-function isReserved(str)
-   local ops = { "local", "or", "and", "not", "for", "in", "do", "while", "repeat",
-		 "until", "if", "elseif", "else", "then", "end", "function", "nil", "return" }
-   for i, v in ipairs(ops) do
-      if str == v then
-	 return v
-      end
-   end
-   return false
-end
-
---duplicate!!!
-function isOperator(str)
-   local ops = { "^", "-", "*", "/", "+", "..", ">", "<", ">=", "<=", "~=", "==", "%",
-		 "~", "#", "=", ".", ":", "[", "]", "{", "}", ",", ";", "\"", "(", ")" }
-   for i, v in ipairs(ops) do
-      if str == v then
-	 return v
-      end
-   end
-   return false
-end
+--------------------------------------------------------------------------------
+-- Stack values and count
+--------------------------------------------------------------------------------
+local ifct, whct, frct, rpct, fnct, doct = 0, 0, 0, 0, 0, 0
+local stack, level, size = {}, 0, 0
+local globals = {}
 
 ops = {}
-ops["+"]   = "add"
-ops["-"]   = "sub"
-ops["%"]   = "mod"
-ops["--"]  = "neg"
-ops["*"]   = "mul"
-ops["/"]   = "div"
-ops["^"]   = "exp"
-ops[".."]  = "concat"
-ops[">"]   = "gt"
-ops["<"]   = "lt"
-ops[">="]  = "gte"
-ops["<="]  = "lte"
-ops["=="]  = "eq"
-ops["~="]  = "neq"
-ops["and"] = "and"
-ops["or"]  = "or"
-ops["not"] = "not"
-ops["~"]   = "inv"
-ops["#"]   = "len"
-ops["nil"] = "nil"
-ops["return"] = "return"
+ops["+"]      = "add"
+ops["-"]      = "sub"
+ops["%"]      = "mod"
+ops["--"]     = "neg"
+ops["*"]      = "mul"
+ops["/"]      = "div"
+ops["^"]      = "exp"
+ops[".."]     = "con"
+ops[">"]      = "gt"
+ops["<"]      = "lt"
+ops[">="]     = "gte"
+ops["<="]     = "lte"
+ops["=="]     = "eq"
+ops["~="]     = "neq"
+ops["and"]    = "and"
+ops["or"]     = "or"
+ops["not"]    = "not"
+ops["~"]      = "inv"
+ops["#"]      = "len"
+ops["nil"]    = "nil"
+ops["return"] = "ret"
 
-function isNum(str)
-   local s = str:byte(1, 1)
-   return s >= 48 and s <= 58
+function isWhitespace(c)
+   return c == " " or c == "\t" or c == "\n"
 end
 
-function isString(str)
-   local s = str:sub(1, 1)
-   return s == "\"" or s == "\'" or str:sub(1, 2) == "[["
+function isParenthesized(expr)
+   return expr:sub(1, 1) == "("
 end
 
-function isParenthesized(str)
-   return str:sub(1, 1) == "(" --and str:sub(#str, #str) == ")"
+function isBracketed(expr)
+   return expr:sub(1, 1) == ")"
 end
 
-function isBracketed(str)
-   return str:sub(1, 1) == "[" --and str:sub(#str, #str) == "]"
-end
-
-function isAccolade(str)
-   return str:sub(1, 1) == "{" --and str:sub(#str, #str) == "]"
-end
-
-function nexttoken(str, i)
-   local j, word, s = 0, ""
-   while i <= #str do
-      i = i + 1
+function nextexpr(str, i)
+   local c, ret = 0, ""
+   local s   = 0
+   local smode, escape = false
+   while true do
+      if i > #str then
+	 if ret == "" then return false, i
+	 else return ret, i
+	 end
+      end
       s = str:sub(i, i)
-      if s == "\n" or s == "\t" or s == " " then
-	 if word ~= "" then
-	    return word, i
+      if not isWhitespace(s) or c > 0 then
+	 ret = ret .. s
+	 if s == "\"" and not escape then
+	    smode = not smode
+	 elseif smode and s == "\\" then
+	    escape = true
+	 elseif not smode and (s == "(" or s == "[") then
+	    c = c + 1
+	 elseif not smode and (s == ")" or s == "]") then
+	    c = c - 1
+	 elseif smode then
+	    escape = false
 	 end
-      elseif s == "(" then
-	 j = 1
-	 word = word .. s
-	 repeat
-	    i = i + 1
-	    s = str:sub(i, i)
-	    word = word .. s
-	    if s == "(" then
-	       j = j + 1
-	    elseif s == ")" then
-	       j = j - 1
-	    end
-	 until i > #str or j == 0
-      elseif s == "{" then
-	 j = 1
-	 word = word .. s
-	 repeat
-	    i = i + 1
-	    s = str:sub(i, i)
-	    word = word .. s
-	    if s == "{" then
-	       j = j + 1
-	    elseif s == "}" then
-	       j = j - 1
-	    end
-	 until i > #str or j == 0
-      elseif s == "\"" or s == "\'" then
-	 j = s
-	 word = word .. s
-	 repeat
-	    i = i + 1
-	    s = str:sub(i, i)
-	    word = word .. s
-	 until i > #str or j == s
-      else
-	 word = word .. s
-      end
-   end
-   if word == "" then
-      return false, i
-   else return word, i
-   end
-end
-
-function nextline(str, i)
-   local word, s = ""
-   while i <= #str do
-      i = i + 1
-      s = str:sub(i, i)
-      if s == "\n" then
-	 if word ~= "" then
-	    return word, i
-	 end
-      else
-	 word = word .. s
-      end
-   end
-   if word == "" then
-      return false, i
-   else return word, i
-   end
-end
-
-function peval(str)
-   local i, k, s, op, final, call = 0, 0, "", "", "", false
-   local func = false
-   while i <= #str do
-      s, i = nexttoken(str, i)
-      if not s then break
-      end
-      if isParenthesized(s) then
-	 if call then
-	    final = final .. feval(s)
-	    func = true
-	 else
-	    final = final .. peval(s:sub(2, #s - 1))
-	 end
-	 k = k + 1
-	 call = false
-      elseif isBracketed(s) then
-	 if new then
-	    new = false
-	    final = final .. peval(s:sub(2, #s - 1)) .. "new\n"
-	 else
-	    final = final .. peval(s:sub(2, #s - 1)) .. "index\n"
-	 end
-	 stackdown()
-	 call = true
-      elseif isNum(s) then
-	 stackup()
-	 final = final .. "int\t" .. s .. "\n"
-	 k = k + 1
-	 call = false
-      elseif isOperator(s) or isReserved(s) then
-	 if k == 0 and s == "-" then
-	    op = "--"
-	 else
-	    op = s
-	 end
-	 call = false
-      elseif isAccolade(s) then
-	 stackup()
-	 final = final .. "create\n"
-	 s = s:sub(2, #s)
-	 local t, j = nexttoken(s, 1)
-	 if t == "}" then
-	    final = final .. "done\t0\n"
-	 else
-	    local count = 1
-	    while t ~= false do
-	       if t == "," then
-		  final = final .. "item\t" .. tostring(count) .. "\n"
-		  count = count + 1
-	       elseif t == "}" then
-		  final = final .. "item\t" .. tostring(count) .. "\n"
-		  final = final .. "done\t" .. tostring(count) .. "\n"
-	       else
-		  final = final .. peval(t)
-	       end
-	       t, j = nexttoken(s, j)
-	    end
-	 end
-      elseif isString(s) then
-	 stackup()
-	 final = final .. "string\t" .. s .. "\n"
-	 k = k + 1
-	 call = false
-      elseif s == "true" or s == "false" then
-	 stackup()
-	 final = final .. "bool\t" .. s .. "\n"
-	 k = k + 1
-	 call = false
-      else
-	 call = get(s)
-	 if call then
-	    stackup()
-	    final = final .. "ref\t" .. tostring(call) .. "\n"
-	 else
-	    stackup()
-	    final = final .. "var\t" .. s .. "\n"
-	 end
-	 k = k + 1
-	 call = true
-      end
-   end
-   if ops[op] then
-      final = final .. ops[op] .. "\n"
-      if op ~= "~" and op ~= "--" and op ~= "not" and op ~= "#" and op ~= "nil" then
-	 stackdown()
-      end
-   end
-   return final
-end
-
-function feval(str)
-   local i, k, final, s = 0, 1, ""
-   str = str:sub(2, #str - 1)
-   if str == "" then
-      return "args\t0\n"
-   end
-   local tmp1, tmp2 = place, stack[level]["-"]
-   repeat
-      s, i = nexttoken(str, i)
-      if not s then break
-      elseif s == "," then
-	 k = k + 1
-      else
-	 final = final .. peval(s)
-      end
-   until false
-   place, stack[level]["-"] = tmp1, tmp2
-   return "args\t" .. tostring(k) .. "\n" .. final .. "call\n"
-end
-
-function stackup()
-   place = place + 1
-   stack[level]["-"] = stack[level]["-"] + 1
-end
-
-function stackdown()
-   place = place - 1
-   stack[level]["-"] = stack[level]["-"] - 1
-end
-
-function eeval(str)
-   return _eeval(str, false)
-end
-
-function _eeval(str, flag)
-   local i, j, k, final, token, tmp1, tmp2 = 0, 0, 0, ""
-   token, i = nexttoken(str, i)
-   local localmode = token == "local" or flag == "forloop"
-   local check = {}
-   if localmode then
-      -- def/local mode
-      if token == "local" then token, i = nexttoken(str, i) end
-      while token do
-	 if token ~= "," then
-	    place = place + 1
-	    stack[level]["-"] = stack[level]["-"] + 1
-	    stack[level][token] = place
-	    k = k + 1
-	 end
-	 token, i = nexttoken(str, i)
-	 if token ~= "," then
-	    break
-	 end
-	 token, i = nexttoken(str, i)
-      end
-      tmp1 = stack[level]["-"]
-      tmp2 = place
-      stack[level]["-"] = stack[level]["-"] - k
-      place = place - k
-      final = "sets\t" .. tostring(k) .. "\n" .. final
-   else
-      -- access/global mode
-      tmp1 = stack[level]["-"]
-      tmp2 = place
-      while token do
-	 if token ~= "," then
-	    final = final .. peval(token)
-	    local tmp = token
-	    token, i = nexttoken(str, i)
-	    while token and (isBracketed(token) or isParenthesized(token)) do
-	       if isBracketed(token) then
-		  print("check: " .. tmp)
-		  check[#check + 1] = tmp
-	       end
-	       final = final .. peval(token)
-	       tmp = token
-	       token, i = nexttoken(str, i)
-	    end
-	    final = final .. "store\n"
-	    k = k + 1
-	 end
-	 if token ~= "," then
-	    break
-	 end
-	 token, i = nexttoken(str, i)
-      end
-      final = "modif\n" .. final .. "sets\t" .. tostring(k) .. "\n"
-   end
-   j = 0
-   stackup()
-   stackup()
-   if token == "=" then
-      token, i = nexttoken(str, i)
-      while token do
-	 if token ~= "," then
-	    if token == "function" then
-	       local tmp
-	       tmp, i = scope(str, i - 9, true)
-	       final = final .. tmp
-	    else
-	       final = final .. peval(token)
-	    end
-	    token, i = nexttoken(str, i)
-	    while token and (isBracketed(token) or isParenthesized(token)) do  
-	       final = final .. peval(token)
-	       token, i = nexttoken(str, i)
-	    end
-	    final = final .. "push\n"
-	    j = j + 1
-	 end
-	 if token ~= "," then
-	    break
-	 end
-	 token, i = nexttoken(str, i)
-      end
-   end
-   if token then
-      j = #token + 1
-      print("\"" .. token .. "\"")
-   end
-   if localmode then
-      final = final .. "stack\n"
-   else
-      final = final .. "place\n"
-   end
-   stack[level]["-"] = tmp1
-   place = tmp2
-   for j = 1, #check do
-      final = final .. peval(check[j]) .. "check\n"
-      stackdown()
-   end
-   return final, i - j
-end
-
-function concat(str)
-   local final, token, i = "", nexttoken(str, 0)
-   local k = 0
-   if token and token == "return" then
-      token, i = nexttoken(str, i)
-   end
-   stackup()
-   stackup()
-   while token do
-      if token ~= "," then
-	 final = final .. peval(token)
-	 token, i = nexttoken(str, i)
-	 while token and (isBracketed(token) or isParenthesized(token)) do
-	    final = final .. peval(token)
-	    token, i = nexttoken(str, i)
-	 end
-	 final = final .. "push\n"
-	 k = k + 1
-      end
-      if token ~= "," then
-	    break
-      end
-      token, i = nexttoken(str, i)
-   end
-   if token then
-      i = i - #token - 1
-   end
-   stackdown()
-   return "sets\t" .. tostring(k) .. "\n" ..
-      final ..
-      "free\t" .. tostring(stack[level]["-"]) .. "\n" ..
-      "return\n", i
-end
-
-function func(str)
-   local final, token, i = "", nexttoken(str, 0)
-   local k = 0
-   local arg = false
-   while token do
-      if token == "..." then
-	 token = "arg"
-	 arg = true
-      end
-      if token ~= "," then
-	 place = place + 1
-	 stack[level]["-"] = stack[level]["-"] + 1
-	 stack[level][token] = place
-	 k = k + 1
-      end
-      token, i = nexttoken(str, i)
-      if token ~= "," then
+      elseif ret ~= "" and c == 0 and not smode then
 	 break
       end
-      token, i = nexttoken(str, i)
+      i = i + 1
    end
-   local ret = "gen\t" .. tostring(k) .. "\n"
-   ret = ret .. "arg\t" .. tostring(arg) .. "\n"
+   return ret, i
+end
+
+-- Closure and tail call analysis
+function precompile(str, i)
+   local ret, tmp = ""
+   local expr
+   while true do
+      expr, i = nextexpr(str, i)
+      if not expr then break end
+
+      if expr == "end" then
+	 return ret, i
+
+      elseif expr == "else" then
+	 return ret, i
+
+      elseif expr == "if" then
+
+      elseif expr == "do" then
+
+      elseif expr == "for" then
+
+      elseif expr == "while" then
+
+      elseif expr == "repeat" then
+
+      elseif expr == "function" then
+
+      elseif expr == "{" then
+
+      else
+
+      end
+   end
    return ret
 end
 
-function leval(str, i)
-   local j, k = 0, i
-   local s, i = nextline(str, i)
-   print("«" .. s .. "»")
-   if not s then return s end
-   if s:find("=") and (s:find("=") ~= s:find("==")) or s:find("local") then
-      s, i = eeval(str:sub(k, #str))
-      return s, i + k - 1
-   elseif s:find("return") and s:find(",") then
-      s, i = concat(str:sub(k, #str))
-      return s, i + k - 1
-   end
-   return peval(s), i
-end
+function compile(str, i)
+   local ret, tmp = ""
+   local expr
 
-function get(name)
-   local s
-   for i = level, 1, -1 do
-      s = stack[i][name]
-      if s then
-	 return place - s
+   newlevel()
+   
+   while true do
+      expr, i = nextexpr(str, i)
+      if not expr then break end
+
+      if expr == "end" then
+	 ret = ret .. poplevel()
+	 return ret, i, "end"
+
+      elseif expr == "else" then
+	 ret = ret .. poplevel()
+	 return ret, i, "else"
+
+      elseif expr == "if" then
+	 tmp, i = ifscope(str, i)
+	 ret = ret .. tmp
+
+      elseif expr == "do" then
+	 tmp, i = doscope(str, i)
+	 ret = ret .. tmp
+
+      elseif expr == "for" then
+	 tmp, i = forscope(str, i)
+	 ret = ret .. tmp
+
+      elseif expr == "while" then
+	 tmp, i = whilescope(str, i)
+	 ret = ret .. tmp
+
+      elseif expr == "repeat" then
+	 tmp, i = repscope(str, i)
+	 ret = ret .. tmp
+
+      elseif expr == "function" then
+	 tmp, i = funscope(str, i)
+	 ret = ret .. tmp
+
+      elseif expr == "{" then
+	 tmp, i = arrscope(str, i)
+	 ret = ret .. tmp
+
+      else
+	 tmp, i = evaluate(str, i, expr)
+	 ret = ret .. tmp
       end
    end
-   return false
+   
+   ret = ret .. poplevel()
+   return ret
 end
 
-function free()
-   local final = ""
-   place = place - stack[level]["-"]
-   if stack[level]["-"] > 0 then
-      final = final .. "free\t" .. tostring(stack[level]["-"]) .. "\n"
-   end
-   stack[level] = nil
-   level = level - 1
-   return final
-end
-
-function alloc()
+function newlevel()
    level = level + 1
    stack[level] = {}
-   stack[level]["-"] = 0
+   stack[level]["size"] = size
 end
 
-function scope(str, i, ...)
-   local final, s = ""
-   s, i = nexttoken(str, i)
-   alloc()
-   
-   while s do
-      
-      if s == "if" then
-	 local count
-	 s, i = nexttoken(str, i)
-	 scopes["if"] = scopes["if"] + 1
-	 count = scopes["if"]
-	 final = final .. "if\t" .. tostring(count) .. "\n" ..
-	 peval(s) .. "then\t" .. tostring(count) .. "\n"
-	 stackdown()
-	 --- Assertion
-	 s, i = nexttoken(str, i)
-	 if s ~= "then" then
-	    print("error\n")
-	 end
-	 s, i = scope(str, i)
-	 final = final .. s .. free()
-	 s, i = nexttoken(str, i)
-	 if s and s ~= "else" and s ~= "elseif" then
-	    i = i - #s - 1
-	 end
-	 while s == "elseif" do
-	    alloc()
-	    s, i = nexttoken(str, i)
-	    scopes["if"] = scopes["if"] + 1
-	    final = final .. "else\t" .. tostring(scopes["if"] - 1) .. "\n" ..
-	    "if\t" .. tostring(scopes["if"]) .. "\n" ..
-	    peval(s) .. "then\t" .. tostring(scopes["if"]) .. "\n"
-	    stackdown()
-	    --- Assertion
-	    s, i = nexttoken(str, i)
-	    if s ~= "then" then
-	       print("error\n")
-	    end
-	    s, i = scope(str, i)
-	    final = final .. s .. free()
-	    s, i = nexttoken(str, i)
-	 end
-	 if s == "else" then
-	    alloc()
-	    final = final .. "else\t" .. tostring(scopes["if"]) .. "\n"
-	    s, i = scope(str, i)
-	    final = final .. s .. free()
-	 end
-	 for j = scopes["if"], count, -1 do
-	    final = final .. "iend\t" .. tostring(j) .. "\n" --.. free()
-	 end
+function poplevel()
+   local free = tostring(stack[level]["size"])
+   size = stack[level]["size"]
+   stack[level] = nil
+   level = level - 1
+   return "free\t" .. free .. "\n"
+end
 
-	 
-      elseif s == "elseif" then
-	 return final, i - 7
+function register(loc, var)
+   local ret = ""
+   if loc then
+      stack[level][var] = size
+      size = size + 1
+   else
+      globals[var] = true
+   end
+end
 
-	 
-      elseif s == "else" then
-	 return final, i - 5
+function access(var)
+   for lvl, stk in ipairs(stack) do
+      if stk[var] then
+	 return "ref\t" .. tostring(size - stk[var]) .. "\n"
+      end
+   end
+   if not globals[var] then
+      globals[var] = true
+   end
+   return "var\t" .. var .. "\n"
+end
 
-	 
-      elseif s == "repeat" then
-	 scopes["repeat"] = scopes["repeat"] + 1
-	 final = final .. "repeat\t" .. tostring(scopes["repeat"]) .. "\n"
-	 s, i = scope(str, i)
-	 final = final .. s .. free()
-	 s, i = nexttoken(str, i)
-	 final = final .. peval(s) .. "rend\t" .. tostring(scopes["repeat"]) .. "\n"
+function translate(expr)
+   if isParenthesized(expr) or isBracketed(expr) then
+      return translate(expr:sub(2, #expr - 1))
+   end
+   local tmp, t = nextexpr(expr, 1)
+   local ret, operation = "", ""
 
-	 
-      elseif s == "until" then
-	 return final, i
-
-	 
-      elseif s == "while" then
-	 s, i = nexttoken(str, i)
-	 scopes["while"] = scopes["while"] + 1
-	 final = final .. "while\t" .. tostring(scopes["while"]) .. "\n" ..
-	 peval(s) .. "wdo\t" .. tostring(scopes["while"]) .. "\n"
-	 --- Assertion
-	 s, i = nexttoken(str, i)
-	 if s ~= "do" then
-	    print("error")
-	 end
-	 s, i = scope(str, i)
-	 final = final .. s .. free() .. "wend\t" .. tostring(scopes["while"]) .. "\n"
-
-	 
-      elseif s == "for" then
-	 local j, k, args, bin, ain = i, 0, {}, false
-	 s, i = nexttoken(str, i)
-	 args[k] = ""
-	 while s ~= "do" do
-	    if s == "in" then
-	       bin = str:sub(j, i - 3)
-	       j = i
-	    end
-	    if s ~= "," then
-	       if args[k] ~= "" then
-		  args[k] = args[k] .. " " .. s
-	       else
-		  args[k] = s
-	       end
-	    else
-	       print(args[k])
-	       k = k + 1
-	       args[k] = ""
-	    end
-	    s, i = nexttoken(str, i)
-	 end
-	 ain = str:sub(j, i - 3)
-	 scopes["for"] = scopes["for"] + 1
-	 if bin then
-	    local t = _eeval(bin, "forloop")
-	    final = final .. "forin\t" .. tostring(scopes["for"]) .. "\n" ..
-	       t .. peval(ain) ..
-	       "fdo\t" .. tostring(scopes["for"]) .. "\n" 
-	 else
-	    local t = _eeval(args[0], "forloop")
-	    final = final .. "for\t" .. tostring(scopes["for"]) .. "\n" ..
-	    t .. peval(args[1]) .. "cond\n"
-	    if args[2] ~= nil then
-	       final = final .. peval(args[2])
-	    else
-	       final = final .. "int\t1\n"
-	    end
-	    final = final .. "fdo\t" .. tostring(scopes["for"]) .. "\n" 
-	 end
-	 s, i = scope(str, i)
-	 final = final .. s .. free() .. "fend\t" .. tostring(scopes["for"]) .. "\n"
-	 
-
-      elseif s == "function" then
-	 s, i = nexttoken(str, i)
-	 scopes["function"] = scopes["function"] + 1
-	 final = final .. "func\t" .. tostring(scopes["function"]) .. "\n"
-	 functions = functions .. "def\t" .. tostring(scopes["function"]) ..
-	    "\n" .. func(s:sub(2, #s - 1))
-	 s, i = scope(str, i)
-	 functions = functions .. s .. free() .. "fend\n"
-	 if arg[1] then
-	    return final, i
-	 end
-
-	 
-      elseif s == "do" then
-	 scopes["do"] = scopes["do"] + 1
-	 final = final .. "do\t" .. tostring(scopes["do"] .. "\n")
-	 s, i = scope(str, i)
-	 final = final .. s .. free() .. "dend\t" .. tostring(scopes["do"]) .. "\n"
-
-	 
-      elseif s == "end" then
-	 return final, i
-
-	 
+   while tmp do
+      print(tmp)
+      if ops[tmp] then
+	 operation = ops[tmp]
+      elseif tmp == "," then
+	 ret = ret .. operation .. "\ntac\n"
+	 operation = ""
+      elseif tonumber(tmp) then
+	 ret = ret .. "num\t" .. tmp .. "\n"
+      elseif tmp == "false" or tmp == "true" then
+	 ret = ret .. "bool\t" .. tmp .. "\n"
+      elseif tmp:sub(1, 1) == "\"" then
+	 ret = ret .. "str\t" .. tmp .. "\n"
       else
-	 s, i = leval(str, i - #s - 1)
-	 if s then
-	    final = final .. s
-	 end
+	 ret = ret .. access(tmp)
       end
       
-      s, i = nexttoken(str, i)
+      tmp, t = nextexpr(expr, t)
+      
+      while tmp and isBracketed(tmp) do
+	 ret = ret .. translate(tmp) .. "index\n"
+	 tmp, t = nextexpr(expr, t)
+      end
+      if tmp and isParenthesized(tmp) then
+	 ret = ret .. "params\n" .. translate(tmp) .. "call\n"
+	 tmp, t = nextexpr(expr, t)
+      end
    end
+   return ret .. operation .. "\n"
+end
+
+function evaluate(str, i, ...)
+   local expr = {...}
+   local c, t = #expr
+   local eq, tmp = false
+   local ret = ""
+   if not expr[1] then
+      c = 1
+      expr[c], i = nextexpr(str, i)
+   end
+   if expr[1] == "local" and not expr[2] then
+      c = 2
+      expr[c], i = nextexpr(str, i)
+   end
+   while true do
+      tmp, t = nextexpr(str, i)
+      if tmp == "=" then
+	 eq = true
+	 c = c + 1
+	 expr[c] = "="
+      elseif tmp ~= "," then break end
+      i = t
+      c = c + 1
+      expr[c], i = nextexpr(str, i)
+   end
+   if eq then
+      if expr[1] == "local" then
+	 for j = 2, #expr do
+	    if expr[j] == "=" then
+	       c = j + 1
+	       ret = "set\t" .. tostring(j - 1) .. "\n"
+	       break
+	    else
+	       register(true, expr[j])
+	    end
+	 end
+      else
+	 for j = 1, #expr do
+	    if expr[j] == "=" then
+	       c = j + 1
+	       ret = "mod\t" .. tostring(j - 1) .. "\n" .. ret .. "place\n"
+	       break
+	    else
+	       ret = ret .. access(expr[j])
+	    end
+	 end
+      end
+   else
+      c = 1
+   end
+   for j = c, #expr do
+      print(expr[j])
+      ret = ret .. translate(expr[j]) .. "tac\n"
+   end
+   return ret, i
+end
+
+function ifscope(str, i)
+   local ret, tmp, t
+   ifct = ifct + 1
+   ret = "if\t" .. tostring(ifct) .. "\n"
+
+   tmp, i = evaluate(str, i)
+   ret = ret .. tmp
+
+   tmp, i = nextexpr(str, i)
+   test(tmp, "then")
+   ret = ret .. "then\t" .. tostring(ifct) .. "\n"
    
-   return final .. free() .. "exit\n" .. functions
+   tmp, i, t = compile(str, i)
+   if t == "else" then
+      ret = ret .. tmp .. "else\t" .. tostring(ifct) .. "\n"
+      tmp, i, t = compile(str, i)
+   end
+   test(t, "end")
+   ret = ret .. tmp .. "iend\t" .. tostring(ifct) .. "\n"
+   return ret, i
+end
+
+function doscope(str, i)
+   local ret, tmp, t
+   doct = doct + 1
+   ret = "do\t" .. tostring(doct) .. "\n"
+   
+   tmp, i, t = compile(str, i)
+   test(t, "end")
+   ret = ret .. tmp .. "dend\t" .. tostring(doct) .. "\n"
+   return ret, i
+end
+
+function whilescope(str, i)
+   local ret, tmp, t
+   whct = whct + 1
+   ret = "while\t" .. tostring(whct) .. "\n"
+
+   tmp, i = evaluate(str, i)
+   ret = ret .. tmp
+
+   tmp, i = nextexpr(str, i)
+   test(tmp, "do")
+   ret = ret .. "wdo\t" .. tostring(whct) .. "\n"
+   
+   tmp, i, t = compile(str, i)
+   test(t, "end")
+   ret = ret .. tmp .. "wend\t" .. tostring(whct) .. "\n"
+   return ret, i
+end
+
+function forscope(str, i)
+   -- TODO
+   return ret, i
+end
+
+function repscope(str, i)
+   local ret, tmp, t
+   rpct = rpct + 1
+   ret = "repeat\t" .. tostring(rpct) .. "\n"
+ 
+   tmp, i, t = compile(str, i)
+   test(t, "until")
+   ret = ret .. tmp .. "until\t" .. tostring(rpct) .. "\n"
+
+   tmp, i = evaluate(str, i)
+   ret = ret .. tmp .. "rend\t" .. tostring(rpct) .. "\n"
+   return ret, i
+end
+
+function arrscope(str, i)
+   --TODO
+   return ret, i
+end
+
+function funscope(str, i)
+   --TODO
+   return ret, i
+end
+
+function test(t1, t2)
+   if t1 ~= t2 then
+      print("Error! Was expecting " .. t1 .. ", got " .. t2 .. "\n")
+   end
 end
 
 local file = io.open(comp_file .. ".pp.lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open(comp_file .. ".lir", "w+")
-file:write(scope(text, 0))
+file:write(compile(text, 1))
 file:close()
-

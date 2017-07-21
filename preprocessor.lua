@@ -1,5 +1,4 @@
---!! TMP
-comp_file = "unit-tests/test"
+-- Constant
 _SPACE = "   "
 
 --------------------------------------------------------------------------------
@@ -861,12 +860,12 @@ end
 -- Error handling
 --------------------------------------------------------------------------------
 function helperror()
-   local file, text = io.open("preprocessor.lua", "r")
+   local file, text = io.open(comp_file .. ".lua", "r")
    for i = 1, linum do
       text = file:read("line")
    end
    file:close()
-   print("FILE: test.lua")
+   print("FILE: " .. comp_file .. ".lua")
    print("Error at line " .. tostring(linum) .. ": " .. typerr)
    print(text)
    for i = 1, chnum do
@@ -879,9 +878,9 @@ end
 --------------------------------------------------------------------------------
 -- Program
 --------------------------------------------------------------------------------
-local file = io.open("preprocessor.lua", "r")
+local file = io.open(comp_file .. ".lua", "r")
 local text = file:read("all")
 file:close()
-file = io.open("test.pp.lua", "w+")
+file = io.open(comp_file .. ".pp.lua", "w+")
 file:write(preprocess(text))
 file:close()
