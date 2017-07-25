@@ -4,6 +4,7 @@
 local ifct, whct, frct, rpct, fnct, doct = 0, 0, 0, 0, 0, 0
 local stack, level, size = {}, 0, 0
 local globals = {}
+local functions = "\n"
 
 ops = {}
 ops["+"]      = "add"
@@ -26,18 +27,17 @@ ops["not"]    = "not"
 ops["~"]      = "inv"
 ops["#"]      = "len"
 ops["nil"]    = "nil"
-ops["return"] = "ret"
 
 function isWhitespace(c)
    return c == " " or c == "\t" or c == "\n"
 end
 
 function isParenthesized(expr)
-   return expr:sub(1, 1) == "("
+   return expr:sub(1, 1) == "(" and expr:sub(#expr, #expr) == ")"
 end
 
 function isBracketed(expr)
-   return expr:sub(1, 1) == ")"
+   return expr:sub(1, 1) == ")" and expr:sub(#expr, #expr) == "]"
 end
 
 function nextexpr(str, i)
@@ -72,46 +72,9 @@ function nextexpr(str, i)
    return ret, i
 end
 
--- Closure and tail call analysis
-function precompile(str, i)
-   local ret, tmp = ""
-   local expr
-   while true do
-      expr, i = nextexpr(str, i)
-      if not expr then break end
-
-      if expr == "end" then
-	 return ret, i
-
-      elseif expr == "else" then
-	 return ret, i
-
-      elseif expr == "if" then
-
-      elseif expr == "do" then
-
-      elseif expr == "for" then
-
-      elseif expr == "while" then
-
-      elseif expr == "repeat" then
-
-      elseif expr == "function" then
-
-      elseif expr == "{" then
-
-      else
-
-      end
-   end
-   return ret
-end
-
 function compile(str, i)
    local ret, tmp = ""
    local expr
-
-   newlevel()
    
    while true do
       expr, i = nextexpr(str, i)
@@ -145,6 +108,7 @@ function compile(str, i)
 	 tmp, i = repscope(str, i)
 	 ret = ret .. tmp
 
+	 -- unlikely and useless entry
       elseif expr == "function" then
 	 tmp, i = funscope(str, i)
 	 ret = ret .. tmp
@@ -160,7 +124,7 @@ function compile(str, i)
    end
    
    ret = ret .. poplevel()
-   return ret
+   return ret .. "exit\n" .. functions
 end
 
 function newlevel()
@@ -190,7 +154,7 @@ end
 function access(var)
    for lvl, stk in ipairs(stack) do
       if stk[var] then
-	 return "ref\t" .. tostring(size - stk[var]) .. "\n"
+	 return "ref\t" .. tostring(size - stk[var] - 1) .. "\n"
       end
    end
    if not globals[var] then
@@ -200,41 +164,45 @@ function access(var)
 end
 
 function translate(expr)
-   if isParenthesized(expr) or isBracketed(expr) then
-      return translate(expr:sub(2, #expr - 1))
-   end
    local tmp, t = nextexpr(expr, 1)
    local ret, operation = "", ""
 
    while tmp do
-      print(tmp)
       if ops[tmp] then
 	 operation = ops[tmp]
-      elseif tmp == "," then
-	 ret = ret .. operation .. "\ntac\n"
-	 operation = ""
-      elseif tonumber(tmp) then
-	 ret = ret .. "num\t" .. tmp .. "\n"
-      elseif tmp == "false" or tmp == "true" then
-	 ret = ret .. "bool\t" .. tmp .. "\n"
-      elseif tmp:sub(1, 1) == "\"" then
-	 ret = ret .. "str\t" .. tmp .. "\n"
+	 tmp, t = nextexpr(expr, t)
       else
-	 ret = ret .. access(tmp)
-      end
-      
-      tmp, t = nextexpr(expr, t)
-      
-      while tmp and isBracketed(tmp) do
-	 ret = ret .. translate(tmp) .. "index\n"
+	 if tmp == "," then
+	    ret = ret .. operation .. "tac\n"
+	    operation = ""
+	 elseif tonumber(tmp) then
+	    ret = ret .. "num\t" .. tmp .. "\n"
+	 elseif tmp == "false" or tmp == "true" then
+	    ret = ret .. "bool\t" .. tmp .. "\n"
+	 elseif tmp:sub(1, 1) == "\"" then
+	    ret = ret .. "str\t" .. tmp .. "\n"
+	 elseif isParenthesized(tmp) or isBracketed(tmp) then
+	    ret = ret .. translate(tmp:sub(2, #tmp - 1))
+	 else
+	    ret = ret .. access(tmp)
+	 end
+	 
 	 tmp, t = nextexpr(expr, t)
-      end
-      if tmp and isParenthesized(tmp) then
-	 ret = ret .. "params\n" .. translate(tmp) .. "call\n"
-	 tmp, t = nextexpr(expr, t)
+	 
+	 while tmp and isBracketed(tmp) do
+	    ret = ret .. translate(tmp) .. "index\n"
+	    tmp, t = nextexpr(expr, t)
+	 end
+	 if tmp and isParenthesized(tmp) then
+	    ret = ret .. "params\n" .. translate(tmp) .. "call\n"
+	    tmp, t = nextexpr(expr, t)
+	 end
       end
    end
-   return ret .. operation .. "\n"
+   ret = ret .. operation
+   if ret:sub(#ret, #ret) == "\n" then return ret
+   else return ret .. "\n"
+   end
 end
 
 function evaluate(str, i, ...)
@@ -246,7 +214,7 @@ function evaluate(str, i, ...)
       c = 1
       expr[c], i = nextexpr(str, i)
    end
-   if expr[1] == "local" and not expr[2] then
+   if (expr[1] == "local" or expr[1] == "return") and not expr[2] then
       c = 2
       expr[c], i = nextexpr(str, i)
    end
@@ -259,14 +227,21 @@ function evaluate(str, i, ...)
       elseif tmp ~= "," then break end
       i = t
       c = c + 1
-      expr[c], i = nextexpr(str, i)
+      tmp, i = nextexpr(str, i)
+      if tmp == "function" then
+	 tmp, i = funscope(str, i)
+	 functions = functions .. tmp .. "\n"
+	 expr[c] = fnct
+      else
+	 expr[c] = tmp
+      end
    end
    if eq then
       if expr[1] == "local" then
 	 for j = 2, #expr do
 	    if expr[j] == "=" then
 	       c = j + 1
-	       ret = "set\t" .. tostring(j - 1) .. "\n"
+	       ret = "set\t" .. tostring(j - 2) .. "\n"
 	       break
 	    else
 	       register(true, expr[j])
@@ -284,11 +259,22 @@ function evaluate(str, i, ...)
 	 end
       end
    else
-      c = 1
+      if expr[1] == "return" then
+	 c = 2
+      else
+	 c = 1
+      end
    end
    for j = c, #expr do
-      print(expr[j])
-      ret = ret .. translate(expr[j]) .. "tac\n"
+      if type(expr[j]) == "number" then
+	 ret = ret .. "rfct\t" .. tostring(expr[j]) .. "\n"
+      else
+	 ret = ret .. translate(expr[j])
+      end
+      if j ~= #expr or eq then ret = ret .. "tac\n" end
+   end
+   if expr[1] == "return" then
+      ret = ret .. "ret\n"
    end
    return ret, i
 end
@@ -304,10 +290,12 @@ function ifscope(str, i)
    tmp, i = nextexpr(str, i)
    test(tmp, "then")
    ret = ret .. "then\t" .. tostring(ifct) .. "\n"
-   
+
+   newlevel()
    tmp, i, t = compile(str, i)
    if t == "else" then
       ret = ret .. tmp .. "else\t" .. tostring(ifct) .. "\n"
+      newlevel()
       tmp, i, t = compile(str, i)
    end
    test(t, "end")
@@ -369,16 +357,35 @@ function arrscope(str, i)
 end
 
 function funscope(str, i)
-   --TODO
+   local par, tmp = true
+   local t, ret   = 1
+   
+   fnct = fnct + 1
+   ret = "fct\t" .. tostring(fnct) .. "\n"
+   
+   tmp, i = nextexpr(str, i)
+   tmp = tmp:sub(2, #tmp - 1)
+   
+   newlevel()
+   while par do
+      par, t = nextexpr(tmp, t)
+      if not par then break end
+      register(true, par)
+      par, t = nextexpr(tmp, t)
+   end
+   tmp, i, t = compile(str, i)
+   test(t, "end")
+   ret = ret .. tmp .. "fend\t" .. tostring(fnct) .. "\n"
    return ret, i
 end
 
 function test(t1, t2)
    if t1 ~= t2 then
-      print("Error! Was expecting " .. t1 .. ", got " .. t2 .. "\n")
+      print("Error! Was expecting '" .. tostring(t1) .. "', got '" .. tostring(t2) .. "'.\n")
    end
 end
 
+newlevel()
 local file = io.open(comp_file .. ".pp.lua", "r")
 local text = file:read("all")
 file:close()
