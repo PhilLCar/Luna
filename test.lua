@@ -1,10 +1,6 @@
-if "la vie" == "suce" then
-   local mange, ma, graine = "pute", "sale"
-   mange = 1 + fuck("you", "bitch") - 3 + not false - 3
-else
-   plote = "fuck" .. "you"
-   function bob(a, b, c)
-      a = b + c
-      return a + 1
-   end
-end
+local yo = 1
+test, lol = function(inf, uck, ing)
+   local bob = {1, 3}
+   return test(1, 2, 3, 4, 5), "test?\n
+terae"
+end, {1, 2, 3}
