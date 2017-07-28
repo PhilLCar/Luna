@@ -175,7 +175,7 @@ function access(var, flvl)
 	    clo[var] = true
 	    return "clo\t" .. var .. "\n"
 	 end
-	 return "ref\t" .. tostring(size - stk[var] - 1) .. "\n"
+	 return "ref\t" .. tostring(size) .. "\n"
       end
    end
    if not globals[var] then
@@ -198,16 +198,15 @@ function translate(expr, fname, flvl)
 	    operation = ""
 	 elseif tonumber(tmp) then
 	    ret = ret .. "num\t" .. tmp .. "\n"
-	 elseif tmp == "false" or tmp == "true" then
-	    ret = ret .. "bool\t" .. tmp .. "\n"
+	 elseif tmp == "false" or tmp == "true" or tmp == "nil" then
+	    ret = ret .. "spec\t" .. tmp .. "\n"
 	 elseif tmp:sub(1, 1) == "\"" then
 	    ret = ret .. "str\t" .. tmp .. "\n"
 	 elseif isParenthesized(tmp) or isBracketed(tmp) then
 	    ret = ret .. translate(tmp:sub(2, #tmp - 1), fname, flvl)
 	 elseif isAccoladed(tmp) then
 	    ret = ret .. "init\n" ..
-	       translate(tmp:sub(2, #tmp - 1), fname, flvl) .. "done\n"
-	 
+	       translate(tmp:sub(2, #tmp - 1), fname, flvl) .. "done\n"	 
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
@@ -469,6 +468,7 @@ function funscope(str, i, ...)
    local fnct = fnct
    local fname, clo = {...}
    local narg, s = 0, false
+   local sz = size
    fname = fname[1]
    
    
@@ -477,7 +477,8 @@ function funscope(str, i, ...)
    
    tmp, i = nextexpr(str, i)
    tmp = tmp:sub(2, #tmp - 1)
-   
+
+   size = 0
    newlevel()
    while par do
       par, t = nextexpr(tmp, t)
@@ -497,7 +498,8 @@ function funscope(str, i, ...)
    tmp, i, t, clo = compile(str, i, fname, level)
    test("end", t)
    ret = ret .. tmp .. "fend\t" .. tostring(fnct) .. "\n"
-
+   size = sz
+   
    tmp = ""
    t = 0
    for name in pairs(clo) do
