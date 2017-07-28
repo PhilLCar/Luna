@@ -15,6 +15,6 @@ struct Bob lol(int a, float b, char* c) {
 }
 
 int test(int a, int b, int c, int d, int e, int f, int g, int h) {
-  lol(a, (int)b, "a");
+  //lol(a, (int)b, "a");
   return a + b + c + d + e + f + g + h;
 }

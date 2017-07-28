@@ -162,8 +162,6 @@ end
 
 function access(var, flvl)
    local stk
-   print(level)
-   print(var)
    for i = level, 1, -1 do
       stk = stack[i]
       if stk.clo[var] then
@@ -187,13 +185,16 @@ end
 function translate(expr, fname, flvl)
    local tmp, t = nextexpr(expr, 1)
    local ret, operation = "", ""
+   local cnt = 0
    
    while tmp do
+      if cnt == 0 then cnt = 1 end
       if ops[tmp] then
 	 operation = ops[tmp]
 	 tmp, t = nextexpr(expr, t)
       else
 	 if tmp == "," then
+	    cnt = cnt + 1
 	    ret = ret .. operation .. "tac\n"
 	    operation = ""
 	 elseif tonumber(tmp) then
@@ -220,9 +221,11 @@ function translate(expr, fname, flvl)
 	 while tmp and (isBracketed(tmp) or isParenthesized(tmp)) do
 	    if isParenthesized(tmp) then
 	       if fname then
-		  ret = ret .. "params\n" .. translate(tmp, fname, flvl) .. "tcall\n"
+		  ret = ret .. "params\t" .. tostring(cnt) .. "\n" ..
+		     translate(tmp, fname, flvl) .. "tac\ntcall\n"
 	       else
-		  ret = ret .. "params\n" .. translate(tmp, fname, flvl) .. "call\n"
+		  ret = ret .. "params\t" .. tostring(cnt) .. "\n" ..
+		     translate(tmp, fname, flvl) .. "tac\ncall\n"
 	       end
 	    else
 	       ret = ret .. translate(tmp, fname, flvl) .. "index\n"
@@ -294,7 +297,7 @@ function evaluate(str, i, fname, flvl, ...)
    end
    -- global
    if typ == 0 then
-      ret = "mod\t" .. tostring(eq) .. "\n"
+      ret = "chg\t" .. tostring(eq) .. "\n"
       if c > 1 then fname = nil end
    -- local
    elseif typ == 1 then
@@ -316,11 +319,12 @@ function evaluate(str, i, fname, flvl, ...)
    tmp = ""
    for j = 1, eq do
       if typ == 0 then
-	 tmp = translate(expr[j], fname, flvl) .. "place\n" .. tmp
+	 tmp = tmp .. translate(expr[j], fname, flvl)
       elseif typ == 1 then
 	 register(true, expr[j])
       end
    end
+   if typ == 0 then tmp = tmp .. "place\n" end
    return ret .. "stack\n" .. tmp, i
 end
 
@@ -521,5 +525,5 @@ local file = io.open(comp_file .. ".pp.lua", "r")
 local text = file:read("all")
 file:close()
 file = io.open(comp_file .. ".lir", "w+")
-file:write(compile(text, 1, "_main", level))
+file:write(compile(text, 1, nil, level))
 file:close()

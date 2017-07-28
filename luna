@@ -9,5 +9,5 @@ require("preprocessor")
 require("compiler")
 require("ir-compiler")
 -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
-os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s ./library/asm/mmap.s ./library/asm/utils.s " ..
+os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s ./library/asm/mmap.s ./library/asm/print.s ./library/asm/utils.s " ..
 	      comp_file .. ".s -o " .. comp_file .. ".exe")

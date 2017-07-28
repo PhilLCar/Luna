@@ -34,10 +34,6 @@ lol:
 	.cfi_endproc
 .LFE5:
 	.size	lol, .-lol
-	.section	.rodata
-.LC0:
-	.string	"a"
-	.text
 	.globl	test
 	.type	test, @function
 test:
@@ -48,44 +44,28 @@ test:
 	.cfi_offset 6, -16
 	movq	%rsp, %rbp
 	.cfi_def_cfa_register 6
-	subq	$80, %rsp
-	movl	%edi, -20(%rbp)
-	movl	%esi, -24(%rbp)
-	movl	%edx, -28(%rbp)
-	movl	%ecx, -32(%rbp)
-	movl	%r8d, -36(%rbp)
-	movl	%r9d, -40(%rbp)
-	movq	%fs:40, %rax
-	movq	%rax, -8(%rbp)
-	xorl	%eax, %eax
-	cvtsi2ss	-24(%rbp), %xmm0
-	leaq	-80(%rbp), %rax
-	movl	-20(%rbp), %ecx
-	leaq	.LC0(%rip), %rdx
-	movl	%ecx, %esi
-	movq	%rax, %rdi
-	call	lol
-	movl	-20(%rbp), %edx
+	movl	%edi, -4(%rbp)
+	movl	%esi, -8(%rbp)
+	movl	%edx, -12(%rbp)
+	movl	%ecx, -16(%rbp)
+	movl	%r8d, -20(%rbp)
+	movl	%r9d, -24(%rbp)
+	movl	-4(%rbp), %edx
+	movl	-8(%rbp), %eax
+	addl	%eax, %edx
+	movl	-12(%rbp), %eax
+	addl	%eax, %edx
+	movl	-16(%rbp), %eax
+	addl	%eax, %edx
+	movl	-20(%rbp), %eax
+	addl	%eax, %edx
 	movl	-24(%rbp), %eax
-	addl	%eax, %edx
-	movl	-28(%rbp), %eax
-	addl	%eax, %edx
-	movl	-32(%rbp), %eax
-	addl	%eax, %edx
-	movl	-36(%rbp), %eax
-	addl	%eax, %edx
-	movl	-40(%rbp), %eax
 	addl	%eax, %edx
 	movl	16(%rbp), %eax
 	addl	%eax, %edx
 	movl	24(%rbp), %eax
 	addl	%edx, %eax
-	movq	-8(%rbp), %rsi
-	xorq	%fs:40, %rsi
-	je	.L5
-	call	__stack_chk_fail@PLT
-.L5:
-	leave
+	popq	%rbp
 	.cfi_def_cfa 7, 8
 	ret
 	.cfi_endproc
