@@ -83,6 +83,12 @@ cstr:
 	.section	.rodata
 .LC0:
 	.string	"%d\n"
+.LC1:
+	.string	"false"
+.LC2:
+	.string	"true"
+.LC3:
+	.string	"nil"
 	.text
 	.globl	print
 	.type	print, @function
@@ -94,15 +100,54 @@ print:
 	.cfi_offset 6, -16
 	movq	%rsp, %rbp
 	.cfi_def_cfa_register 6
-	subq	$16, %rsp
-	movq	%rdi, -8(%rbp)
+	subq	$32, %rsp
+	movq	%rdi, -24(%rbp)
+	movq	-24(%rbp), %rax
+	andl	$7, %eax
+	movl	%eax, -12(%rbp)
+	movq	-24(%rbp), %rax
+	sarq	$3, %rax
+	movq	%rax, -8(%rbp)
+	movl	-12(%rbp), %eax
+	cmpl	$1, %eax
+	je	.L11
+	cmpl	$2, %eax
+	je	.L12
+	testl	%eax, %eax
+	jne	.L10
 	movq	-8(%rbp), %rax
-	movq	%rax, %rdi
-	call	lint
 	movq	%rax, %rsi
 	leaq	.LC0(%rip), %rdi
 	movl	$0, %eax
 	call	printf@PLT
+	jmp	.L10
+.L11:
+	cmpq	$0, -8(%rbp)
+	jne	.L14
+	leaq	.LC1(%rip), %rdi
+	call	puts@PLT
+	jmp	.L17
+.L14:
+	cmpq	$1, -8(%rbp)
+	jne	.L16
+	leaq	.LC2(%rip), %rdi
+	call	puts@PLT
+	jmp	.L17
+.L16:
+	cmpq	$2, -8(%rbp)
+	jne	.L17
+	leaq	.LC3(%rip), %rdi
+	call	puts@PLT
+	jmp	.L17
+.L12:
+	movq	-8(%rbp), %rax
+	addq	$8, %rax
+	movq	%rax, %rdi
+	call	puts@PLT
+	jmp	.L10
+.L17:
+	nop
+.L10:
 	nop
 	leave
 	.cfi_def_cfa 7, 8

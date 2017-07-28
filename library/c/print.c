@@ -20,5 +20,23 @@ long cstr(char* s) {
 }
 
 int print(long i) {
-  printf("%d\n", lint(i));
+  int type = i & 7;
+  long val = i >> 3;
+  switch(type) {
+  case 0:
+    printf("%d\n", val);
+    break;
+  case 1:
+    if (!val)
+      printf("false\n");
+    else if (val == 1) 
+      printf("true\n");
+    else if (val == 2)
+      printf("nil\n");
+    break;
+  case 2:
+    printf("%s\n", (char*)(val + 8));
+    break;
+  }
+  return 0;
 }

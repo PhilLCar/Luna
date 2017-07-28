@@ -1,5 +1,32 @@
 	.text
 # Fonctions utiles à la compilation, pour alléger le compilateur
+
+
+	.global transfer
+transfer:
+	#push	%rsp
+	#call	print_word_hex
+	#push	$'\n'
+	#call	putchar
+	movq	%rdi, -8(%rsp)
+	movq	%rsi, -16(%rsp)
+tf_lp:	movq	(%rbp, %rax, 8), %rdi
+	leaq	(%rax, %rbx, ), %rsi
+	leaq	(%rbp, %rsi, 8), %rsi
+	cmp	%rsi, %rsp
+	jz	tf_end
+	movq	(%rsi), %rsi
+	movq	%rsi, (%rdi)
+	dec	%rax
+	jmp	tf_lp
+tf_end:	movq	-16(%rsp), %rsi
+	movq	-8(%rsp), %rdi
+	ret
+	
+	
+######################################################################
+# OLD
+######################################################################	
 	.global	compare
 compare:
 	push	%rdx

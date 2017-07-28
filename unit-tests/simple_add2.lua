@@ -1,5 +1,5 @@
 local x, y = 3
 y = 3+4+5 + x
-_print
+print(y)
 --15
 

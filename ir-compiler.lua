@@ -17,6 +17,8 @@ u_cont = { false , false , false , false , false , false , false , false  }
 c_size = 6
 c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 
+rsp = 0
+
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
 intro =
@@ -25,26 +27,26 @@ intro =
    "\t.global\tmain\n" ..
    "_main:\n" ..
    "main:\n" ..
-   "\tpush\t%r12\n" ..
-   "\tpush\t%r13\n" ..
-   "\tpush\t%r14\n" ..
-   "\tpush\t%r15\n" ..
-   "\tpush\t%rbp\n" ..
-   "\tmov\t%rsp, %rbp\n" ..
+   "\tpushq\t%r12\n" ..
+   "\tpushq\t%r13\n" ..
+   "\tpushq\t%r14\n" ..
+   "\tpushq\t%r15\n" ..
+   "\tpushq\t%rbp\n" ..
+   "\tmovq\t%rsp, %rbp\n" ..
    "\txor\t%rbx, %rbx\n" .. 
    -- MEMORY
-   "\tmov\t$134217728, %rax\n" ..
-   --"\tmov\t%rax, _mem_size(%rip)\n" ..
-   "\tpush\t%rax\n" ..
+   "\tmovq\t$134217728, %rax\n" ..
+   --"\tmovq\t%rax, _mem_size(%rip)\n" ..
+   "\tpushq\t%rax\n" ..
    "\tcall\tmmap\n" ..
    --"\tmovq\t%rax, _memory(%rip)\n" ..
-   "\tmov\t%rax, %r12\n" ..
+   "\tmovq\t%rax, %r12\n" ..
    -- GLOBALS
-   "\tmov\t$524288, %rax\n" ..
-   "\tpush\t%rax\n" ..
+   "\tmovq\t$524288, %rax\n" ..
+   "\tpushq\t%rax\n" ..
    "\tcall\tmmap\n" ..
    --"\tmovq\t%rax, _globals(%rip)\n" ..
-   "\tmov\t%rax, %r13\n" ..
+   "\tmovq\t%rax, %r13\n" ..
    -- INIT
    "\tmovq\t$0, (%r13)\n" ..
    "\tmovq\t$17, 8(%r13)\n" ..
@@ -52,15 +54,14 @@ intro =
    "\tmovq\t$0, (%r12)\n" ..
    "\tmovq\t$17, 8(%r12)\n" ..
    "\tlea\t3(, %r12, 8), %r14\n" ..
-   "\tadd\t$16, %r12\n"
+   "\taddq\t$16, %r12\n"
 
 outro =
-   "\tpop\t%rbp\n" ..
-   "\tpop\t%r15\n" ..
-   "\tpop\t%r14\n" ..
-   "\tpop\t%r13\n" ..
-   "\tpop\t%r12\n" ..
-   "\tmov\t$0, %rax\n" ..
+   "\tpopq\t%r15\n" ..
+   "\tpopq\t%r14\n" ..
+   "\tpopq\t%r13\n" ..
+   "\tpopq\t%r12\n" ..
+   "\tmovq\t$0, %rax\n" ..
    "\tret\n"
 
 data = "\n# DATA" ..	    
@@ -76,39 +77,39 @@ buf = false
 v_stack = {}
 v_size  = 0
 
-r_stack = {0}
-r_size  = 0
+r_stack = { true }
+r_size  = 1
 
 -- Register handling functions
 --------------------------------------------------------------------------------
 function available()
-   return not u_cont[(v_size + 1) % u_size]
+   return not u_cont[(v_size % u_size) + 1]
 end
 
 function register()
    v_size = v_size + 1
-   u_cont[v_size % u_size] = true
+   u_cont[((v_size - 1) % u_size) + 1] = true
    v_stack[v_size] = true
-   return u_name[v_size % u_size]
+   return u_name[((v_size - 1) % u_size) + 1]
 end
 
 function current()
-   return u_name[v_size % u_size]
+   return u_name[((v_size - 1) % u_size) + 1]
 end
 
 function future()
-   return u_name[(v_size + 1) % u_size]
+   return u_name[(v_size % u_size) + 1]
 end
 
 function release()
    local tmp
-   u_cont[v_size % u_size] = false
+   u_cont[((v_size - 1) % u_size) + 1] = false
    if not v_stack[v_size] then
       r_stack[r_size] = nil
       tmp = tostring(-8 * r_size) .. "(%rbp)"
       r_size = r_size - 1
    else
-      tmp = u_name[v_size % u_size]
+      tmp = u_name[((v_size - 1) % u_size) + 1]
    end
    v_stack[v_size] = nil
    v_size = v_size - 1
@@ -130,14 +131,36 @@ function push(value)
    if buf then
       if not available() then
 	 r = replace()
-	 ret = "\tmov\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+	 ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
       else
 	 r = register()
       end
-      ret = ret .. "\tmov\t" .. buf .. ", " .. r .. "\n"
+      ret = ret .. "\tmovq\t" .. buf .. ", " .. r .. "\n"
    end
    buf = value
    return ret
+end
+
+function lea(value)
+   local ret, r = ""
+   if not available() then
+      r = replace()
+      ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+   else
+      r = register()
+   end
+   ret = ret .. "\tleaq\t" .. value .. ", " .. r .. "\n"
+   return ret
+end
+
+function lock(value)
+   local tmp = ""
+   if r_size > 0 then
+      tmp = tostring(-8 * r_size)
+   end
+   r_size = r_size + 1
+   r_stack[r_size] = true
+   return "\tmovq\t" .. value .. ", " .. tmp .. "(%rbp)\n"
 end
 
 function use()
@@ -145,7 +168,7 @@ function use()
    push(nil)
    if not available() then
       r = replace()
-      ret = "\tmov\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
    else
       r = register()
    end
@@ -184,10 +207,21 @@ function isMem(reg)
 end	 
 
 ---------- FUNCTIONS ----------
-function call(fname)
-   return "\tsub\t$" .. tostring(8 * r_size) .. ", %rsp\n" ..
-      "\tcall\t" .. fname .. "\n" ..
-      "\tadd\t$" .. tostring(8 * r_size) .. ", %rsp\n"
+function prep(up)
+   local ret, dif = ""
+   if up then
+      dif = r_size - rsp - 1
+   else
+      dif = -rsp
+   end
+   if dif > 0 then
+      ret = "\tsubq\t$" .. tostring(8 * dif) .. ", %rsp\n"
+      rsp = dif
+   elseif dif < 0 then
+      ret = "\taddq\t$" .. tostring(-8 * dif) .. ", %rsp\n"
+      rsp = dif
+   end
+   return ret
 end
 
 function num(op)
@@ -195,7 +229,7 @@ function num(op)
    local v1 = pop()
    local v2 = get()
    if isMem(v1) and isMem(v2) then
-      ret = "\tmov\t" .. v2 .. ", " .. current() .. "\n"
+      ret = "\tmovq\t" .. v2 .. ", " .. current() .. "\n"
       v2 = current()
    end
    ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
@@ -209,7 +243,7 @@ function arg1(op, tag)
    local v2 = pop()
    register()
    if isMem(v1) and isMem(v2) then
-      ret = "\tmov\t" .. v2 .. ", " .. current() .. "\n"
+      ret = "\tmovq\t" .. v2 .. ", " .. current() .. "\n"
       v2 = current()
    end
    ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
@@ -221,7 +255,7 @@ function arg2(op, tag)
    local v1 = pop()
    local v2 = get()
    if isMem(v1) and isMem(v2) then
-      ret = "\tmov\t" .. v2 .. ", " .. current() .. "\n"
+      ret = "\tmovq\t" .. v2 .. ", " .. current() .. "\n"
       v2 = current()
    end
    ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
@@ -234,15 +268,15 @@ function div(op)
    local v1 = pop()
    local v2 = get()
    if u_cont[5] then
-      ret = "\tmov\t%rdx, %r15\n"
+      ret = "\tmovq\t%rdx, %r15\n"
    end
    ret = ret .. 
-      "\tmov\t" .. v2 .. ", " .. "%rax\n" ..
+      "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
       "\tcdq\n" ..
-      "\tidiv\t" .. v1 .. "\n" ..
-      "\tmov\t" .. "%rax" .. ", " .. v2 .. "\n"      
+      "\tidivq\t" .. v1 .. "\n" ..
+      "\tmovq\t" .. "%rax" .. ", " .. v2 .. "\n"      
    if u_cont[5] then
-      ret = ret .. "\tmov\t%r15, %rdx\n"
+      ret = ret .. "\tmovq\t%r15, %rdx\n"
    end
    return ret
 end
@@ -252,15 +286,15 @@ function mod(op)
    local v1 = pop()
    local v2 = get()
    if u_cont[5] then
-      ret = "\tmov\t%rdx, %r15\n"
+      ret = "\tmovq\t%rdx, %r15\n"
    end
-   ret = ret .. "\txor\t%rdx, %rdx\n" ..
-      "\tmov\t" .. v2 .. ", " .. "%rax\n" ..
+   ret = ret ..
+      "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
       "\tcdq\n" ..
-      "\tidiv\t" .. v1 .. "\n" ..
-      "\tmov\t" .. "%rdx" .. ", " .. v2 .. "\n"      
+      "\tidivq\t" .. v1 .. "\n" ..
+      "\tmovq\t" .. "%rdx" .. ", " .. v2 .. "\n"      
    if u_cont[5] then
-      ret = ret .. "\tmov\t%r15, %rdx\n"
+      ret = ret .. "\tmovq\t%r15, %rdx\n"
    end
    return ret
 end
@@ -273,6 +307,16 @@ function str(value)
    use()
    return ret .. "\tlea\tstring" .. tostring(strct) .. "(%rip), ".. current() .. "\n" ..
       "\tlea\t2(, %rax, 8), " .. current() .. "\n"
+end
+
+function nt()
+   local ret
+   local v1 = pop()
+   ret = "\tmov\t" .. v1 .. ", %rax\n" ..
+      prep(up) ..
+      "\tcall\tnot\n" ..
+      push("%rax")
+   return ret
 end
 
 ---------- PARSING ----------
@@ -306,14 +350,14 @@ end
 
 ---------- PROGRAM ----------
 function translate(text)
-   return intro .. _translate(text, 1) .. outro
+   return intro .. _translate(text, 1, false) .. outro
 end
 
-function _translate(text, i)
+function _translate(text, i, sets)
    local asm, tmp = ""
    local s, i = readline(text, i)
    local instr, value
-   local tmp, call
+   local tmp, vname
    
    while s do
       instr, value = separate(s)
@@ -333,79 +377,150 @@ function _translate(text, i)
 	 
       elseif instr == "string" then
 	 asm = asm .. str(value)
+
+      elseif instr == "ref" then
+	 tmp = tonumber(value) + 1
+	 if tmp > 0 then
+	    tmp = tostring(-8 * tmp)
+	 else
+	    tmp = ""
+	 end
+	 if sets then
+	    asm = asm .. lea(tmp .. "(%rbp)")
+	 else
+	    asm = asm .. push(tmp .. "(%rbp)")
+	 end
 	 
       elseif instr == "var" then
-	 call = value
+	 vname = value
 	 --asm = asm .. var(value)
 
       elseif instr == "add" then
-	 asm = asm .. num("add")
+	 asm = asm .. num("addq")
+
+      elseif instr == "sub" then
+	 asm = asm .. num("subq")
+
+      elseif instr == "mul" then
+	 asm = asm .. num("imulq")
+
+      elseif instr == "div" then
+	 asm = asm .. div()
+
+      elseif instr == "mod" then
+	 asm = asm .. mod()
+
+      elseif instr == "not" then
+	 asm = asm .. nt()
 
       elseif instr == "params" then
-	 tmp, i = params(text, i, tonumber(value), call)
+	 tmp, i = params(text, i, tonumber(value), vname)
 	 call = false
 	 asm = asm .. tmp
 	 
       elseif instr == "chg" then
 	 tmp, i = chg(text, i, tonumber(value))
 	 asm = asm .. tmp
+	 
+      elseif instr == "set" then
+	 tmp, i = set(text, i, tonumber(value))
+	 asm = asm .. tmp
 
       elseif instr == "call" then
 	 return asm, i
 
       elseif instr == "stack" then
-	 return asm, i
+	 return asm, i, true
+
+      elseif instr == "place" then
+	 return asm, i, true
 
       elseif instr == "tac" then
-	 return asm, i
+	 return asm, i, false
       end
       --------------------
       s, i = readline(text, i)
+   end
+   if rsp ~= 0 then
+      asm = asm .. "\tleave\n"
+   else
+      asm = asm .. "\tpopq\t%rbp\n"
    end
    return asm
 end
 
 function params(text, i, p, call)
    local rs, vs   = r_size , v_size
-   local asm, tmp = ""
+   local asm, tmp = prep(true)
    local push = p - 6
-   if r_size > 0 then
-      asm = "\tsub\t$" .. tostring(8 * r_size) .. ", %rsp\n"
-   end
    r_size = r_size + p
    while v_size % u_size ~= 2 do
       v_size = v_size + 1
    end
    for j = 1, p do
-      tmp, i = _translate(text, i)
+      tmp, i = _translate(text, i, false)
       asm = asm .. tmp
    end
    for j = 1, push do
-      asm = asm .. "\tpush\t" .. pop() .. "\n"
+      asm = asm .. "\tpushq\t" .. pop() .. "\n"
    end
    if push < 0 then push = 0 end
    for j = 1, p do
       if j > 6 then break end
       local t = pop()
       if t:sub(1, 1) ~= "%" then
-	 asm = asm .. "\tmov\t" .. t .. ", " .. future() .. "\n"
+	 asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
       end
    end
    r_size, v_size = rs, vs
    --should be call or tcall (no check for now)
    s, i = readline(text, i)
    asm = asm .. "\tcall\t" .. call .. "\n"
-   if r_size > 0 then
-      asm = asm .. "\tadd\t$" .. tostring(8 * (r_size + push)) .. ", %rsp\n"
-   end
    return asm, i
 end
 
 function chg(text, i, p)
-   return _translate(text, i)
+   local asm, tmp = ""
+   local rs, done = r_size
+   while not done do
+      tmp, i, done = _translate(text, i, true)
+      if done then break end
+      asm = asm .. tmp .. lock(pop())
+   end
+   if p == 0 then
+      done = false
+      while not done do
+	 tmp, i, done = _translate(text, i, false)
+	 asm = asm .. tmp
+      end
+   else
+      tmp, i = set(text, i, p)
+      asm = asm .. tmp ..
+	 "\tmovq\t$" .. tostring(-rs) .. ", %rax\n" ..
+	 "\tmovq\t$" .. tostring(-p) .. ", %rbx\n" ..
+	 prep(true) ..
+	 "\tcall\ttransfer\n"
+   end
+   for j = rs + 1, r_size do
+      r_stack[j] = nil
+   end
+   r_size = rs
+   return asm, i
 end
 
 function set(text, i, p)
+   local asm, tmp = ""
+   local done, j = false, 1
+   while j <= p do
+      tmp, i, done = _translate(text, i, false)
+      if done then
+	 tmp = push("$17")
+      end
+      asm = asm .. tmp .. lock(pop())
+      j = j + 1
+   end
+   while not done do tmp, i, done = _translate(text, i) end
+   return asm, i
 end
 
 function ret(text, i, p)

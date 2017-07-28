@@ -173,7 +173,7 @@ function access(var, flvl)
 	    clo[var] = true
 	    return "clo\t" .. var .. "\n"
 	 end
-	 return "ref\t" .. tostring(size) .. "\n"
+	 return "ref\t" .. tostring(stk[var]) .. "\n"
       end
    end
    if not globals[var] then
@@ -307,25 +307,25 @@ function evaluate(str, i, fname, flvl, ...)
       ret = "ret\n"
       if c > 1 then fname = nil end
    end
+   tmp = ""
    for j = eq + 1, #expr do
       -- Checks for function declarations
       if type(expr[j]) == "number" then
-	 ret = ret .. expr["code"][j]
+	 tmp = tmp .. expr["code"][j]
       else
-	 ret = ret .. translate(expr[j], fname, flvl)
+	 tmp = tmp .. translate(expr[j], fname, flvl)
       end
-      ret = ret .. "tac\n"
+      tmp = tmp .. "tac\n"
    end
-   tmp = ""
    for j = 1, eq do
       if typ == 0 then
-	 tmp = tmp .. translate(expr[j], fname, flvl)
+	 ret = ret .. translate(expr[j], fname, flvl) .. "tac\n"
       elseif typ == 1 then
 	 register(true, expr[j])
       end
    end
-   if typ == 0 then tmp = tmp .. "place\n" end
-   return ret .. "stack\n" .. tmp, i
+   if typ == 0 then ret = ret .. "place\n" end
+   return ret .. tmp .. "stack\n", i
 end
 
 function ifscope(str, i, fname, flvl)

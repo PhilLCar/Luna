@@ -31,7 +31,7 @@ print_lua:
 	jz	print_table
 	cmp	$4, %rax
 	jz	print_pair
-#	cmp	$5, %rax
+#	cmp	$5, %rax #stack sequence
 #	jz	print_io
 #	cmp	$6, %rax
 #	jz	print_closure

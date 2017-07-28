@@ -1,5 +1,5 @@
 local x = false
 x = not x
-_print
+print(x)
 --true
 
