@@ -39,18 +39,12 @@ intro =
    --"\tmovq\t%rax, _mem_size(%rip)\n" ..
    "\tpushq\t%rax\n" ..
    "\tcall\tmmap\n" ..
-   --"\tmovq\t%rax, _memory(%rip)\n" ..
    "\tmovq\t%rax, %r12\n" ..
-   -- GLOBALS
-   "\tmovq\t$524288, %rax\n" ..
-   "\tpushq\t%rax\n" ..
-   "\tcall\tmmap\n" ..
-   --"\tmovq\t%rax, _globals(%rip)\n" ..
-   "\tmovq\t%rax, %r13\n" ..
    -- INIT
-   "\tmovq\t$0, (%r13)\n" ..
-   "\tmovq\t$17, 8(%r13)\n" ..
-   "\tlea\t3(, %r13, 8), %r13\n" ..
+   "\tmovq\t$0, (%r12)\n" ..
+   "\tmovq\t$17, 8(%r12)\n" ..
+   "\tlea\t3(, %r12, 8), %r13\n" ..
+   "\taddq\t$16, %r12\n" ..
    "\tmovq\t$0, (%r12)\n" ..
    "\tmovq\t$17, 8(%r12)\n" ..
    "\tlea\t3(, %r12, 8), %r14\n" ..
@@ -412,6 +406,9 @@ function _translate(text, i, sets)
 
       elseif instr == "not" then
 	 asm = asm .. nt()
+
+      elseif instr == "init" then
+	 
 
       elseif instr == "params" then
 	 tmp, i = params(text, i, tonumber(value), vname)

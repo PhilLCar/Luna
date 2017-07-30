@@ -3,139 +3,131 @@
 
 
 	.global transfer
+	# %rax: frame size, %rbx: transfer size
 transfer:
-	#push	%rsp
-	#call	print_word_hex
-	#push	$'\n'
-	#call	putchar
 	movq	%rdi, -8(%rsp)
-	movq	%rsi, -16(%rsp)
 tf_lp:	movq	(%rbp, %rax, 8), %rdi
-	leaq	(%rax, %rbx, ), %rsi
-	leaq	(%rbp, %rsi, 8), %rsi
-	cmp	%rsi, %rsp
+	leaq	(%rax, %rbx, ), %r15
+	leaq	(%rbp, %r15, 8), %r15
+	cmp	%r15, %rsp
 	jz	tf_end
-	movq	(%rsi), %rsi
-	movq	%rsi, (%rdi)
+	movq	(%r15), %r15
+	movq	%r15, (%rdi)
 	dec	%rax
 	jmp	tf_lp
-tf_end:	movq	-16(%rsp), %rsi
-	movq	-8(%rsp), %rdi
+tf_end:	movq	-8(%rsp), %rdi
 	ret
+
 	
-	
-######################################################################
-# OLD
-######################################################################	
 	.global	compare
+	# %rax: arg1, %rbx: arg2
 compare:
-	push	%rdx
-	mov	%rax, %rdx
-	and	$7, %rdx
-	cmp	$2, %rdx
+	movq	%rax, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
 	jz	comp_string
-	cmp	%rax, %rcx
+	cmpq	%rax, %rbx
 	jz	res_t
-	mov	$1, %rax
-	pop	%rdx
+	movq	$1, %rax
 	ret
-res_t:	mov	$9, %rax
-	pop	%rdx
+res_t:	movq	$9, %rax
 	ret
 
 comp_string:
-	mov	%rcx, %rdx
-	and	$7, %rdx
-	cmp	$2, %rdx
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
 	jnz	cp_f
-	sar	$3, %rax
-	sar	$3, %rcx
-	mov	(%rax), %rdx
-	cmp	%rdx, (%rcx)
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movq	(%rax), %r15
+	cmpq	%r15, (%rbx)
 	jnz	cp_f
-	add	$8, %rax
-	add	$8, %rcx
-cp_lp:	xor	%rdx, %rdx
-	mov	(%rcx), %dl
-	cmp	(%rax), %dl
+	addq	$8, %rax
+	addq	$8, %rbx
+cp_lp:	xorq	%r15, %r15
+	movl	(%rbx), %dl
+	cmpl	(%rax), %dl
 	jnz	cp_f
-	cmp	$0, %dl
+	cmpl	$0, %dl
 	jz	cp_t
 	cmpl	$0, (%rax)
 	jz	cp_f
 	inc	%rax
-	inc	%rcx
+	inc	%rbx
 	jmp	cp_lp
-cp_f:	mov	$1, %rax
-	pop	%rdx
+cp_f:	movq	$1, %rax
 	ret
-cp_t:	mov	$9, %rax
-	pop	%rdx
+cp_t:	movq	$9, %rax
 	ret
+
 
 	.global	index
+	# %rax: key, %rbx: table
 index:
-	push	%rdx
-	sar	$3, %rcx
-	mov	8(%rcx), %rdx
-ix_lp:	cmp	$17, %rdx
+	sarq	$3, %rbx
+	movq	8(%rbx), %r15
+ix_lp:	cmpq	$17, %r15
 	jz	ix_nl
-	sar	$3, %rdx
-	mov	(%rdx), %rcx
-	push	%rax
+	sarq	$3, %r15
+	movq	(%r15), %rbx
+	pushq	%r15
+	pushq	%rax
 	call	compare
-	lea	8(%rdx), %rcx
-	mov	8(%rcx), %rdx
-	cmp	$9, %rax
+	popq	%rax
+	popq	%r15
+	leaq	8(%r15), %rbx
+	movq	8(%rbx), %r15
+	cmpq	$9, %rax
 	jz	ix_ad
-	pop	%rax
 	jmp	ix_lp
-ix_ad:	pop	%rax
-	lea	(%rcx), %rax
-	pop	%rdx
-	ret
-ix_nl:	lea	8(%rcx), %rax
-	pop	%rdx
+ix_nl:	addq	$8, %rbx
+ix_ad:	leaq	(%rbx), %rax
 	ret
 
+	
 	.global new
+	# %rax: key, %rbx: table
 new:
-	mov	%rax, %r8
+	pushq	%rax
 	call	index
-	cmp	$17, (%rax)
+	cmpq	$17, (%rax)
 	jnz	nw_rt
-	lea	4(, %rbp, 8), %rcx
-	mov	%rcx, (%rax)
-	mov	%r8, (%rbp)
-	lea	8(%rbp), %rax
-	movq	$17, 16(%rbp)
-	add	$24, %rbp
-nw_rt:	ret
+	leaq	4(, %r12, 8), %rbx
+	movq	%rbx, (%rax)
+	popq	(%r12)
+	leaq	8(%r12), %rax
+	movq	$17, 8(%r12)
+	movq	$17, 16(%r12)
+	addq	$24, %r12
+	ret
+nw_rt:	popq
+	ret
 
 	.global check
 check:
-	push	%rdi
-	mov	%rax, %rdi
-	sar	$3, %rax
-	lea	8(%rax), %rdx
-	xor	%r9, %r9
-ck_lp:	cmp	$17, (%rdx)
+	pushq	%rdi
+	movq	%rax, %rdi
+	sarq	$3, %rax
+	leaq	8(%rax), %rbx
+	xorq	%r15, %r15
+ck_lp:	cmpq	$17, (%rbx)
 	jz	ck_en
-	inc	%r9
-	mov	(%rdx), %rax
-	sar	$3, %rax
-	cmp	$17, 8(%rax)
+	inc	%r15
+	movq	(%rbx), %rax
+	sarq	$3, %rax
+	cmpq	$17, 8(%rax)
 	jnz	ck_rm
-	dec	%r9
-	mov	16(%rax), %rsi
-	mov	%rsi, (%rdx)
-ck_rm:	lea	16(%rax), %rdx
+	dec	%r15
+	movq	16(%rax), %rax
+	movq	%rax, (%rbx)
+ck_rm:	leaq	16(%rax), %rbx
 	jmp	ck_lp
-ck_en:	sal	$3, %r9
-	mov	%rdi, %rax
-	sar	$3, %rax
-	mov	%r9, (%rax)
-	pop	%rdi
+ck_en:	salq	$3, %r15
+	movq	%rdi, %rax
+	sarq	$3, %rax
+	movq	%r15, (%rax)
+	popq	%rdi
 	ret
 
 	.global var

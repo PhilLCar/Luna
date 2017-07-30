@@ -1,4 +1,4 @@
-	.file	"print.c"
+	.file	"base.c"
 	.text
 	.globl	lint
 	.type	lint, @function
@@ -115,7 +115,7 @@ print:
 	je	.L12
 	testl	%eax, %eax
 	jne	.L10
-	movq	-8(%rbp), %rax
+	movq	-24(%rbp), %rax
 	movq	%rax, %rsi
 	leaq	.LC0(%rip), %rdi
 	movl	$0, %eax
