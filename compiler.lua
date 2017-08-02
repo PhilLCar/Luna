@@ -185,10 +185,10 @@ end
 function translate(expr, fname, flvl)
    local tmp, t = nextexpr(expr, 1)
    local ret, operation = "", ""
-   local cnt = 0
+   local cnt = 1
+   local trans, nval
    
    while tmp do
-      if cnt == 0 then cnt = 1 end
       if ops[tmp] then
 	 operation = ops[tmp]
 	 tmp, t = nextexpr(expr, t)
@@ -206,8 +206,9 @@ function translate(expr, fname, flvl)
 	 elseif isParenthesized(tmp) or isBracketed(tmp) then
 	    ret = ret .. translate(tmp:sub(2, #tmp - 1), fname, flvl)
 	 elseif isAccoladed(tmp) then
-	    ret = ret .. "init\n" ..
-	       translate(tmp:sub(2, #tmp - 1), fname, flvl) .. "done\n"	 
+	    trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl)
+	    ret = ret .. "init\t" .. nval .. "\n" ..
+	       trans .. "done\n"	 
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
@@ -220,12 +221,13 @@ function translate(expr, fname, flvl)
 	 
 	 while tmp and (isBracketed(tmp) or isParenthesized(tmp)) do
 	    if isParenthesized(tmp) then
+	       trans, nval = translate(tmp, fname, flvl)
 	       if fname then
-		  ret = ret .. "params\t" .. tostring(cnt) .. "\n" ..
-		     translate(tmp, fname, flvl) .. "tac\ntcall\n"
+		  ret = ret .. "params\t" .. nval .. "\n" ..
+		     trans .. "tac\ntcall\n"
 	       else
-		  ret = ret .. "params\t" .. tostring(cnt) .. "\n" ..
-		     translate(tmp, fname, flvl) .. "tac\ncall\n"
+		  ret = ret .. "params\t" .. nval .. "\n" ..
+		     trans .. "tac\ncall\n"
 	       end
 	    else
 	       ret = ret .. translate(tmp, fname, flvl) .. "index\n"
@@ -235,9 +237,9 @@ function translate(expr, fname, flvl)
       end
    end
    ret = ret .. operation
-   if ret:sub(#ret, #ret) == "\n" then return ret
-   elseif ret == "" then return ret
-   else return ret .. "\n"
+   if ret:sub(#ret, #ret) == "\n" then return ret, cnt
+   elseif ret == "" then return ret, cnt
+   else return ret .. "\n", cnt
    end
 end
 

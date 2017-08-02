@@ -46,10 +46,10 @@ comp_string:
 	addq	$8, %rax
 	addq	$8, %rbx
 cp_lp:	xorq	%r15, %r15
-	movl	(%rbx), %dl
-	cmpl	(%rax), %dl
+	mov	(%rbx), %dl
+	cmp	(%rax), %dl
 	jnz	cp_f
-	cmpl	$0, %dl
+	cmp	$0, %dl
 	jz	cp_t
 	cmpl	$0, (%rax)
 	jz	cp_f
@@ -71,14 +71,14 @@ ix_lp:	cmpq	$17, %r15
 	jz	ix_nl
 	sarq	$3, %r15
 	movq	(%r15), %rbx
-	pushq	%r15
 	pushq	%rax
+	pushq	%r15
 	call	compare
-	popq	%rax
 	popq	%r15
 	leaq	8(%r15), %rbx
 	movq	8(%rbx), %r15
 	cmpq	$9, %rax
+	popq	%rax
 	jz	ix_ad
 	jmp	ix_lp
 ix_nl:	addq	$8, %rbx
@@ -101,10 +101,11 @@ new:
 	movq	$17, 16(%r12)
 	addq	$24, %r12
 	ret
-nw_rt:	popq
+nw_rt:	add	$8, %rsp
 	ret
 
 	.global check
+	# %rax: table
 check:
 	pushq	%rdi
 	movq	%rax, %rdi
@@ -131,15 +132,17 @@ ck_en:	salq	$3, %r15
 	ret
 
 	.global var
+	# %rax: key
 var:
-	mov	%rbx, %rcx
+	movq	%r12, %rbx
 	call	new
-	mov	%rax, %rcx
-	mov	%rbx, %rax
+	pushq	%rax
+	movq	%rbx, %rax
 	call	check
-	mov	%rcx, %rax
+	popq	%rax
 	ret
 
+	###
 	.global stack
 stack:
 	pop	%rdx

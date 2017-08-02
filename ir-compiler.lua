@@ -48,7 +48,8 @@ intro =
    "\tmovq\t$0, (%r12)\n" ..
    "\tmovq\t$17, 8(%r12)\n" ..
    "\tlea\t3(, %r12, 8), %r14\n" ..
-   "\taddq\t$16, %r12\n"
+   "\taddq\t$16, %r12\n" ..
+   "# GENERATED CODE BEGINING #\n"
 
 outro =
    "\tpopq\t%r15\n" ..
@@ -58,6 +59,7 @@ outro =
    "\tmovq\t$0, %rax\n" ..
    "\tret\n"
 
+need_data = false
 data = "\n# DATA" ..	    
    "\n################################################################################\n" ..
    ".data\n\n"
@@ -136,7 +138,7 @@ function push(value)
 end
 
 function lea(value)
-   local ret, r = ""
+   local ret, r = push(nil)
    if not available() then
       r = replace()
       ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
@@ -148,13 +150,17 @@ function lea(value)
 end
 
 function lock(value)
-   local tmp = ""
+   local tmp, ret = "", ""
    if r_size > 0 then
       tmp = tostring(-8 * r_size)
    end
    r_size = r_size + 1
    r_stack[r_size] = true
-   return "\tmovq\t" .. value .. ", " .. tmp .. "(%rbp)\n"
+   if isMem(value) then
+      ret = "\tmovq\t" .. value .. ", %r15\n"
+      value = "%r15"
+   end
+   return ret .. "\tmovq\t" .. value .. ", " .. tmp .. "(%rbp)\n"
 end
 
 function use()
@@ -295,6 +301,7 @@ end
 
 function str(value)
    strct = strct + 1
+   need_data = true
    data = data .. "string" .. tostring(strct) .. ":\n" ..
       "\t.quad\t" .. tostring((#value - 2) * 8) .. "\n" ..
       "\t.asciz\t" .. value .. "\n"
@@ -306,11 +313,74 @@ end
 function nt()
    local ret
    local v1 = pop()
-   ret = "\tmov\t" .. v1 .. ", %rax\n" ..
+   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
       prep(up) ..
       "\tcall\tnot\n" ..
       push("%rax")
    return ret
+end
+
+function len()
+   local ret
+   local v1 = pop()
+   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
+      "\tsar\t$3, %rax\n" ..
+      push("(%rax)")
+   return ret
+end
+
+function index(address)
+   local ret
+   local v1, v2 = pop(), pop()
+   ret =
+      "\tmovq\t" .. v1 .. ", %rax\n" ..
+      "\tmovq\t" .. v2 .. ", %rbx\n" ..
+      prep(true)
+   if address then
+      ret = ret .. 
+	 "\tcall\tnew\t\n" ..
+	 push("%rax")
+   else
+      ret = ret .. 
+	 "\tcall\tindex\t\n" ..
+	 push("(%rax)")
+   end
+   return ret
+end
+
+function init(text, i)
+   local ret = push(nil)
+   local done, asm = false
+   local l, v1, v2 = 0
+   ret = ret .. --prep(true) ..
+      "\tmovq\t$0, (%r12)\n" ..
+      "\tmovq\t$17, 8(%r12)\n" ..
+      --"\tpushq\t3(, %r12, 8)\n" ..
+      lea("3(, %r12, 8)") ..
+      "\taddq\t$16, %r12\n"
+   
+   while not done do
+      ret = ret .. lea("-8(%r12)")
+      l = l + 8
+      asm, i, done = _translate(text, i)
+      ret = ret .. asm ..
+	 "\tmovq\t$" .. l .. ", (%r12)\n"
+      v1, v2 = pop(), pop()
+      if isMem(v2) then
+	 ret = ret .. "\tmovq\t" .. v2 .. ", " .. "%rax\n"
+	 v2 = "%rax"
+      end
+      ret = ret ..
+	 "\tleaq\t4(, %r12, 8), %rbx\n" ..
+	 "\tmovq\t%rbx, (" .. v2 .. ")\n"
+      if isMem(v1) then
+	 ret = ret .. "\tmovq\t" .. v1 .. ", " .. "%rax\n"
+      end
+      ret = ret .. "\tmovq\t" .. v1 .. ", " .. "8(%r12)\n" ..
+	 "\tmovq\t$17, 16(%r12)\n" ..
+	 "\taddq\t$24, %r12\n"
+   end
+   return ret, i
 end
 
 ---------- PARSING ----------
@@ -407,7 +477,15 @@ function _translate(text, i, sets)
       elseif instr == "not" then
 	 asm = asm .. nt()
 
+      elseif instr == "len" then
+	 asm = asm .. len()
+
       elseif instr == "init" then
+	 tmp, i = init(text, i)
+	 asm = asm .. tmp
+
+      elseif instr == "index" then
+	 asm = asm .. index(sets)
 	 
 
       elseif instr == "params" then
@@ -423,13 +501,14 @@ function _translate(text, i, sets)
 	 tmp, i = set(text, i, tonumber(value))
 	 asm = asm .. tmp
 
-      elseif instr == "call" then
-	 return asm, i
+      elseif instr == "call" or instr == "tcall" then
+	 return asm, i, instr
 
-      elseif instr == "stack" then
-	 return asm, i, true
-
-      elseif instr == "place" then
+      elseif
+	 instr == "stack" or
+	 instr == "place" or
+	 instr == "done"
+      then
 	 return asm, i, true
 
       elseif instr == "tac" then
@@ -443,14 +522,19 @@ function _translate(text, i, sets)
    else
       asm = asm .. "\tpopq\t%rbp\n"
    end
+   if need_data then
+      asm = asm .. data
+   end
    return asm
 end
 
+-- tout à refaire
 function params(text, i, p, call)
    local rs, vs   = r_size , v_size
-   local asm, tmp = prep(true)
+   local asm, tmp
    local push = p - 6
    r_size = r_size + p
+   asm = prep(true)
    while v_size % u_size ~= 2 do
       v_size = v_size + 1
    end
@@ -465,7 +549,7 @@ function params(text, i, p, call)
    for j = 1, p do
       if j > 6 then break end
       local t = pop()
-      if t:sub(1, 1) ~= "%" then
+      if t:sub(1, 1) ~= "%" or t == "%rax" then
 	 asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
       end
    end
@@ -508,15 +592,22 @@ end
 function set(text, i, p)
    local asm, tmp = ""
    local done, j = false, 1
+   local r = r_size
    while j <= p do
-      tmp, i, done = _translate(text, i, false)
-      if done then
+      if not done then
+	 tmp, i, done = _translate(text, i, false)
+      end if done then
+	 -- Remember first done j
+	 -- call "complete" : will expand stack from j
 	 tmp = push("$17")
       end
       asm = asm .. tmp .. lock(pop())
       j = j + 1
    end
-   while not done do tmp, i, done = _translate(text, i) end
+   while not done do tmp, i, done = _translate(text, i) end -- Clears unnecessarily computed data
+   asm = asm ..
+      "\tmovq\t$" .. p .. ", %rax\n" ..
+      "\tleaq\t" .. -8 * r_size .. ", %rbx\n"
    return asm, i
 end
 

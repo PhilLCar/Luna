@@ -24,7 +24,7 @@ int print(long i) {
   long val = i >> 3;
   switch(type) {
   case 0:
-    printf("%d\n", i);
+    printf("%d\n", val);
     break;
   case 1:
     if (!val)
