@@ -1,5 +1,5 @@
 local x, y = "allo"
 y = #x
-_print
+print(y)
 --4
 

@@ -1,7 +1,6 @@
 rectangle = {}
 rectangle.x = 2
 rectangle.y = 4
-rectangle.y * rectangle.x
-_print
+print(rectangle.y * rectangle.x)
 --8
 

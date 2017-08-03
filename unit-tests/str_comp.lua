@@ -1,5 +1,4 @@
-"test" == "test"
-_print
+print("test" == "test")
 --true
 
 

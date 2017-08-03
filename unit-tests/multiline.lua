@@ -1,7 +1,7 @@
 local x = [[Test :
       - Element 1
       - Element 2]]
-_print
+   print(x)
 --Test :
 --      - Element 1
 --      - Element 2

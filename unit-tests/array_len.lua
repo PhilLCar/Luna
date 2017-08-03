@@ -1,5 +1,4 @@
 local x = {1,2, 3}
-#x
-_print
+print(#x)
 --3
 

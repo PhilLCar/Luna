@@ -27,6 +27,7 @@ intro =
    "\t.global\tmain\n" ..
    "_main:\n" ..
    "main:\n" ..
+   "\tpushq\t%rbx\n" ..
    "\tpushq\t%r12\n" ..
    "\tpushq\t%r13\n" ..
    "\tpushq\t%r14\n" ..
@@ -43,28 +44,30 @@ intro =
    -- INIT
    "\tmovq\t$0, (%r12)\n" ..
    "\tmovq\t$17, 8(%r12)\n" ..
+   "\tmovq\t$17, 16(%r12)\n" ..
    "\tlea\t3(, %r12, 8), %r13\n" ..
-   "\taddq\t$16, %r12\n" ..
+   "\taddq\t$24, %r12\n" ..
    "\tmovq\t$0, (%r12)\n" ..
    "\tmovq\t$17, 8(%r12)\n" ..
+   "\tmovq\t$17, 16(%r12)\n" ..
    "\tlea\t3(, %r12, 8), %r14\n" ..
-   "\taddq\t$16, %r12\n" ..
-   "# GENERATED CODE BEGINING #\n"
+   "\taddq\t$24, %r12\n" ..
+   "\n# GENERATED CODE BEGINING" ..	    
+   "\n################################################################################\n"
 
 outro =
    "\tpopq\t%r15\n" ..
    "\tpopq\t%r14\n" ..
    "\tpopq\t%r13\n" ..
    "\tpopq\t%r12\n" ..
+   "\tpopq\t%rbx\n" ..
    "\tmovq\t$0, %rax\n" ..
    "\tret\n"
 
 need_data = false
 data = "\n# DATA" ..	    
    "\n################################################################################\n" ..
-   ".data\n\n"
-
-strct = 0
+   "\t.data\n\n"
 
 -- Internal stack structure
 --------------------------------------------------------------------------------
@@ -164,8 +167,7 @@ function lock(value)
 end
 
 function use()
-   local ret, r = ""
-   push(nil)
+   local ret, r = push(nil)
    if not available() then
       r = replace()
       ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
@@ -207,6 +209,17 @@ function isMem(reg)
 end	 
 
 ---------- FUNCTIONS ----------
+local _lab = 0
+function label(...)
+   local ret = {...}
+   ret = ret[1]
+   _lab = _lab + 1
+   if ret then
+      return ret .. _lab
+   end
+   return "_LU" .. _lab
+end
+
 function prep(up)
    local ret, dif = ""
    if up then
@@ -216,10 +229,10 @@ function prep(up)
    end
    if dif > 0 then
       ret = "\tsubq\t$" .. tostring(8 * dif) .. ", %rsp\n"
-      rsp = dif
+      rsp = rsp + dif
    elseif dif < 0 then
       ret = "\taddq\t$" .. tostring(-8 * dif) .. ", %rsp\n"
-      rsp = dif
+      rsp = rsp + dif
    end
    return ret
 end
@@ -300,33 +313,50 @@ function mod(op)
 end
 
 function str(value)
-   strct = strct + 1
+   local l, r = label("_ST"), use()
    need_data = true
-   data = data .. "string" .. tostring(strct) .. ":\n" ..
-      "\t.quad\t" .. tostring((#value - 2) * 8) .. "\n" ..
+   data = data .. l .. ":\n" ..
+      "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
       "\t.asciz\t" .. value .. "\n"
-   use()
-   return ret .. "\tlea\tstring" .. tostring(strct) .. "(%rip), ".. current() .. "\n" ..
-      "\tlea\t2(, %rax, 8), " .. current() .. "\n"
+   return r .. "\tleaq\t" .. l .. "(%rip), %rax\n" ..
+      "\tleaq\t2(, %rax, 8), " .. current() .. "\n"
 end
 
--- TO BE REDONE
 function nt()
    local ret
    local v1 = pop()
    ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
-      prep(up) ..
+      prep(true) ..
       "\tcall\t_not\n" ..
+      push("%rax")
+   return ret
+end
+
+function eq()
+   local ret
+   local v1 = pop()
+   local v2 = pop()
+   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
+      "\tmovq\t" .. v2 .. ", %rbx\n" ..
+      prep(true) ..
+      "\tcall\t_compare\n" ..
       push("%rax")
    return ret
 end
 
 function len()
    local ret
-   local v1 = pop()
-   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
-      "\tsar\t$3, %rax\n" ..
+   local v1, lab = pop(), label()
+   r_size = r_size + 1
+   ret = prep(true) ..
+      "\tmovq\t" .. v1 .. ", %rax\n" ..
+      "\tsarq\t$3, %rax\n" ..
+      "\tcmpq\t$65, (%rax)\n" ..
+      "\tjnz\t" .. lab .. "\n" ..
+      "\tcall\t_check\n" ..
+      lab .. ":" ..
       push("(%rax)")
+   r_size = r_size - 1
    return ret
 end
 
@@ -413,15 +443,18 @@ end
 
 ---------- PROGRAM ----------
 function translate(text)
-   return intro .. _translate(text, 1, false) .. outro
+   local ret = intro .. _translate(text, 1, false) .. outro
+   if need_data then
+      ret = ret .. data
+   end
+   return ret
 end
 
 function _translate(text, i, sets)
    local asm, tmp = ""
    local s, i = readline(text, i)
    local instr, value
-   local vname
-   local clct = 0
+   local clct, vname = 0
    
    while s do
       instr, value = separate(s)
@@ -440,7 +473,7 @@ function _translate(text, i, sets)
 	    asm = asm .. push("$1")
 	 end
 	 
-      elseif instr == "string" then
+      elseif instr == "str" then
 	 asm = asm .. str(value)
 
       elseif instr == "ref" then
@@ -450,11 +483,12 @@ function _translate(text, i, sets)
 	 else
 	    tmp = ""
 	 end
-	 if sets then
+	 --[[if sets then
 	    asm = asm .. lea(tmp .. "(%rbp)")
 	 else
 	    asm = asm .. push(tmp .. "(%rbp)")
-	 end
+	    end]]
+	 asm = asm .. push(tmp .. "(%rbp)")
 	 
       elseif instr == "var" then
 	 vname = value
@@ -467,7 +501,8 @@ function _translate(text, i, sets)
 	 asm = asm .. num("subq")
 
       elseif instr == "mul" then
-	 asm = asm .. num("imulq")
+	 asm = asm .. num("imulq") ..
+	    "\tsarq\t$3, " .. get() .. "\n"
 
       elseif instr == "div" then
 	 asm = asm .. div()
@@ -477,6 +512,9 @@ function _translate(text, i, sets)
 
       elseif instr == "not" then
 	 asm = asm .. nt()
+	 
+      elseif instr == "eq" then
+	 asm = asm .. eq()
 
       elseif instr == "len" then
 	 asm = asm .. len()
@@ -524,9 +562,6 @@ function _translate(text, i, sets)
    else
       asm = asm .. "\tpopq\t%rbp\n"
    end
-   if need_data then
-      asm = asm .. data
-   end
    return asm
 end
 
@@ -569,6 +604,9 @@ function chg(text, i, p)
    while not done do
       tmp, i, done = _translate(text, i, true)
       if done then break end
+      if buf and isMem(buf) then
+	 asm = asm .. lea(pop())
+      end
       asm = asm .. tmp .. lock(pop())
    end
    if p == 0 then
@@ -606,7 +644,12 @@ function set(text, i, p)
       asm = asm .. tmp .. lock(pop())
       j = j + 1
    end
-   while not done do tmp, i, done = _translate(text, i, false) end
+   while not done do
+      tmp, i = readline(text, i)
+      if tmp == "stack" or tmp == "done" then
+	 done = tmp
+      end
+   end
    if done == "done" then
       asm = asm .. "\tmovq\t$33, " .. -8 * r_size .. "(%rbp)\n"
       r_size = r_size + 1

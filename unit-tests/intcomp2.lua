@@ -1,4 +1,3 @@
-1==2
-_print
+print(1==2)
 --false
 

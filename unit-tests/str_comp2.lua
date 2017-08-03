@@ -1,4 +1,3 @@
-"a"=="chamen"
-_print
+print("a"=="chamen")
 --false
 

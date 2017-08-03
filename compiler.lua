@@ -26,7 +26,6 @@ ops["or"]     = "or"
 ops["not"]    = "not"
 ops["~"]      = "inv"
 ops["#"]      = "len"
-ops["nil"]    = "nil"
 
 function isWhitespace(c)
    return c == " " or c == "\t" or c == "\n"
@@ -239,7 +238,7 @@ function translate(expr, fname, flvl, def)
    end
    ret = ret .. operation
    if ret:sub(#ret, #ret) == "\n" then return ret, cnt
-   elseif ret == "" then return ret, cnt
+   elseif ret == "" then return ret, 0
    else return ret .. "\n", cnt
    end
 end

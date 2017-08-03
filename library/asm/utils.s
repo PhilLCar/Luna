@@ -138,8 +138,8 @@ _i_index:
 	pushq	%rdi
 	pushq	%rsi
 	movq	16(%rbx), %rbx
-	movq	(%rbx), %rdi  #64	
-	movq	8(%rbx), %rsi #8
+	movq	(%rbx), %rdi  	
+	movq	8(%rbx), %rsi 
 	leaq	-8(%rax, %rsi, ), %r15
 	cmpq	$8, %r15
 	jb	_i_miss
@@ -184,6 +184,7 @@ _i_new:
 	push	%rbx
 	pushq	%rdi
 	pushq	%rsi
+	movq	$65, (%rbx)
 	movq	16(%rbx), %rbx
 	movq	(%rbx), %rdi
 	movq	8(%rbx), %rsi	
@@ -239,6 +240,27 @@ _mm_en:	movq	48(%rsp), %r8
 	popq	%rdx
 	jmp	_n_rt
 
+	.global _check
+	# %rax: table
+_check:	
+	pushq	%rax
+	movq	16(%rax), %rax
+	xorq	%rbx, %rbx
+	movq	(%rax), %r15
+	leaq	16(%r15, %rax, ), %r15
+	addq	8(%rax), %rax
+	addq	$8, %rax
+_ch_lp:	cmpq	$17, (%rax)
+	jz	_ch_en
+	cmpq	%rax, %r15
+	jz	_ch_en
+	addq	$8, %rax
+	addq	$8, %rbx
+	jmp	_ch_lp
+_ch_en:	popq	%rax
+	movq	%rbx, (%rax)
+	ret
+	
 
 ######################################### WOW
 	.global expand

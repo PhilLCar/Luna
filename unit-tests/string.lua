@@ -1,4 +1,4 @@
 local x = "test"
-_print
+print(x)
 --test
 

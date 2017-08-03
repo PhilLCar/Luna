@@ -1,5 +1,4 @@
 local x, y, z = 1
-y
-_print
+print(y)
 --nil
 

@@ -1,5 +1,4 @@
 x = 5
-x
-_print
+print(x)
 --5
 
