@@ -92,12 +92,16 @@ _ac_en:	movq	(%r12), %rax
 	leaq	(, %r15, 8), %rbx
 	movq	%rbx, (%rax)
 	movq	$1, %rbx
-	orq	$1, %r15
 _lg_lp:	cmpq	%rbx, %r15
 	jb	_lg_en
 	salq	$1, %rbx
 	jmp	_lg_lp
-_lg_en:	leaq	(, %rbx, 8), %rax
+_lg_en: cmpq	%rbx, %r15
+	jz	_lg_fn
+	movq	$17, 16(%r12, %r15, 8)
+	inc	%r15
+	jmp	_lg_en
+_lg_fn:	leaq	(, %rbx, 8), %rax
 	movq	%rax, (%r12)
 	movq	$8, 8(%r12)
 	leaq	16(%r12, %rbx, 8), %r12
@@ -134,14 +138,14 @@ _i_index:
 	pushq	%rdi
 	pushq	%rsi
 	movq	16(%rbx), %rbx
-	movq	(%rbx), %rdi	
-	movq	8(%rbx), %rsi	
+	movq	(%rbx), %rdi  #64	
+	movq	8(%rbx), %rsi #8
 	leaq	-8(%rax, %rsi, ), %r15
 	cmpq	$8, %r15
 	jb	_i_miss
 	cmpq	%r15, %rdi
 	jb	_i_miss
-_i_rt:	leaq	16(%r15, %rbx, ), %rax
+_i_rt:	leaq	8(%r15, %rbx, ), %rax
 	popq	%rsi
 	popq	%rdi
 	popq	%rbx
@@ -188,7 +192,7 @@ _i_new:
 	jb	_n_underflow
 	cmpq	%r15, %rdi
 	jb	_n_overflow
-_n_rt:	leaq	16(%r15, %rbx, ), %rax
+_n_rt:	leaq	8(%r15, %rbx, ), %rax
 	popq	%rsi
 	popq	%rdi
 	popq	%rbx
@@ -212,6 +216,7 @@ _n_overflow:
 	pushq	%rcx
 	movq	%rdi, %rdx
 	movq	%rsi, %rcx
+	leaq	(%rcx, %rdi, ), %r15
 	jmp	_ca_lp
 _mem_copy:
 	pushq	%r8
