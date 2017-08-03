@@ -175,7 +175,7 @@ function access(var, flvl, def)
 	 return "ref\t" .. tostring(stk[var]) .. "\n"
       end
    end
-   if def then
+   if def or globals[var] then
       globals[var] = true
       return "gbl\t" .. var .. "\n"
    end

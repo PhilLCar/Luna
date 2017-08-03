@@ -19,6 +19,8 @@ c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 
 rsp = 0
 
+str_tbl = {}
+
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
 intro =
@@ -313,11 +315,15 @@ function mod(op)
 end
 
 function str(value)
-   local l, r = label("_ST"), use()
+   local r, l = use(), str_tbl[value]
    need_data = true
-   data = data .. l .. ":\n" ..
-      "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
-      "\t.asciz\t" .. value .. "\n"
+   if not l then
+      l = label("_ST")
+      str_tbl[value] = l
+      data = data .. l .. ":\n" ..
+	 "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
+	 "\t.asciz\t" .. value .. "\n"
+   end
    return r .. "\tleaq\t" .. l .. "(%rip), %rax\n" ..
       "\tleaq\t2(, %rax, 8), " .. current() .. "\n"
 end
@@ -360,21 +366,45 @@ function len()
    return ret
 end
 
-function index(address)
-   local ret
-   local v1, v2 = pop(), pop()
-   ret =
-      "\tmovq\t" .. v1 .. ", %rax\n" ..
-      "\tmovq\t" .. v2 .. ", %rbx\n" ..
+function index(address, global)
+   local ret, v = ""
+   if global then
+      if buf and string.find(buf, "%rax") then
+	 ret = push(nil)
+      end
+      global = "\"" .. global .. "\""
+      local l = str_tbl[global]
+      if not l then
+	 l = label("_ST")
+	 str_tbl[global] = l
+	 need_data = true
+	 data = data .. l .. ":\n" ..
+	    "\t.quad\t" .. (#global - 2) * 8 .. "\n" ..
+	    "\t.asciz\t" .. global .. "\n"
+      end
+      ret = ret ..
+	 "\tleaq\t" .. l .. "(%rip), %rax\n" ..
+	 "\tleaq\t2(, %rax, 8), %rax\n"
+      v = "%r13"
+   else
+      ret = "\tmovq\t" .. pop() .. ", %rax\n"
+      v = pop()
+   end
+   ret = ret .. 
+      "\tmovq\t" .. v .. ", %rbx\n" ..
       prep(true)
+   
    if address then
       ret = ret .. 
-	 "\tcall\t_new\t\n" ..
-	 push("%rax")
+	 "\tcall\t_new\t\n"
    else
       ret = ret .. 
-	 "\tcall\t_index\t\n" ..
-	 push("(%rax)")
+	 "\tcall\t_index\t\n"
+   end
+   if address and not global then
+      ret = ret .. push("%rax")
+   else
+      ret = ret .. push("(%rax)")
    end
    return ret
 end
@@ -483,12 +513,10 @@ function _translate(text, i, sets)
 	 else
 	    tmp = ""
 	 end
-	 --[[if sets then
-	    asm = asm .. lea(tmp .. "(%rbp)")
-	 else
-	    asm = asm .. push(tmp .. "(%rbp)")
-	    end]]
 	 asm = asm .. push(tmp .. "(%rbp)")
+
+      elseif instr == "gbl" then
+	 asm = asm .. index(sets, value)
 	 
       elseif instr == "var" then
 	 vname = value
@@ -524,7 +552,7 @@ function _translate(text, i, sets)
 	 asm = asm .. tmp
 
       elseif instr == "index" then
-	 asm = asm .. index(sets)
+	 asm = asm .. index(sets, false)
 	 
 
       elseif instr == "params" then
@@ -605,7 +633,7 @@ function chg(text, i, p)
       tmp, i, done = _translate(text, i, true)
       if done then break end
       if buf and isMem(buf) then
-	 asm = asm .. lea(pop())
+	 tmp = tmp .. lea(pop())
       end
       asm = asm .. tmp .. lock(pop())
    end
