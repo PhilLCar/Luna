@@ -160,7 +160,7 @@ function register(loc, var)
    end
 end
 
-function access(var, flvl)
+function access(var, flvl, def)
    local stk
    for i = level, 1, -1 do
       stk = stack[i]
@@ -176,13 +176,14 @@ function access(var, flvl)
 	 return "ref\t" .. tostring(stk[var]) .. "\n"
       end
    end
-   if not globals[var] then
+   if def then
       globals[var] = true
+      return "gbl\t" .. var .. "\n"
    end
    return "var\t" .. var .. "\n"
 end
 
-function translate(expr, fname, flvl)
+function translate(expr, fname, flvl, def)
    local tmp, t = nextexpr(expr, 1)
    local ret, operation = "", ""
    local cnt = 1
@@ -204,16 +205,16 @@ function translate(expr, fname, flvl)
 	 elseif tmp:sub(1, 1) == "\"" then
 	    ret = ret .. "str\t" .. tmp .. "\n"
 	 elseif isParenthesized(tmp) or isBracketed(tmp) then
-	    ret = ret .. translate(tmp:sub(2, #tmp - 1), fname, flvl)
+	    ret = ret .. translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
 	 elseif isAccoladed(tmp) then
-	    trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl)
+	    trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
 	    ret = ret .. "init\t" .. nval .. "\n" ..
-	       trans .. "done\n"	 
+	       trans .. "tac\ndone\n"	 
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
 	    else
-	       ret = ret .. access(tmp, flvl)
+	       ret = ret .. access(tmp, flvl, def)
 	    end
 	 end
 	 
@@ -221,7 +222,7 @@ function translate(expr, fname, flvl)
 	 
 	 while tmp and (isBracketed(tmp) or isParenthesized(tmp)) do
 	    if isParenthesized(tmp) then
-	       trans, nval = translate(tmp, fname, flvl)
+	       trans, nval = translate(tmp, fname, flvl, false)
 	       if fname then
 		  ret = ret .. "params\t" .. nval .. "\n" ..
 		     trans .. "tac\ntcall\n"
@@ -230,7 +231,7 @@ function translate(expr, fname, flvl)
 		     trans .. "tac\ncall\n"
 	       end
 	    else
-	       ret = ret .. translate(tmp, fname, flvl) .. "index\n"
+	       ret = ret .. translate(tmp, fname, flvl, false) .. "index\n"
 	    end
 	       tmp, t = nextexpr(expr, t)
 	 end
@@ -315,13 +316,13 @@ function evaluate(str, i, fname, flvl, ...)
       if type(expr[j]) == "number" then
 	 tmp = tmp .. expr["code"][j]
       else
-	 tmp = tmp .. translate(expr[j], fname, flvl)
+	 tmp = tmp .. translate(expr[j], fname, flvl, false)
       end
       tmp = tmp .. "tac\n"
    end
    for j = 1, eq do
       if typ == 0 then
-	 ret = ret .. translate(expr[j], fname, flvl) .. "tac\n"
+	 ret = ret .. translate(expr[j], fname, flvl, true) .. "tac\n"
       elseif typ == 1 then
 	 register(true, expr[j])
       end
@@ -421,7 +422,7 @@ function forscope(str, i, fname, flvl)
 	 tmp = tmp .. fp[c] .. " "
 	 c = c + 1
       end
-      ret = ret .. translate(tmp, fname, flvl) .. "fido\t" .. tostring(fict) .. "\n"
+      ret = ret .. translate(tmp, fname, flvl, false) .. "fido\t" .. tostring(fict) .. "\n"
    else
       if t ~= 1 and t ~= 2 then
 	 print("ERR") --temporaire
@@ -441,7 +442,7 @@ function forscope(str, i, fname, flvl)
 	 c = c + 1
       end
       if t == 1 then tmp = tmp .. ", 1" end
-      ret = ret .. translate(tmp, fname, flvl) .. "frdo\t" .. tostring(frct) .. "\n"
+      ret = ret .. translate(tmp, fname, flvl, false) .. "frdo\t" .. tostring(frct) .. "\n"
    end
    newlevel()
    tmp, i, t = compile(str, i, fname, flvl)
@@ -510,7 +511,7 @@ function funscope(str, i, ...)
    t = 0
    for name in pairs(clo) do
       t = t + 1
-      tmp = translate(name, fname, 0) .. "encl\t\"" .. name .. "\"\n" .. tmp
+      tmp = translate(name, fname, 0, false) .. "encl\t\"" .. name .. "\"\n" .. tmp
    end
    tmp = tmp .. "rfct\t" .. fnct .. "\nopen\t" .. tostring(t) .. "\n"
    return ret, i, fnct, tmp

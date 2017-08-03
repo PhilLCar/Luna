@@ -1,98 +1,171 @@
 	.text
-# Fonctions utiles à la compilation, pour alléger le compilateur
+# Internal procedures to reduce compiled file size
 
-
-	.global transfer
+#MEMORY PROCEDURES
+	.global _transfer
 	# %rax: frame size, %rbx: transfer size
-transfer:
+_transfer:
 	movq	%rdi, -8(%rsp)
-tf_lp:	movq	(%rbp, %rax, 8), %rdi
+_tf_lp:	movq	(%rbp, %rax, 8), %rdi
 	leaq	(%rax, %rbx, ), %r15
 	leaq	(%rbp, %r15, 8), %r15
 	cmp	%r15, %rsp
-	jz	tf_end
+	jz	_tf_en
 	movq	(%r15), %r15
 	movq	%r15, (%rdi)
 	dec	%rax
-	jmp	tf_lp
-tf_end:	movq	-8(%rsp), %rdi
+	jmp	_tf_lp
+_tf_en:	movq	-8(%rsp), %rdi
 	ret
 
-	
-	.global	compare
+#BOOLEAN PROCEDURES
+	.global	_compare
 	# %rax: arg1, %rbx: arg2
-compare:
+_compare:
 	movq	%rax, %r15
 	andq	$7, %r15
 	cmpq	$2, %r15
-	jz	comp_string
+	jz	_comp_string
 	cmpq	%rax, %rbx
-	jz	res_t
+	jz	_res_t
 	movq	$1, %rax
 	ret
-res_t:	movq	$9, %rax
+_res_t:	movq	$9, %rax
 	ret
 
-comp_string:
+_comp_string:
 	movq	%rbx, %r15
 	andq	$7, %r15
 	cmpq	$2, %r15
-	jnz	cp_f
+	jnz	_cp_f
 	sarq	$3, %rax
 	sarq	$3, %rbx
 	movq	(%rax), %r15
 	cmpq	%r15, (%rbx)
-	jnz	cp_f
+	jnz	_cp_f
 	addq	$8, %rax
 	addq	$8, %rbx
-cp_lp:	xorq	%r15, %r15
+_cp_lp:	xorq	%r15, %r15
 	mov	(%rbx), %dl
 	cmp	(%rax), %dl
-	jnz	cp_f
+	jnz	_cp_f
 	cmp	$0, %dl
-	jz	cp_t
+	jz	_cp_t
 	cmpl	$0, (%rax)
-	jz	cp_f
+	jz	_cp_f
 	inc	%rax
 	inc	%rbx
-	jmp	cp_lp
-cp_f:	movq	$1, %rax
+	jmp	_cp_lp
+_cp_f:	movq	$1, %rax
 	ret
-cp_t:	movq	$9, %rax
+_cp_t:	movq	$9, %rax
 	ret
 
+	.global _not
+_not:
+	cmpq	$1, %rax
+	jz	_nt_t
+	cmpq	$17, %rax
+	jz	_nt_t
+	movq	$1, %rax
+	ret
+_nt_t:	movq	$9, %rax
+	ret
 
-	.global	index
+#ARRAY PROCEDURES
+	.global _array_copy
+	# %rax: table
+_array_copy:
+	sarq	$3, %rax
+	movq	16(%rax), %rbx
+	movq	%r12, 16(%rax)
+	movq	%rax, (%r12)
+	xorq	%r15, %r15
+_ac_lp:	cmpq	$33, (%rbx)
+	jz	_ac_en
+	movq	(%rbx), %rax
+	movq	%rax, 16(%r12, %r15, 8)
+	inc	%r15
+	subq	$8, %rbx
+	jmp	_ac_lp
+_ac_en:	movq	(%r12), %rax
+	leaq	(, %r15, 8), %rbx
+	movq	%rbx, (%rax)
+	movq	$1, %rbx
+	orq	$1, %r15
+_lg_lp:	cmpq	%rbx, %r15
+	jb	_lg_en
+	salq	$1, %rbx
+	jmp	_lg_lp
+_lg_en:	leaq	(, %rbx, 8), %rax
+	movq	%rax, (%r12)
+	movq	$8, 8(%r12)
+	leaq	16(%r12, %rbx, 8), %r12
+	ret
+
+	
+	.global	_index
 	# %rax: key, %rbx: table
-index:
+_index:
 	sarq	$3, %rbx
-	movq	8(%rbx), %r15
-ix_lp:	cmpq	$17, %r15
-	jz	ix_nl
+	movq	%rax, %r15
+	andq	$7, %r15
+	jz	_i_index
+_ix_s:	movq	8(%rbx), %r15
+_ix_lp:	cmpq	$17, %r15
+	jz	_ix_nl
 	sarq	$3, %r15
 	movq	(%r15), %rbx
 	pushq	%rax
 	pushq	%r15
-	call	compare
+	call	_compare
 	popq	%r15
 	leaq	8(%r15), %rbx
 	movq	8(%rbx), %r15
 	cmpq	$9, %rax
 	popq	%rax
-	jz	ix_ad
-	jmp	ix_lp
-ix_nl:	addq	$8, %rbx
-ix_ad:	leaq	(%rbx), %rax
+	jz	_ix_ad
+	jmp	_ix_lp
+_ix_nl:	addq	$8, %rbx
+_ix_ad:	leaq	(%rbx), %rax
 	ret
-
+_i_index:
+	pushq	%rbx
+	pushq	%rdi
+	pushq	%rsi
+	movq	16(%rbx), %rbx
+	movq	(%rbx), %rdi	
+	movq	8(%rbx), %rsi	
+	leaq	-8(%rax, %rsi, ), %r15
+	cmpq	$8, %r15
+	jb	_i_miss
+	cmpq	%r15, %rdi
+	jb	_i_miss
+_i_rt:	leaq	16(%r15, %rbx, ), %rax
+	popq	%rsi
+	popq	%rdi
+	popq	%rbx
+	ret
+_i_miss:	
+	movq	$17, (%r12)
+	movq	%r12, %rax
+	addq	$8, %r12
+	popq	%rsi
+	popq	%rdi
+	popq	%rbx
+	ret
 	
-	.global new
+	.global _new
 	# %rax: key, %rbx: table
-new:
+_new:
+	sarq	$3, %rbx
+	movq	%rax, %r15
+	andq	$7, %r15
+	jz	_i_new
 	pushq	%rax
-	call	index
+	call	_ix_s
 	cmpq	$17, (%rax)
-	jnz	nw_rt
+	jnz	_nw_rt
 	leaq	4(, %r12, 8), %rbx
 	movq	%rbx, (%rax)
 	popq	(%r12)
@@ -101,95 +174,68 @@ new:
 	movq	$17, 16(%r12)
 	addq	$24, %r12
 	ret
-nw_rt:	add	$8, %rsp
+_nw_rt:	add	$8, %rsp
 	ret
-
-	.global check
-	# %rax: table
-check:
+_i_new:
+	push	%rbx
 	pushq	%rdi
-	movq	%rax, %rdi
-	sarq	$3, %rax
-	leaq	8(%rax), %rbx
-	xorq	%r15, %r15
-ck_lp:	cmpq	$17, (%rbx)
-	jz	ck_en
-	inc	%r15
-	movq	(%rbx), %rax
-	sarq	$3, %rax
-	cmpq	$17, 8(%rax)
-	jnz	ck_rm
-	dec	%r15
-	movq	16(%rax), %rax
-	movq	%rax, (%rbx)
-ck_rm:	leaq	16(%rax), %rbx
-	jmp	ck_lp
-ck_en:	salq	$3, %r15
-	movq	%rdi, %rax
-	sarq	$3, %rax
-	movq	%r15, (%rax)
+	pushq	%rsi
+	movq	16(%rbx), %rbx
+	movq	(%rbx), %rdi
+	movq	8(%rbx), %rsi	
+	leaq	-8(%rax, %rsi, ), %r15
+	cmpq	$8, %r15
+	jb	_n_underflow
+	cmpq	%r15, %rdi
+	jb	_n_overflow
+_n_rt:	leaq	16(%r15, %rbx, ), %rax
+	popq	%rsi
 	popq	%rdi
+	popq	%rbx
 	ret
-
-	.global var
-	# %rax: key
-var:
+_n_underflow:
+	pushq	%rdx
+	pushq	%rcx
+	movq	%rdi, %rdx
+	movq	%rsi, %rcx
+_os_lp:	salq	$1, %rcx
+	leaq	-8(%rax, %rcx, ), %r15
+	cmpq	$8, %r15
+	jb	_os_lp
+	leaq	(%rcx, %rdi, ), %r15
+_ca_lp:	salq	$1, %rdx
+	cmpq	%r15, %rdx
+	jb	_ca_lp
+	jmp	_mem_copy
+_n_overflow:
+	pushq	%rdx
+	pushq	%rcx
+	movq	%rdi, %rdx
+	movq	%rsi, %rcx
+	jmp	_ca_lp
+_mem_copy:
+	pushq	%r8
+	movq	%rdx, (%r12)
+	movq	%rcx, 8(%r12)
+	leaq	16(%r12, %rcx, ), %r8
+	subq	%rsi, %r8
+_mm_lp:	cmpq	$0, %rdi
+	jz	_mm_en
+	movq	8(%rdi, %rbx, ), %r15
+	movq	%r15, (%rdi, %r8)
+	subq	$8, %rdi
+	jmp	_mm_lp
+_mm_en:	movq	48(%rsp), %r8
+	movq	%r12, 16(%r8)
 	movq	%r12, %rbx
-	call	new
-	pushq	%rax
-	movq	%rbx, %rax
-	call	check
-	popq	%rax
-	ret
+	leaq	16(%rdx, %r12, ), %r12
+	popq	%r8
+	popq	%rcx
+	popq	%rdx
+	jmp	_n_rt
 
-	###
-	.global stack
-stack:
-	pop	%rdx
-st_lp:	cmp	$0, %rcx
-	jz	st_dn
-	dec	%rcx
-	cmp	$17, %rax
-	jz	st_em
-	sar	$3, %rax
-	push	8(%rax)
-	mov	16(%rax), %rax
-	jmp	st_lp
-st_em:	push	%rax
-	jmp	st_lp
-st_dn:	jmp	*%rdx
 
-	.global place
-place:
-	pop	%rsi
-	lea	(%rsp, %rcx, 8), %rdx
-pl_lp:	cmp	$0, %rcx
-	jz	pl_dn
-	dec	%rcx
-	mov	(%rsp, %rcx, 8), %rdi
-	cmp	$17, %rax
-	jz	pl_em
-	sar	$3, %rax
-	mov	8(%rax), %rax
-	mov	%rax, (%rdi)
-	add	$8, %rax
-	jmp	pl_lp
-pl_em:	mov	%rax, (%rdi)
-	jmp	pl_lp
-pl_dn:	mov	%rdx, %rsp
-	jmp	*%rsi
-
-	.global not
-not:
-	cmp	$1, %rax
-	jz	nt_t
-	cmp	$17, %rax
-	jz	nt_t
-	mov	$1, %rax
-	ret
-nt_t:	mov	$9, %rax
-	ret
-
+######################################### WOW
 	.global expand
 expand:
 	pop	%r12
@@ -319,7 +365,7 @@ ds_en:	mov	%rdi, %rax
 	lea	8(, %rax, 8), %rcx
 	mov	%rcx, (%rbp)
 	add	$16, %rbp
-	lea	string_n(%rip), %rdi
+	lea	_string_n(%rip), %rdi
 	lea	2(, %rax, 8), %rdi
 	mov	%rdi, (%rbp)
 	mov	%rax, 8(%rbp)
@@ -330,6 +376,6 @@ ds_fn:	jmp	*%rdx
 	
 	.data
 	
-string_n:
+_string_n:
 	.quad	8
 	.asciz	"n"

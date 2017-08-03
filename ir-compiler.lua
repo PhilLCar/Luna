@@ -310,12 +310,13 @@ function str(value)
       "\tlea\t2(, %rax, 8), " .. current() .. "\n"
 end
 
+-- TO BE REDONE
 function nt()
    local ret
    local v1 = pop()
    ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
       prep(up) ..
-      "\tcall\tnot\n" ..
+      "\tcall\t_not\n" ..
       push("%rax")
    return ret
 end
@@ -338,48 +339,46 @@ function index(address)
       prep(true)
    if address then
       ret = ret .. 
-	 "\tcall\tnew\t\n" ..
+	 "\tcall\t_new\t\n" ..
 	 push("%rax")
    else
       ret = ret .. 
-	 "\tcall\tindex\t\n" ..
+	 "\tcall\t_index\t\n" ..
 	 push("(%rax)")
    end
    return ret
 end
 
-function init(text, i)
+function init(text, i, p)
    local ret = push(nil)
-   local done, asm = false
-   local l, v1, v2 = 0
-   ret = ret .. --prep(true) ..
+   local rs, vs
+   local tmp
+   
+   ret = ret ..
       "\tmovq\t$0, (%r12)\n" ..
       "\tmovq\t$17, 8(%r12)\n" ..
-      --"\tpushq\t3(, %r12, 8)\n" ..
+      "\tleaq\t" .. -8 * r_size .. "(%rbp), %rax\n" ..
+      "\tmovq\t%rax, 16(%r12)\n" ..
       lea("3(, %r12, 8)") ..
-      "\taddq\t$16, %r12\n"
+      "\taddq\t$24, %r12\n"
+
+   rs, vs = r_size, v_size
    
-   while not done do
-      ret = ret .. lea("-8(%r12)")
-      l = l + 8
-      asm, i, done = _translate(text, i)
-      ret = ret .. asm ..
-	 "\tmovq\t$" .. l .. ", (%r12)\n"
-      v1, v2 = pop(), pop()
-      if isMem(v2) then
-	 ret = ret .. "\tmovq\t" .. v2 .. ", " .. "%rax\n"
-	 v2 = "%rax"
-      end
-      ret = ret ..
-	 "\tleaq\t4(, %r12, 8), %rbx\n" ..
-	 "\tmovq\t%rbx, (" .. v2 .. ")\n"
-      if isMem(v1) then
-	 ret = ret .. "\tmovq\t" .. v1 .. ", " .. "%rax\n"
-      end
-      ret = ret .. "\tmovq\t" .. v1 .. ", " .. "8(%r12)\n" ..
-	 "\tmovq\t$17, 16(%r12)\n" ..
-	 "\taddq\t$24, %r12\n"
+   tmp, i = set(text, i, p)
+   ret = ret .. tmp
+   
+   ret = ret .. "\tmovq\t" .. get() .. ", %rax\n" .. prep(true) ..
+      "\tcall\t_array_copy\n"
+
+   for j = rs + 1, r_size do
+      r_stack[j] = nil
    end
+   r_size = rs
+   for j = vs + 1, v_size do
+      v_stack[j] = nil
+   end
+   v_size = vs
+   
    return ret, i
 end
 
@@ -421,10 +420,12 @@ function _translate(text, i, sets)
    local asm, tmp = ""
    local s, i = readline(text, i)
    local instr, value
-   local tmp, vname
+   local vname
+   local clct = 0
    
    while s do
       instr, value = separate(s)
+      clct = clct - 1
       --------------------	 
       if instr == "num" then
 	 value = 8 * tonumber(value)
@@ -481,7 +482,7 @@ function _translate(text, i, sets)
 	 asm = asm .. len()
 
       elseif instr == "init" then
-	 tmp, i = init(text, i)
+	 tmp, i = init(text, i, tonumber(value))
 	 asm = asm .. tmp
 
       elseif instr == "index" then
@@ -491,6 +492,7 @@ function _translate(text, i, sets)
       elseif instr == "params" then
 	 tmp, i = params(text, i, tonumber(value), vname)
 	 call = false
+	 clct = 2
 	 asm = asm .. tmp
 	 
       elseif instr == "chg" then
@@ -509,7 +511,7 @@ function _translate(text, i, sets)
 	 instr == "place" or
 	 instr == "done"
       then
-	 return asm, i, true
+	 return asm, i, instr
 
       elseif instr == "tac" then
 	 return asm, i, false
@@ -528,6 +530,7 @@ function _translate(text, i, sets)
    return asm
 end
 
+---------- MEMORY SETTING ----------
 -- tout à refaire
 function params(text, i, p, call)
    local rs, vs   = r_size , v_size
@@ -580,7 +583,7 @@ function chg(text, i, p)
 	 "\tmovq\t$" .. tostring(-rs) .. ", %rax\n" ..
 	 "\tmovq\t$" .. tostring(-p) .. ", %rbx\n" ..
 	 prep(true) ..
-	 "\tcall\ttransfer\n"
+	 "\tcall\t_transfer\n"
    end
    for j = rs + 1, r_size do
       r_stack[j] = nil
@@ -593,21 +596,21 @@ function set(text, i, p)
    local asm, tmp = ""
    local done, j = false, 1
    local r = r_size
+   -- TEMPORAIRE EN ATTENDANT D'ÉCRIRE LA FONCTION DE CLEANUP
    while j <= p do
       if not done then
 	 tmp, i, done = _translate(text, i, false)
       end if done then
-	 -- Remember first done j
-	 -- call "complete" : will expand stack from j
 	 tmp = push("$17")
       end
       asm = asm .. tmp .. lock(pop())
       j = j + 1
    end
-   while not done do tmp, i, done = _translate(text, i) end -- Clears unnecessarily computed data
-   asm = asm ..
-      "\tmovq\t$" .. p .. ", %rax\n" ..
-      "\tleaq\t" .. -8 * r_size .. ", %rbx\n"
+   while not done do tmp, i, done = _translate(text, i, false) end
+   if done == "done" then
+      asm = asm .. "\tmovq\t$33, " .. -8 * r_size .. "(%rbp)\n"
+      r_size = r_size + 1
+   end
    return asm, i
 end
 
@@ -615,6 +618,7 @@ function ret(text, i, p)
    
 end
 
+---------- MAIN ----------
 local file = io.open(comp_file .. ".lir", "r")
 text = file:read("all")
 file:close()
