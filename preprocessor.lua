@@ -278,7 +278,6 @@ function readexpr(str, i, indent)
       typerr = "Parenthesis mismatch."
       helperror()
    end
-   
    expr = removeMacros(expr)
    ret = scan(expr, 1, nil, indent)
    return ret, i
@@ -379,7 +378,7 @@ function scan(array, start, stop, indent)
 	       ret = "(" .. ret .. ")"
 	    else
 	       for k = 1, #ret do
-		  if ret:sub(i, i) == "," then
+		  if ret:sub(k, k) == "," then
 		     ret = "(" .. ret .. ")"
 		     break
 		  end

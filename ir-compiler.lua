@@ -10,7 +10,7 @@ r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
 
 -- Usable registers (8)
 u_size = 8
-u_name = { "%r10", "%r11", "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
+u_name = { "%rdx", "%rcx", "%r8" , "%r9" , "%r10", "%r11", "%rdi", "%rsi" }
 u_cont = { false , false , false , false , false , false , false , false  }
 
 -- Calling registers (6)
@@ -20,6 +20,8 @@ c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 rsp = 0
 
 str_tbl = {}
+
+ref_mask = false
 
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
@@ -55,7 +57,15 @@ intro =
    "\tlea\t3(, %r12, 8), %r14\n" ..
    "\taddq\t$24, %r12\n" ..
    "\n# GENERATED CODE BEGINING" ..	    
-   "\n################################################################################\n"
+   "\n################################################################################\n\n"
+
+func = "\n# FUNCTIONS" ..	    
+   "\n################################################################################\n\n"
+
+need_data = false
+data = "\n# DATA" ..	    
+   "\n################################################################################\n\n" ..
+   "\t.data\n\n"
 
 outro =
    "\tpopq\t%r15\n" ..
@@ -65,11 +75,6 @@ outro =
    "\tpopq\t%rbx\n" ..
    "\tmovq\t$0, %rax\n" ..
    "\tret\n"
-
-need_data = false
-data = "\n# DATA" ..	    
-   "\n################################################################################\n" ..
-   "\t.data\n\n"
 
 -- Internal stack structure
 --------------------------------------------------------------------------------
@@ -81,36 +86,38 @@ v_size  = 0
 r_stack = { true }
 r_size  = 1
 
+r_index = 1
+
 -- Register handling functions
 --------------------------------------------------------------------------------
 function available()
-   return not u_cont[(v_size % u_size) + 1]
+   return not u_cont[((v_size - 1 + r_index) % u_size) + 1]
 end
 
 function register()
    v_size = v_size + 1
-   u_cont[((v_size - 1) % u_size) + 1] = true
+   u_cont[((v_size - 2 + r_index) % u_size) + 1] = true
    v_stack[v_size] = true
-   return u_name[((v_size - 1) % u_size) + 1]
+   return u_name[((v_size - 2 + r_index) % u_size) + 1]
 end
 
 function current()
-   return u_name[((v_size - 1) % u_size) + 1]
+   return u_name[((v_size - 2 + r_index) % u_size) + 1]
 end
 
 function future()
-   return u_name[(v_size % u_size) + 1]
+   return u_name[((v_size - 1 + r_index) % u_size) + 1]
 end
 
 function release()
    local tmp
-   u_cont[((v_size - 1) % u_size) + 1] = false
+   u_cont[((v_size - 2 + r_index) % u_size) + 1] = false
    if not v_stack[v_size] then
       r_stack[r_size] = nil
       tmp = tostring(-8 * r_size) .. "(%rbp)"
       r_size = r_size - 1
    else
-      tmp = u_name[((v_size - 1) % u_size) + 1]
+      tmp = u_name[((v_size - 2 + r_index) % u_size) + 1]
    end
    v_stack[v_size] = nil
    v_size = v_size - 1
@@ -123,6 +130,22 @@ function replace()
    v_stack[v_size - u_size] = false
    r_stack[r_size] = false
    return tmp
+end
+
+function promote()
+   v_stack[v_size] = true
+   r_stack[r_size] = nil
+   r_size = r_size - 1
+   return current()
+end
+
+function align(reg)
+   for i, v in ipairs(u_name) do
+      if v == reg then
+	 r_index = i
+	 break
+      end
+   end
 end
 
 ---------- EXTERNAL ----------
@@ -166,6 +189,16 @@ function lock(value)
       value = "%r15"
    end
    return ret .. "\tmovq\t" .. value .. ", " .. tmp .. "(%rbp)\n"
+end
+
+function unlock()
+   local tmp = ""
+   r_stack[r_size] = nil
+   r_size = r_size - 1
+   if r_size > 0 then
+      tmp = tostring(-8 * r_size)
+   end
+   return push(tmp .. "(%rbp)")
 end
 
 function use()
@@ -244,7 +277,7 @@ function num(op)
    local v1 = pop()
    local v2 = get()
    if isMem(v1) and isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", " .. current() .. "\n"
+      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
       v2 = current()
    end
    ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
@@ -258,7 +291,7 @@ function arg1(op, tag)
    local v2 = pop()
    register()
    if isMem(v1) and isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", " .. current() .. "\n"
+      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
       v2 = current()
    end
    ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
@@ -270,7 +303,7 @@ function arg2(op, tag)
    local v1 = pop()
    local v2 = get()
    if isMem(v1) and isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", " .. current() .. "\n"
+      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
       v2 = current()
    end
    ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
@@ -442,6 +475,23 @@ function init(text, i, p)
    return ret, i
 end
 
+function build(nargs)
+   local ret = ""
+   local p = 1
+   while p <= nargs and p <= 6 do
+      ret = ret .. "\tmovq\t" .. c_name[p] .. ", " .. -8 * r_size .. "(%rbp)\n"
+      r_size = r_size + 1
+      r_stack[r_size] = true
+      p = p + 1
+   end
+   if nargs > 6 then
+      ref_mask = true
+      ref_mask_low = 6
+      ref_mask_up  = nargs
+   end
+   return ret
+end
+
 ---------- PARSING ----------
 function readline(str, i)
    local s, ret = "", ""
@@ -473,7 +523,13 @@ end
 
 ---------- PROGRAM ----------
 function translate(text)
-   local ret = intro .. _translate(text, 1, false) .. outro
+   local ret, i = _translate(text, 1, false)
+   ret = intro .. ret
+
+   if i < #text then
+      ret = ret .. func .. _translate(text, i, false)
+   end
+   
    if need_data then
       ret = ret .. data
    end
@@ -489,7 +545,11 @@ function _translate(text, i, sets)
    while s do
       instr, value = separate(s)
       clct = clct - 1
-      --------------------	 
+      --------------------
+      if instr ~= "params" then
+	 vname = nil
+      end
+      --------------------
       if instr == "num" then
 	 value = 8 * tonumber(value)
 	 asm = asm .. push("$" .. tostring(value))
@@ -508,7 +568,13 @@ function _translate(text, i, sets)
 
       elseif instr == "ref" then
 	 tmp = tonumber(value) + 1
-	 if tmp > 0 then
+	 if ref_mask and tmp > ref_mask_low and tmp <= ref_mask_up then
+	    tmp = tmp - ref_mask_low - 1
+	    tmp = tostring(16 + 8 * tmp)
+	 elseif ref_mask and tmp > ref_mask_up then
+	    tmp = tmp - ref_mask_up + ref_mask_low
+	    tmp = tostring(-8 * tmp)
+	 elseif tmp > 0 then
 	    tmp = tostring(-8 * tmp)
 	 else
 	    tmp = ""
@@ -569,8 +635,26 @@ function _translate(text, i, sets)
 	 tmp, i = set(text, i, tonumber(value))
 	 asm = asm .. tmp
 
+      elseif instr == "ret" then
+	 tmp, i = ret(text, i, tonumber(value))
+	 asm = asm .. tmp
+
+      elseif instr == "rfct" then
+	 asm = asm .. use() ..
+	    "\tleaq\t_FN" .. value .. "(%rip), " .. current() .. "\n"
+
+      elseif instr == "fct" then
+	 tmp, i = fct(text, i, value)
+	 asm = asm .. tmp
+	 
       elseif instr == "call" or instr == "tcall" then
 	 return asm, i, instr
+
+      elseif instr == "free" then
+	 for j = 1, tonumber(value) do
+	    r_stack[r_size] = nil
+	    r_size = r_size - 1
+	 end
 
       elseif
 	 instr == "stack" or
@@ -581,49 +665,134 @@ function _translate(text, i, sets)
 
       elseif instr == "tac" then
 	 return asm, i, false
+
+      elseif instr == "fend" then
+	 if rsp ~= 0 then
+	    asm = asm .. "\tleave\n"
+	 else
+	    asm = asm .. "\tpopq\t%rbp\n"
+	 end
+	 return asm, i
+
+      elseif instr == "exit" then
+	 if rsp ~= 0 then
+	    asm = asm .. "\tleave\n"
+	 else
+	    asm = asm .. "\tpopq\t%rbp\n"
+	 end
+	 return asm .. outro, i
       end
       --------------------
       s, i = readline(text, i)
    end
-   if rsp ~= 0 then
-      asm = asm .. "\tleave\n"
-   else
-      asm = asm .. "\tpopq\t%rbp\n"
-   end
    return asm
 end
 
----------- MEMORY SETTING ----------
--- tout à refaire
-function params(text, i, p, call)
-   local rs, vs   = r_size , v_size
-   local asm, tmp
-   local push = p - 6
-   r_size = r_size + p
-   asm = prep(true)
-   while v_size % u_size ~= 2 do
-      v_size = v_size + 1
+function fct(text, i, value)
+   local ins, val
+   local ret, tmp = "\t.align\t8\n" ..
+      "\t.fill\t1, 1, 0x90\n" ..
+      "_FN" .. value .. ":\n"
+
+   tmp, i = readline(text, i)
+   ins, val = separate(tmp)
+   
+   if ins == "fname" then
+      ret = ret .. val .. ":\n"
+      tmp, i = readline(text, i)
+      ins, val = separate(tmp)
    end
+   val = tonumber(val)
+   
+   align("%rdx")
+   r_size  = 1
+   r_stack = { true }
+   v_size  = 0
+   v_stack = {}
+   rsp = 0
+
+   ret = ret .. 
+      "\tpushq\t%rbp\n" ..
+      "\tmovq\t%rsp, %rbp\n" ..
+      build(val)
+   
+   tmp, i = _translate(text, i, false)
+   return ret .. tmp .. "\tret\n", i
+end
+
+---------- MEMORY SETTING ----------
+function params(text, i, p, call)
+   local rs, rs2 = r_size
+   local asm, tmp, typ = ""
+   local pp = p - 6
+   if pp < 0 then pp = 0 end
+   -- Protect
+   ------------------------------
+   if buf then
+      asm = asm .. lock(pop())
+   end
+   for j = v_size, v_size - u_size, -1 do
+      if j == 0 then break end
+      asm = asm .. lock(pop())
+   end
+   rs2 = r_size
+   -- Set the stack pointer
+   ------------------------------
+   asm = asm .. prep(true)
+   --- Possible cause of error, beware!
+   if pp > 1 then
+      r_size = r_size + pp - 1
+   end
+   align("%rdi")
+   -- Get the parameters
+   ------------------------------
    for j = 1, p do
       tmp, i = _translate(text, i, false)
       asm = asm .. tmp
+      align("%rdi")
    end
-   for j = 1, push do
-      asm = asm .. "\tpushq\t" .. pop() .. "\n"
-   end
-   if push < 0 then push = 0 end
-   for j = 1, p do
-      if j > 6 then break end
-      local t = pop()
-      if t:sub(1, 1) ~= "%" or t == "%rax" then
-	 asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
+   typ, i = readline(text, i)
+   if typ == "call" --[[TMP]] or typ == "tcall" then
+      for j = 1, pp do
+	 asm = asm .. "\tpushq\t" .. pop() .. "\n"
       end
+      for j = 1, p do
+	 if j > 6 then break end
+	 local t = pop()
+	 if t:sub(1, 1) ~= "%" or t == "%rax" then
+	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
+	 end
+      end
+      -- Restore
+      ------------------------------
+      tmp = ""
+      for j = r_size, rs2 + 1, -1 do
+	 r_stack[r_size] = nil
+	 r_size = r_size - 1
+      end
+      for j = r_size - 1, rs, -1 do
+	 tmp = tmp .. unlock()
+      end
+      align("%rdx")
+      -- Call
+      ------------------------------
+      if call then
+	 asm = asm ..
+	    "\tmovq\t$" .. p .. ", %r15\n" ..
+	    "\tcall\t" .. call .. "\n"
+      else
+	 local r = pop()
+	 if isMem(r) then
+	    asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
+	    r = "%rax"
+	 end
+	 asm = asm .. 
+	    "\tmovq\t$" .. p .. ", %r15\n" ..
+	    "\tcallq\t*" .. r .. "\n"
+      end
+      return asm .. tmp.. push("%rax"), i
+   elseif typ == "tcall" then
    end
-   r_size, v_size = rs, vs
-   --should be call or tcall (no check for now)
-   s, i = readline(text, i)
-   asm = asm .. "\tcall\t" .. call .. "\n"
-   return asm, i
 end
 
 function chg(text, i, p)
@@ -655,6 +824,7 @@ function chg(text, i, p)
       r_stack[j] = nil
    end
    r_size = rs
+   buf = nil
    return asm, i
 end
 
@@ -662,13 +832,9 @@ function set(text, i, p)
    local asm, tmp = ""
    local done, j = false, 1
    local r = r_size
-   -- TEMPORAIRE EN ATTENDANT D'ÉCRIRE LA FONCTION DE CLEANUP
    while j <= p do
-      if not done then
-	 tmp, i, done = _translate(text, i, false)
-      end if done then
-	 tmp = push("$17")
-      end
+      tmp, i, done = _translate(text, i, false)
+      -- gérer struct
       asm = asm .. tmp .. lock(pop())
       j = j + 1
    end
@@ -686,7 +852,15 @@ function set(text, i, p)
 end
 
 function ret(text, i, p)
-   
+   local asm, tmp = ""
+   local done
+   for j = 1, p do
+      tmp, i, done = _translate(text, i, false)
+      asm = asm .. tmp
+   end
+   tmp, i, done = _translate(text, i, false)
+   asm = asm .. "\tmovq\t" .. pop() .. ", %rax\n"
+   return asm, i
 end
 
 ---------- MAIN ----------

@@ -197,7 +197,9 @@ function translate(expr, fname, flvl, def)
 	    cnt = cnt + 1
 	    ret = ret .. operation .. "tac\n"
 	    operation = ""
-	 elseif tonumber(tmp) then
+	    tmp, t = nextexpr(expr, t)
+	 end
+	 if tonumber(tmp) then
 	    ret = ret .. "num\t" .. tmp .. "\n"
 	 elseif tmp == "false" or tmp == "true" or tmp == "nil" then
 	    ret = ret .. "spec\t" .. tmp .. "\n"
@@ -219,9 +221,13 @@ function translate(expr, fname, flvl, def)
 	 
 	 tmp, t = nextexpr(expr, t)
 	 
-	 while tmp and (isBracketed(tmp) or isParenthesized(tmp)) do
-	    if isParenthesized(tmp) then
-	       trans, nval = translate(tmp, fname, flvl, false)
+	 while tmp and (isBracketed(tmp) or isParenthesized(tmp) or isAccoladed(tmp)) do
+	    if isParenthesized(tmp) or isAccoladed(tmp) then
+	       if isParenthesized(tmp) then
+		  trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
+	       else
+		  trans, nval = translate(tmp, fname, flvl, false)
+	       end
 	       if fname then
 		  ret = ret .. "params\t" .. nval .. "\n" ..
 		     trans .. "tac\ntcall\n"
@@ -291,28 +297,37 @@ function evaluate(str, i, fname, flvl, ...)
       tmp, i = nextexpr(str, i)
    end
    if not eq then
-      if typ == 1 then
-	 eq = c
-      else
+      if typ ~= 1 then
 	 eq = 0
+      else
+	 eq = c
+	 c = eq + eq
       end
+   else
+      c = eq + eq
    end
    -- global
    if typ == 0 then
       ret = "chg\t" .. tostring(eq) .. "\n"
-      if c > 1 then fname = nil end
+      fname = nil
    -- local
    elseif typ == 1 then
       ret = "set\t" .. tostring(eq) .. "\n"
       fname = nil
+   -- return
    elseif typ == 2 then
-      ret = "ret\n"
+      ret = "ret\t" .. tostring(c) .. "\n"
       if c > 1 then fname = nil end
    end
    tmp = ""
-   for j = eq + 1, #expr do
+   for j = eq + 1, c do -- sets the right-hand side to right number of calls
       -- Checks for function declarations
-      if type(expr[j]) == "number" then
+      if j == #expr and j ~= c then
+	 tmp = tmp .. "struct\n"
+      end
+      if j > #expr then
+	 tmp = tmp .. "spec\tnil\n"
+      elseif type(expr[j]) == "number" then
 	 tmp = tmp .. expr["code"][j]
       else
 	 tmp = tmp .. translate(expr[j], fname, flvl, false)
@@ -480,6 +495,9 @@ function funscope(str, i, ...)
    
    fnct = fnct + 1
    ret = "fct\t" .. tostring(fnct) .. "\n"
+   if fname then
+      ret = ret .. "fname\t" .. fname .. "\n"
+   end
    
    tmp, i = nextexpr(str, i)
    tmp = tmp:sub(2, #tmp - 1)
@@ -512,7 +530,10 @@ function funscope(str, i, ...)
       t = t + 1
       tmp = translate(name, fname, 0, false) .. "encl\t\"" .. name .. "\"\n" .. tmp
    end
-   tmp = tmp .. "rfct\t" .. fnct .. "\nopen\t" .. tostring(t) .. "\n"
+   tmp = tmp .. "rfct\t" .. fnct .. "\n"
+   if t > 0 then
+      tmp = tmp .. "open\t" .. tostring(t) .. "\n"
+   end
    return ret, i, fnct, tmp
 end
 
