@@ -1,7 +1,7 @@
 --------------------------------------------------------------------------------
 -- Stack values and count
 --------------------------------------------------------------------------------
-local ifct, whct, frct, fict, rpct, fnct, doct = 0, 0, 0, 0, 0, 0, 0
+local ifct, whct, frct, rpct, fnct, doct = 0, 0, 0, 0, 0, 0
 local stack, level, size = {}, 0, 0
 local globals = {}
 local functions = "\n"
@@ -231,12 +231,13 @@ function translate(expr, fname, flvl, def)
 	       else
 		  trans, nval = translate(tmp, fname, flvl, false)
 	       end
+	       if nval > 0 then trans = trans .. "tac\n" end
 	       if fname then
 		  ret = ret .. "params\t" .. nval .. "\n" ..
-		     trans .. "tac\ntcall\n"
+		     trans .. "tcall\n"
 	       else
 		  ret = ret .. "params\t" .. nval .. "\n" ..
-		     trans .. "tac\ncall\n"
+		     trans .. "call\n"
 	       end
 	    else
 	       ret = ret .. translate(tmp, fname, flvl, false) .. "index\n"
@@ -349,9 +350,11 @@ function evaluate(str, i, fname, flvl, ...)
 end
 
 function ifscope(str, i, fname, flvl)
+   ifct = ifct + 1
+   
    local ret, tmp, t
    local ifct = ifct
-   ifct = ifct + 1
+   
    ret = "if\t" .. tostring(ifct) .. "\n"
 
    tmp, i = evaluate(str, i, fname, flvl)
@@ -374,9 +377,11 @@ function ifscope(str, i, fname, flvl)
 end
 
 function doscope(str, i, fname, flvl)
+   doct = doct + 1
+   
    local ret, tmp, t
    local doct = doct
-   doct = doct + 1
+   
    ret = "do\t" .. tostring(doct) .. "\n"
    newlevel()
    tmp, i, t = compile(str, i, fname, flvl)
@@ -386,9 +391,11 @@ function doscope(str, i, fname, flvl)
 end
 
 function whilescope(str, i, fname, flvl)
+   whct = whct + 1
+   
    local ret, tmp, t
    local whct = whct
-   whct = whct + 1
+   
    ret = "while\t" .. tostring(whct) .. "\n"
 
    tmp, i = evaluate(str, i, fname, flvl)
@@ -406,10 +413,12 @@ function whilescope(str, i, fname, flvl)
 end
 
 function forscope(str, i, fname, flvl)
+   frct = frct + 1
+   
    local ret, t, tmp = "", 0
    local fp, c = {}, 0
    local forin = false
-   local fict, frct = fict, frct
+   local frct = frct
    while true do
       tmp, i = nextexpr(str, i)
       if tmp == "in" then
@@ -423,8 +432,7 @@ function forscope(str, i, fname, flvl)
    end
    newlevel()
    if forin then
-      fict = fict + 1
-      ret = "fin\t" .. tostring(fict) .. "\n" ..
+      ret = "fin\t" .. tostring(frct) .. "\n" ..
 	 "iter\t" .. tostring(t + 1) .. "\n"
       c = 1
       while fp[c] ~= "in" do
@@ -439,13 +447,12 @@ function forscope(str, i, fname, flvl)
 	 tmp = tmp .. fp[c] .. " "
 	 c = c + 1
       end
-      ret = ret .. translate(tmp, fname, flvl, false) .. "fido\t" .. tostring(fict) .. "\n"
+      ret = ret .. translate(tmp, fname, flvl, false) .. "fido\t" .. tostring(frct) .. "\n"
    else
       if t ~= 1 and t ~= 2 then
 	 print("ERR") --temporaire
 	 print(t)
       end
-      frct = frct + 1
       ret = "for\t" .. tostring(frct) .. "\n" ..
 	 "iter\t3\n"
       register(true, fp[1])
@@ -466,7 +473,7 @@ function forscope(str, i, fname, flvl)
    test("end", t)
    poplevel()
    if forin then
-      ret = ret .. tmp .. "fiend\t" .. tostring(fict) .. "\n"
+      ret = ret .. tmp .. "fiend\t" .. tostring(frct) .. "\n"
    else
       ret = ret .. tmp .. "frend\t" .. tostring(frct) .. "\n"
    end
@@ -474,9 +481,11 @@ function forscope(str, i, fname, flvl)
 end
 
 function repscope(str, i, fname, flvl)
+   rpct = rpct + 1
+   
    local ret, tmp, t
    local rpct = rpct
-   rpct = rpct + 1
+   
    ret = "repeat\t" .. tostring(rpct) .. "\n"
 
    newlevel()
@@ -487,6 +496,8 @@ function repscope(str, i, fname, flvl)
 end
 
 function funscope(str, i, ...)
+   fnct = fnct + 1
+   
    local par, tmp = true
    local t, ret   = 1
    local fnct = fnct
@@ -495,8 +506,6 @@ function funscope(str, i, ...)
    local sz = size
    fname = fname[1]
    
-   
-   fnct = fnct + 1
    ret = "fct\t" .. tostring(fnct) .. "\n"
    if fname then
       ret = ret .. "fname\t" .. fname .. "\n"

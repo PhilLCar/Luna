@@ -662,7 +662,8 @@ function _translate(text, i, sets)
       elseif
 	 instr == "stack" or
 	 instr == "place" or
-	 instr == "done"
+	 instr == "done" or
+	 instr == "struct"
       then
 	 return asm, i, instr
 
@@ -712,6 +713,7 @@ function fct(text, i, value)
    r_stack = { true }
    v_size  = 0
    v_stack = {}
+   u_cont  = { false, false, false, false, false, false, false, false}
    rsp = 0
 
    ret = ret .. 
@@ -721,6 +723,41 @@ function fct(text, i, value)
    
    tmp, i = _translate(text, i, false)
    return ret .. tmp .. "\tret\n", i
+end
+
+function develop()
+   local lm, le, la = label("_DM"), label("_DE"), label("_DA")
+   local l1, l2, l3, l4, lg = label("_DV"), label("_DV"), label("_DV"), label("_DV"), label("_DV")
+   local ret =
+      "# Comparison routine\n" ..
+      "\tcmpq\t$0, %rbx\n" ..
+      "\tjz\t" .. le .. "\n" ..
+      "\tmovq\t(%rbx), %rsi\n" ..
+      "\tjmp\t" .. la .. "\n" ..
+      lm .. ":\tcmpq\t$33, (%rbx)\n" ..
+      "\tjz\t" .. le .. "\n" ..
+      "\tcmpq\t$2, %r15\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      "\tcmpq\t$3, %r15\n" ..
+      "\tjz\t" .. l2 .. "\n" ..
+      "\tcmpq\t$4, %r15\n" ..
+      "\tjz\t" .. l3 .. "\n" ..
+      "\tcmpq\t$5, %r15\n" ..
+      "\tjz\t" .. l4 .. "\n" ..
+      "\tjmp\t" .. lg .. "\n" ..
+      l1 .. ":\tmovq\t(%rbx), %rdx\n" ..
+      "\tjmp\t" .. la .. "\n" ..
+      l2 .. ":\tmovq\t(%rbx), %rcx\n" ..
+      "\tjmp\t" .. la .. "\n" ..
+      l3 .. ":\tmovq\t(%rbx), %r8\n" ..
+      "\tjmp\t" .. la .. "\n" ..
+      l4 .. ":\tmovq\t(%rbx), %r9\n" ..
+      "\tjmp\t" .. la .. "\n" ..
+      lg .. ":\tpushq\t(%rbx)\n" ..
+      la .. ":\taddq\t$8, %rbx\n" ..
+      "\tinc\t%r15\n" ..
+      "\tjmp\t" .. lm .. "\n" .. le .. ":"
+   return ret
 end
 
 ---------- MEMORY SETTING ----------
@@ -742,7 +779,8 @@ function params(text, i, p, call)
    rs2 = r_size
    -- Set the stack pointer
    ------------------------------
-   asm = asm .. prep(true)
+   --asm = asm .. prep(true)
+   typ = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
    --- Possible cause of error, beware!
    if pp > 1 then
       r_size = r_size + pp - 1
@@ -755,6 +793,8 @@ function params(text, i, p, call)
       asm = asm .. tmp
       align("%rdi")
    end
+   asm = asm .. typ
+   rsp = rs2 - 1
    typ, i = readline(text, i)
    if typ == "call" --[[TMP]] or typ == "tcall" then
       for j = 1, pp do
@@ -767,9 +807,8 @@ function params(text, i, p, call)
 	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
 	 end
       end
-      asm = asm ..
-	 "\tmovq\t$" .. p .. ", %r15\n" ..
-	 "\tcall\t_developp\n"
+      asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
+      if func then asm = asm .. develop() end
       -- Restore
       ------------------------------
       tmp = ""
@@ -777,10 +816,10 @@ function params(text, i, p, call)
 	 r_stack[r_size] = nil
 	 r_size = r_size - 1
       end
+      align("%rdx")
       for j = r_size - 1, rs, -1 do
 	 tmp = tmp .. unlock()
       end
-      align("%rdx")
       -- Call
       ------------------------------
       if call then
@@ -836,21 +875,43 @@ end
 function set(text, i, p)
    local asm, tmp = ""
    local func, j = false, 1
-   local r = r_size
+   local fill, r = false
    while j <= p do
       tmp, i, func = _translate(text, i, false)
-      -- gérer struct
-      asm = asm .. tmp .. lock(pop())
+      if func == "struct" then
+	 tmp, i, func = _translate(text, i, false)
+	 asm = asm .. tmp .. lock(pop())
+	 if func then
+	    asm = asm .. prep(true) ..
+	       "\tleaq\t-8(%rsp), %r15\n"
+	    fill = true
+	 end
+      else
+	 asm = asm .. tmp .. lock(pop())
+      end
       j = j + 1
    end
    if not func then
-      asm = asm .. "\txorq\t%rbx, %rbx\n"
+      r = true
    end
    tmp, i, func = _translate(text, i, false)
    if func == "done" then
-      asm = asm .. prep(true) .. 
-	 "\tcall\t_fillr\n"
-   else
+      if r then
+	 asm = asm .. prep(true) ..
+	    "\tpushq\t$33\n"
+      else
+	 local l1, l2 = label(), label()
+	 asm = asm .. prep(true) ..
+	    "\tcmp\t$0, %rbx\n" ..
+	    "\tjz\t" .. l1 .. "\n" ..
+	    l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
+	    "\tjz\t" .. l1 .. "\n" ..
+	    "\tpushq\t(%rbx)\n" ..
+	    "\taddq\t$8, %rbx\n" ..
+	    "\tjmp\t" .. l2 .. "\n" ..
+	    l1 .. ":\tpushq\t$33\n"
+      end
+   elseif fill then
       asm = asm .. prep(true) .. 
 	 "\tcall\t_fill\n"
    end
@@ -882,7 +943,7 @@ function ret(text, i, p)
    end
    if p > 1 then
       asm = asm ..
-	 "\tmovq\t$33, " .. p - 1 .. "(%r12)\n" ..
+	 "\tmovq\t$33, " .. 8 * (p - 1) .. "(%r12)\n" ..
 	 "\tmovq\t%r12, %rbx\n" ..
 	 "\taddq\t$" .. 8 * p .. ", %r12\n"
    else

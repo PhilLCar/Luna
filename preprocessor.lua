@@ -406,6 +406,18 @@ function scan(array, start, stop, indent)
 	       newarr[j] = nil
 	       j = j - 1
 	    end
+	 elseif array[i] == "{" then
+	    ret, i = scan(array, i + 1, "}", indent)
+	    newarr[j] = "{" .. ret .. "}"
+	    if j > 1 and
+	       not isOperator(newarr[j - 1]) and
+	       newarr[j - 1] ~= "\n"
+	    then
+	       -- À SURVEILLER (autrefois entre parenthèse)
+	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
+	       newarr[j] = nil
+	       j = j - 1
+	    end
 	 else
 	    newarr[j] = array[i]
 	 end

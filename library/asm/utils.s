@@ -46,10 +46,10 @@ _comp_string:
 	addq	$8, %rax
 	addq	$8, %rbx
 _cp_lp:	xorq	%r15, %r15
-	mov	(%rbx), %dl
-	cmp	(%rax), %dl
+	mov	(%rbx), %r15b
+	cmp	(%rax), %r15b
 	jnz	_cp_f
-	cmp	$0, %dl
+	cmp	$0, %r15b
 	jz	_cp_t
 	cmpl	$0, (%rax)
 	jz	_cp_f
@@ -262,9 +262,20 @@ _ch_en:	popq	%rax
 	ret
 
 	.global _fill
-	# %rbx: memory chunk
+	# %rbx: memory chunk, %r15: destination
 _fill:
-	
+	cmpq	$0, %rbx
+	jz	_f_en
+_f_lp:	movq	(%rbx), %rax
+	cmpq	$33, %rax
+	jz	_f_en
+	cmpq	%r15, %rsp
+	jz	_f_en
+	movq	%rax, (%r15)
+	addq	$8, %rbx
+	subq	$8, %r15
+	jmp	_f_lp
+_f_en:	ret
 	
 
 ######################################### WOW
