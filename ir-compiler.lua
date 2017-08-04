@@ -446,6 +446,7 @@ function init(text, i, p)
    local ret = push(nil)
    local rs, vs
    local tmp
+   local mrsp = rsp
    
    ret = ret ..
       "\tmovq\t$0, (%r12)\n" ..
@@ -460,8 +461,11 @@ function init(text, i, p)
    tmp, i = set(text, i, p)
    ret = ret .. tmp
    
-   ret = ret .. "\tmovq\t" .. get() .. ", %rax\n" .. prep(true) ..
-      "\tcall\t_array_copy\n"
+   ret = ret .. "\tmovq\t" .. get() .. ", %rax\n" .. 
+      "\tcall\t_array_copy\n" ..
+      "\tmovq\t%rbp, %rsp\n"
+
+   rsp = 0
 
    for j = rs + 1, r_size do
       r_stack[j] = nil
@@ -540,14 +544,13 @@ function _translate(text, i, sets)
    local asm, tmp = ""
    local s, i = readline(text, i)
    local instr, value
-   local clct, vname = 0
+   local struct, vname = 0
    
    while s do
       instr, value = separate(s)
-      clct = clct - 1
       --------------------
-      if instr ~= "params" then
-	 vname = nil
+      if instr ~= "tac" then
+	 struct = nil
       end
       --------------------
       if instr == "num" then
@@ -623,8 +626,8 @@ function _translate(text, i, sets)
 
       elseif instr == "params" then
 	 tmp, i = params(text, i, tonumber(value), vname)
-	 call = false
-	 clct = 2
+	 vname = false
+	 struct = true
 	 asm = asm .. tmp
 	 
       elseif instr == "chg" then
@@ -648,7 +651,7 @@ function _translate(text, i, sets)
 	 asm = asm .. tmp
 	 
       elseif instr == "call" or instr == "tcall" then
-	 return asm, i, instr
+	 return asm, i
 
       elseif instr == "free" then
 	 for j = 1, tonumber(value) do
@@ -664,7 +667,7 @@ function _translate(text, i, sets)
 	 return asm, i, instr
 
       elseif instr == "tac" then
-	 return asm, i, false
+	 return asm, i, struct
 
       elseif instr == "fend" then
 	 if rsp ~= 0 then
@@ -725,6 +728,7 @@ function params(text, i, p, call)
    local rs, rs2 = r_size
    local asm, tmp, typ = ""
    local pp = p - 6
+   local func
    if pp < 0 then pp = 0 end
    -- Protect
    ------------------------------
@@ -747,7 +751,7 @@ function params(text, i, p, call)
    -- Get the parameters
    ------------------------------
    for j = 1, p do
-      tmp, i = _translate(text, i, false)
+      tmp, i, func = _translate(text, i, false)
       asm = asm .. tmp
       align("%rdi")
    end
@@ -763,6 +767,9 @@ function params(text, i, p, call)
 	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
 	 end
       end
+      asm = asm ..
+	 "\tmovq\t$" .. p .. ", %r15\n" ..
+	 "\tcall\t_developp\n"
       -- Restore
       ------------------------------
       tmp = ""
@@ -778,7 +785,6 @@ function params(text, i, p, call)
       ------------------------------
       if call then
 	 asm = asm ..
-	    "\tmovq\t$" .. p .. ", %r15\n" ..
 	    "\tcall\t" .. call .. "\n"
       else
 	 local r = pop()
@@ -787,7 +793,6 @@ function params(text, i, p, call)
 	    r = "%rax"
 	 end
 	 asm = asm .. 
-	    "\tmovq\t$" .. p .. ", %r15\n" ..
 	    "\tcallq\t*" .. r .. "\n"
       end
       return asm .. tmp.. push("%rax"), i
@@ -798,17 +803,17 @@ end
 function chg(text, i, p)
    local asm, tmp = ""
    local rs, done = r_size
-   while not done do
+   for j = 1, p do
       tmp, i, done = _translate(text, i, true)
-      if done then break end
       if buf and isMem(buf) then
 	 tmp = tmp .. lea(pop())
       end
       asm = asm .. tmp .. lock(pop())
    end
+   tmp, i, done = _translate(text, i, true)
    if p == 0 then
       done = false
-      while not done do
+      while not (done == "stack") do
 	 tmp, i, done = _translate(text, i, false)
 	 asm = asm .. tmp
       end
@@ -830,36 +835,61 @@ end
 
 function set(text, i, p)
    local asm, tmp = ""
-   local done, j = false, 1
+   local func, j = false, 1
    local r = r_size
    while j <= p do
-      tmp, i, done = _translate(text, i, false)
+      tmp, i, func = _translate(text, i, false)
       -- gérer struct
       asm = asm .. tmp .. lock(pop())
       j = j + 1
    end
-   while not done do
-      tmp, i = readline(text, i)
-      if tmp == "stack" or tmp == "done" then
-	 done = tmp
-      end
+   if not func then
+      asm = asm .. "\txorq\t%rbx, %rbx\n"
    end
-   if done == "done" then
-      asm = asm .. "\tmovq\t$33, " .. -8 * r_size .. "(%rbp)\n"
-      r_size = r_size + 1
+   tmp, i, func = _translate(text, i, false)
+   if func == "done" then
+      asm = asm .. prep(true) .. 
+	 "\tcall\t_fillr\n"
+   else
+      asm = asm .. prep(true) .. 
+	 "\tcall\t_fill\n"
    end
    return asm, i
 end
 
 function ret(text, i, p)
    local asm, tmp = ""
-   local done
-   for j = 1, p do
-      tmp, i, done = _translate(text, i, false)
+   local r
+   tmp, i = _translate(text, i, false)
+   asm = asm .. tmp .. "\tmovq\t" .. pop() .. ", %rax\n"
+   for j = 2, p do
+      tmp, i = _translate(text, i, false)
       asm = asm .. tmp
+      r = pop()
+      if j == 2 then
+	 tmp = "(%r12)"
+      else
+	 tmp = tostring(8 * (j - 2)) .. "(%r12)"
+      end
+      if isMem(r) then
+	 asm = asm ..
+	    "\tmovq\t" .. r .. ", %rbx\n" ..
+	    "\tmovq\t%rbx, " .. tmp .. "\n"
+      else
+	 asm = asm ..
+	    "\tmovq\t" .. r .. ", " .. tmp .. "\n"
+      end
    end
-   tmp, i, done = _translate(text, i, false)
-   asm = asm .. "\tmovq\t" .. pop() .. ", %rax\n"
+   if p > 1 then
+      asm = asm ..
+	 "\tmovq\t$33, " .. p - 1 .. "(%r12)\n" ..
+	 "\tmovq\t%r12, %rbx\n" ..
+	 "\taddq\t$" .. 8 * p .. ", %r12\n"
+   else
+      asm = asm ..
+	 "\txorq\t%rbx, %rbx\n"
+   end
+   tmp, i = _translate(text, i, false)
    return asm, i
 end
 

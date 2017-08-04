@@ -260,6 +260,11 @@ _ch_lp:	cmpq	$17, (%rax)
 _ch_en:	popq	%rax
 	movq	%rbx, (%rax)
 	ret
+
+	.global _fill
+	# %rbx: memory chunk
+_fill:
+	
 	
 
 ######################################### WOW

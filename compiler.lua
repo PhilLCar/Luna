@@ -209,8 +209,11 @@ function translate(expr, fname, flvl, def)
 	    ret = ret .. translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
 	 elseif isAccoladed(tmp) then
 	    trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
+	    if trans ~= "" then
+	       trans = trans .. "tac\n"
+	    end
 	    ret = ret .. "init\t" .. nval .. "\n" ..
-	       trans .. "tac\ndone\n"	 
+	       trans .. "done\n"	 
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
