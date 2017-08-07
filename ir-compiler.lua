@@ -268,7 +268,12 @@ function prep(up)
    elseif dif < 0 then
       ret = "\taddq\t$" .. tostring(-8 * dif) .. ", %rsp\n"
       rsp = rsp + dif
-   end
+      end--[[
+   if up then
+      ret = "\tleaq\t" .. tostring(-8 * r_size + 8) .. "(%rbp), %rsp\n"
+   else
+      ret = "\tmovq\t(%rbp), %rsp\n"
+	 end]]
    return ret
 end
 
@@ -386,16 +391,18 @@ end
 function len()
    local ret
    local v1, lab = pop(), label()
-   r_size = r_size + 1
-   ret = prep(true) ..
-      "\tmovq\t" .. v1 .. ", %rax\n" ..
-      "\tsarq\t$3, %rax\n" ..
-      "\tcmpq\t$65, (%rax)\n" ..
+   ret = prep(true)
+   if isMem(v1) then
+      ret = ret .. "\tmovq\t" .. v1 .. ", %rax\n"
+      v1 = "%rax"
+   end
+   ret = ret ..
+      "\tsarq\t$3, " .. v1 .. "\n" ..
+      "\tcmpq\t$65, (" .. v1 .. ")\n" ..
       "\tjnz\t" .. lab .. "\n" ..
       "\tcall\t_check\n" ..
       lab .. ":" ..
-      push("(%rax)")
-   r_size = r_size - 1
+      push("(" .. v1 .. ")")
    return ret
 end
 
@@ -479,9 +486,29 @@ function init(text, i, p)
    return ret, i
 end
 
-function build(nargs)
+function build(nargs, varargs, fname)
    local ret = ""
    local p = 1
+   ret = 
+      "\tmovq\t$" .. nargs .. ", %rax\n" ..
+      "\tcall\t_nil_fill\n"
+   if varargs then
+      ret = ret ..
+	 "\tcall\t_varargs\n"
+      if nargs <= 6 then
+	 ret = ret .. "\tmovq\t%r15, " .. c_name[nargs] .. "\n"
+      elseif nargs == 0 then
+	 ret = ret .. "\tmovq\t%r15, %rdi\n"
+      else
+	 ret = ret .. "\tmovq\t%r15, " .. 8 * (nargs - 6) .. "(%rsp)\n"
+      end
+   end
+   if fname then
+      ret = ret .. fname .. ":\n"
+   end
+   ret = ret ..
+      "\tpushq\t%rbp\n" ..
+      "\tmovq\t%rsp, %rbp\n"
    while p <= nargs and p <= 6 do
       ret = ret .. "\tmovq\t" .. c_name[p] .. ", " .. -8 * r_size .. "(%rbp)\n"
       r_size = r_size + 1
@@ -569,7 +596,8 @@ function _translate(text, i, sets)
       elseif instr == "str" then
 	 asm = asm .. str(value)
 
-      elseif instr == "ref" then
+      elseif instr == "ref" or instr == "arg" then
+	 struct = instr == "arg"
 	 tmp = tonumber(value) + 1
 	 if ref_mask and tmp > ref_mask_low and tmp <= ref_mask_up then
 	    tmp = tmp - ref_mask_low - 1
@@ -582,7 +610,15 @@ function _translate(text, i, sets)
 	 else
 	    tmp = ""
 	 end
-	 asm = asm .. push(tmp .. "(%rbp)")
+	 if struct then
+	    asm = asm .. push("%rax") ..
+	       "\tmovq\t" .. tmp .. "(%rbp), %rax\n" ..
+	       "\tsarq\t$3, %rax\n" ..
+	       "\tleaq\t8(%rax), %rbx\n" ..
+	       "\tmovq\t(%rax), %rax\n" 
+	 else
+	    asm = asm .. push(tmp .. "(%rbp)")
+	 end
 
       elseif instr == "gbl" then
 	 asm = asm .. index(sets, value)
@@ -694,6 +730,7 @@ end
 
 function fct(text, i, value)
    local ins, val
+   local name
    local ret, tmp = "\t.align\t8\n" ..
       "\t.fill\t1, 1, 0x90\n" ..
       "_FN" .. value .. ":\n"
@@ -702,7 +739,7 @@ function fct(text, i, value)
    ins, val = separate(tmp)
    
    if ins == "fname" then
-      ret = ret .. val .. ":\n"
+      name = val
       tmp, i = readline(text, i)
       ins, val = separate(tmp)
    end
@@ -713,16 +750,13 @@ function fct(text, i, value)
    r_stack = { true }
    v_size  = 0
    v_stack = {}
-   u_cont  = { false, false, false, false, false, false, false, false}
+   u_cont  = { false, false, false, false, false, false, false, false }
    rsp = 0
 
-   ret = ret .. 
-      "\tpushq\t%rbp\n" ..
-      "\tmovq\t%rsp, %rbp\n" ..
-      build(val)
+   ret = ret .. build(val, ins == "nargs", name)
    
    tmp, i = _translate(text, i, false)
-   return ret .. tmp .. "\tret\n", i
+   return ret .. tmp .. "\tret\n\n", i
 end
 
 function develop()
@@ -765,7 +799,7 @@ function params(text, i, p, call)
    local rs, rs2 = r_size
    local asm, tmp, typ = ""
    local pp = p - 6
-   local func
+   local func, alg
    if pp < 0 then pp = 0 end
    -- Protect
    ------------------------------
@@ -780,21 +814,27 @@ function params(text, i, p, call)
    -- Set the stack pointer
    ------------------------------
    --asm = asm .. prep(true)
-   typ = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   if r_size > 1 then
+      typ = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   else
+      typ = "\tleaq\t(%rbp), %rsp\n"
+   end
    --- Possible cause of error, beware!
    if pp > 1 then
       r_size = r_size + pp - 1
    end
+   alg = r_index
    align("%rdi")
    -- Get the parameters
    ------------------------------
    for j = 1, p do
       tmp, i, func = _translate(text, i, false)
       asm = asm .. tmp
-      align("%rdi")
    end
-   asm = asm .. typ
-   rsp = rs2 - 1
+   if rsp ~= rs2 - 1 then
+      asm = asm .. typ
+      rsp = rs2 - 1
+   end
    typ, i = readline(text, i)
    if typ == "call" --[[TMP]] or typ == "tcall" then
       for j = 1, pp do
@@ -816,10 +856,16 @@ function params(text, i, p, call)
 	 r_stack[r_size] = nil
 	 r_size = r_size - 1
       end
-      align("%rdx")
+      r_index = alg
       for j = r_size - 1, rs, -1 do
 	 tmp = tmp .. unlock()
       end
+      if r_size > 1 then
+	 tmp = tmp .. "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+      else
+	 tmp = tmp .. "\tleaq\t(%rbp), %rsp\n"
+      end
+      rsp = r_size - 1
       -- Call
       ------------------------------
       if call then

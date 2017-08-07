@@ -18,6 +18,135 @@ _tf_lp:	movq	(%rbp, %rax, 8), %rdi
 _tf_en:	movq	-8(%rsp), %rdi
 	ret
 
+	.global _fill
+	# %rbx: memory chunk, %r15: destination
+_fill:
+	cmpq	$0, %rbx
+	jz	_f_en
+_f_lp:	movq	(%rbx), %rax
+	cmpq	$33, %rax
+	jz	_f_en
+	cmpq	%r15, %rsp
+	jz	_f_en
+	movq	%rax, (%r15)
+	addq	$8, %rbx
+	subq	$8, %r15
+	jmp	_f_lp
+_f_en:	ret
+
+	.global	_varargs
+	# %rax: final nargs, %r15: starting nargs
+_varargs:
+	pushq	%rax
+	pushq	%r14
+	leaq	-6(%rax), %rbx
+_va_lp:	cmpq	%rax, %r15
+	jb	_va_en
+	cmpq	$1, %rax
+	jz	_va_1
+	cmpq	$2, %rax
+	jz	_va_2
+	cmpq	$3, %rax
+	jz	_va_3
+	cmpq	$4, %rax
+	jz	_va_4
+	cmpq	$5, %rax
+	jz	_va_5
+	cmpq	$6, %rax
+	jz	_va_6
+	jmp	_va_g
+_va_1:	movq	%rdi, (%r12)
+	jmp	_va_cm
+_va_2:	movq	%rsi, (%r12)
+	jmp	_va_cm
+_va_3:	movq	%rdx, (%r12)
+	jmp	_va_cm
+_va_4:	movq	%rcx, (%r12)
+	jmp	_va_cm
+_va_5:	movq	%r8, (%r12)
+	jmp	_va_cm
+_va_6:	movq	%r9, (%r12)
+	jmp	_va_cm
+_va_g:	movq	24(%rsp, %rbx, 8), %r14
+	movq	%r14, (%r12)
+	inc	%rbx
+_va_cm:	addq	$8, %r12
+	inc	%rax
+	jmp	_va_lp
+_va_en:	popq	%r14
+	popq	%rax
+	movq	$33, (%r12)
+	addq	$8, %r12
+	subq	%rax, %r15
+	xorq	$-1, %r15
+	leaq	-8(%r12, %r15, 8), %r15
+	leaq	5(, %r15, 8), %r15
+	ret
+	
+	.global	_nil_fill
+	# %rax: final nargs, %r15: starting nargs
+_nil_fill:
+	cmpq	%rax, %r15
+	jge	_nf_en
+	pushq	%rax
+	pushq	%rdi
+	pushq	%r15
+	movq	%r15, %rbx
+	subq	$6, %rbx
+	jge	_rs_0
+	xorq	%rbx, %rbx
+_rs_0:	subq	$6, %rax
+	jbe	_rs_fn
+_resize:
+	subq	%rbx, %rax
+	neg	%rax
+	leaq	5(%rbx), %rbx
+	leaq	(%rsp, %rax, 8), %rdi
+_rs_lp:	cmp	$0, %rbx
+	jz	_rs_dn
+	movq	(%rsp), %r15
+	movq	%r15, (%rsp, %rax, 8)
+	dec	%rbx
+	addq	$8, %rsp
+	jmp	_rs_lp
+_rs_dn:	movq	%rdi, %rsp
+_rs_fn:	pop	%r15
+	pop	%rdi
+	pop	%rax
+_rs_en:	xorq	%rbx, %rbx
+_nf_lp:	cmpq	%rax, %r15
+	jge	_nf_en
+	cmpq	$0, %r15
+	jz	_nf_1
+	cmpq	$1, %r15
+	jz	_nf_2
+	cmpq	$2, %r15
+	jz	_nf_3
+	cmpq	$3, %r15
+	jz	_nf_4
+	cmpq	$4, %r15
+	jz	_nf_5
+	cmpq	$5, %r15
+	jz	_nf_6
+	jmp	_nf_g
+_nf_1:	movq	$17, %rdi
+	jmp	_nf_cm
+_nf_2:	movq	$17, %rsi
+	jmp	_nf_cm
+_nf_3:	movq	$17, %rdx
+	jmp	_nf_cm
+_nf_4:	movq	$17, %rcx
+	jmp	_nf_cm
+_nf_5:	movq	$17, %r8
+	jmp	_nf_cm
+_nf_6:	movq	$17, %r9
+	jmp	_nf_cm
+_nf_g:	movq	$17, 16(%rsp, %rbx, 8)
+	inc	%rbx
+_nf_cm:	inc	%r15
+	jmp	_nf_lp
+_nf_en:	ret
+
 #BOOLEAN PROCEDURES
 	.global	_compare
 	# %rax: arg1, %rbx: arg2
@@ -260,22 +389,6 @@ _ch_lp:	cmpq	$17, (%rax)
 _ch_en:	popq	%rax
 	movq	%rbx, (%rax)
 	ret
-
-	.global _fill
-	# %rbx: memory chunk, %r15: destination
-_fill:
-	cmpq	$0, %rbx
-	jz	_f_en
-_f_lp:	movq	(%rbx), %rax
-	cmpq	$33, %rax
-	jz	_f_en
-	cmpq	%r15, %rsp
-	jz	_f_en
-	movq	%rax, (%r15)
-	addq	$8, %rbx
-	subq	$8, %r15
-	jmp	_f_lp
-_f_en:	ret
 	
 
 ######################################### WOW

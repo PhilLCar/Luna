@@ -562,7 +562,7 @@ function compar(str, i)
       until i >= #str or s == "\n"
       s, i = nexttoken(str, i)
    end
-   if line then
+   if line and s then
       if s ~= "\n" then
 	 typerr = "Unexpected symbol " .. s .. "."
 	 helperror()

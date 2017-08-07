@@ -8,4 +8,7 @@ end
 
 local a = {8, test()}
 
-print(#a + get2{1,3,5})
+print(#a + get2{1,3,5} + 1)
+--8
+
+

@@ -168,11 +168,16 @@ function access(var, flvl, def)
       end
       if stk[var] then
 	 if i < flvl then
-	    local clo = stack[level]["clo"]
-	    clo[var] = true
+	    local clo1, clo2 = stack[i]["clo"], stack[level]["clo"]
+	    clo1[var] = true
+	    clo2[var] = true
 	    return "clo\t" .. var .. "\n"
 	 end
-	 return "ref\t" .. tostring(stk[var]) .. "\n"
+	 if var == "..." then
+	    return "arg\t" .. tostring(stk[var]) .. "\n"
+	 else
+	    return "ref\t" .. tostring(stk[var]) .. "\n"
+	 end
       end
    end
    if def or globals[var] then
