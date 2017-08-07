@@ -51,11 +51,7 @@ intro =
    "\tmovq\t$17, 16(%r12)\n" ..
    "\tlea\t3(, %r12, 8), %r13\n" ..
    "\taddq\t$24, %r12\n" ..
-   "\tmovq\t$0, (%r12)\n" ..
-   "\tmovq\t$17, 8(%r12)\n" ..
-   "\tmovq\t$17, 16(%r12)\n" ..
-   "\tlea\t3(, %r12, 8), %r14\n" ..
-   "\taddq\t$24, %r12\n" ..
+   "\tmovq\t$17, %r14\n" ..
    "\n# GENERATED CODE BEGINING" ..	    
    "\n################################################################################\n\n"
 
@@ -205,7 +201,7 @@ function use()
    local ret, r = push(nil)
    if not available() then
       r = replace()
-      ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      ret = ret .. "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
    else
       r = register()
    end
@@ -404,6 +400,45 @@ function len()
       lab .. ":" ..
       push("(" .. v1 .. ")")
    return ret
+end
+
+function encl(value)
+   local r, l = prep(true), str_tbl[value]
+   need_data = true
+   if not l then
+      l = label("_ST")
+      str_tbl[value] = l
+      data = data .. l .. ":\n" ..
+	 "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
+	 "\t.asciz\t" .. value .. "\n"
+   end
+   return r ..
+      "\tmovq\t" .. pop() .. ", %rbx\n" ..
+      "\tleaq\t" .. l .. "(%rip), %rax\n" ..
+      "\tleaq\t2(, %rax, 8), %rax\n" ..
+      "\tcall\t_encl\n"
+end
+
+function clo(sets, value)
+   value = "\"" .. value .. "\""
+   local r, l = prep(true), str_tbl[value]
+   need_data = true
+   if not l then
+      l = label("_ST")
+      str_tbl[value] = l
+      data = data .. l .. ":\n" ..
+	 "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
+	 "\t.asciz\t" .. value .. "\n"
+   end
+   if sets then
+      r = r .. push("%rax")
+   else
+      r = r .. push("(%rax)")
+   end
+   return r ..
+      "\tleaq\t" .. l .. "(%rip), %rax\n" ..
+      "\tleaq\t2(, %rax, 8), %rax\n" ..
+      "\tcall\t_clo_ref\n"
 end
 
 function index(address, global)
@@ -620,6 +655,17 @@ function _translate(text, i, sets)
 	    asm = asm .. push(tmp .. "(%rbp)")
 	 end
 
+      elseif instr == "clo" then
+	 asm = asm .. clo(sets, value)
+
+      elseif instr == "encl" then
+	 asm = asm .. encl(value)
+
+      elseif instr == "open" then
+	 asm = asm .. prep(true) ..
+	    "\tmovq\t$" .. value .. ", %rax\n" ..
+	    "\tcall\t_open\n"
+
       elseif instr == "gbl" then
 	 asm = asm .. index(sets, value)
 	 
@@ -680,7 +726,11 @@ function _translate(text, i, sets)
 
       elseif instr == "rfct" then
 	 asm = asm .. use() ..
-	    "\tleaq\t_FN" .. value .. "(%rip), " .. current() .. "\n"
+	    "\tleaq\t_FN" .. value .. "(%rip), " .. current() .. "\n" ..
+	    "\tmovq\t" .. current() .. ", (%r12)\n" ..
+	    "\tmovq\t%r14, 8(%r12)\n" ..
+	    "\tleaq\t7(, %r12, 8), " .. current() .. "\n" ..
+	    "\taddq\t$16, %r12\n"
 
       elseif instr == "fct" then
 	 tmp, i = fct(text, i, value)
@@ -707,10 +757,14 @@ function _translate(text, i, sets)
 	 return asm, i, struct
 
       elseif instr == "fend" then
-	 if rsp ~= 0 then
-	    asm = asm .. "\tleave\n"
+	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
+	    if rsp ~= 0 then
+	       asm = asm .. "\tleave\n\tret\n\n"
+	    else
+	       asm = asm .. "\tpopq\t%rbp\n\tret\n\n"
+	    end
 	 else
-	    asm = asm .. "\tpopq\t%rbp\n"
+	    asm = asm .. "\n"
 	 end
 	 return asm, i
 
@@ -756,7 +810,7 @@ function fct(text, i, value)
    ret = ret .. build(val, ins == "nargs", name)
    
    tmp, i = _translate(text, i, false)
-   return ret .. tmp .. "\tret\n\n", i
+   return ret .. tmp, i
 end
 
 function develop()
@@ -796,6 +850,11 @@ end
 
 ---------- MEMORY SETTING ----------
 function params(text, i, p, call)
+   if not call then
+      -- Closure env
+      r_size = r_size + 1
+   end
+   ----
    local rs, rs2 = r_size
    local asm, tmp, typ = ""
    local pp = p - 6
@@ -813,13 +872,11 @@ function params(text, i, p, call)
    rs2 = r_size
    -- Set the stack pointer
    ------------------------------
-   --asm = asm .. prep(true)
    if r_size > 1 then
       typ = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
    else
       typ = "\tleaq\t(%rbp), %rsp\n"
    end
-   --- Possible cause of error, beware!
    if pp > 1 then
       r_size = r_size + pp - 1
    end
@@ -872,13 +929,18 @@ function params(text, i, p, call)
 	 asm = asm ..
 	    "\tcall\t" .. call .. "\n"
       else
+	 asm = "\tpushq\t%r14\n" .. asm
 	 local r = pop()
 	 if isMem(r) then
 	    asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
 	    r = "%rax"
 	 end
-	 asm = asm .. 
-	    "\tcallq\t*" .. r .. "\n"
+	 asm = asm ..
+	    "\tsarq\t$3, %rax\n" ..
+	    "\tmovq\t8(%rax), %r14\n" ..
+	    "\tcallq\t*(" .. r .. ")\n" ..
+	    "\tpopq\t%r14\n"
+	 r_size = r_size - 1
       end
       return asm .. tmp.. push("%rax"), i
    elseif typ == "tcall" then
@@ -997,6 +1059,11 @@ function ret(text, i, p)
 	 "\txorq\t%rbx, %rbx\n"
    end
    tmp, i = _translate(text, i, false)
+   if rsp ~= 0 then
+      asm = asm .. "\tleave\n\tret\n"
+   else
+      asm = asm .. "\tpopq\t%rbp\n\tret\n"
+   end
    return asm, i
 end
 

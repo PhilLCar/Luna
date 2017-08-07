@@ -849,7 +849,7 @@ function _preprocess(str, i, indent, stops)
 
       ---------- GEN ----------
       else
-	 if line == "=" then rval = true end
+	 if line == "=" or line == "return" then rval = true end
 	 ret = ret .. strgen(_SPACE, nl) .. line .. " "
 	 nl = 0
       end

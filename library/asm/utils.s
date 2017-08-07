@@ -1,7 +1,7 @@
 	.text
-# Internal procedures to reduce compiled file size
+# Internal routines to reduce compiled file size
 
-#MEMORY PROCEDURES
+#MEMORY ROUTINES
 	.global _transfer
 	# %rax: frame size, %rbx: transfer size
 _transfer:
@@ -147,7 +147,7 @@ _nf_cm:	inc	%r15
 	jmp	_nf_lp
 _nf_en:	ret
 
-#BOOLEAN PROCEDURES
+#BOOLEAN ROUTINES
 	.global	_compare
 	# %rax: arg1, %rbx: arg2
 _compare:
@@ -201,7 +201,7 @@ _not:
 _nt_t:	movq	$9, %rax
 	ret
 
-#ARRAY PROCEDURES
+#ARRAY ROUTINES
 	.global _array_copy
 	# %rax: table
 _array_copy:
@@ -390,148 +390,43 @@ _ch_en:	popq	%rax
 	movq	%rbx, (%rax)
 	ret
 	
+# CLOSURE ROUTINES
+	.global _encl
+	# %rax: key, %rbx: value
+_encl:	
+	movq	%rax, (%r12)
+	movq	%rbx, 8(%r12)
+	movq	%r14, 16(%r12)
+	movq	%r12, %r14
+	addq	$24, %r12
+	ret
 
-######################################### WOW
-	.global expand
-expand:
-	pop	%r12
-	mov	%rax, %r14
-	movq	$17, 8(%rbp)
-	movq	$17, 16(%rbp)
-	lea	4(,%rbp, 8), %r15
-	add	$24, %rbp
-rg_0:	mov	%rdi, %r10
-	jmp	rg_fl
-rg_1:	mov	%rsi, %r10
-	jmp	rg_fl	
-rg_2:	mov	%rdx, %r10
-	jmp	rg_fl
-rg_3:	mov	%rcx, %r10
-	jmp	rg_fl
-rg_4:	mov	%r8, %r10
-	jmp	rg_fl
-rg_5:	mov	%r9, %r10
-	jmp	rg_fl
-rg_st:	pop	%r10
-rg_fl:	cmp	$0, %r14
-	jz	ex_en
-	dec	%r14
-	mov	%r10, %r11
-	and	$7, %r11
-	cmp	$4, %r11
-	jnz	ex_n
-	mov	%r10, (%r13)
-	sar	$3, %r10
-	mov	(%r10), %r13
-	jmp	ex_f
-ex_n:	mov	%r10, 8(%rbp)
-	mov	%r15, 16(%rbp)
-	lea	4(, %rbp, 8), %r15
-	add	$24, %rbp
-ex_f:	mov	%rax, %r11
-	sub	%r14, %r11
-	cmp	$1, %r11
-	jz	rg_1
-	cmp	$2, %r11
-	jz	rg_2
-	cmp	$3, %r11
-	jz	rg_3
-	cmp	$4, %r11
-	jz	rg_4
-	cmp	$5, %r11
-	jz	rg_5
-	jmp	rg_st
-ex_en:	sar	$3, %r15
-	jmp	*%r12
+	.global _clo_ref
+	# %rax: key
+_clo_ref:
+	pushq	%r14
+	pushq	%rdi
+	movq	%rax, %rdi
+_cr_lp:	movq	%rdi, %rax
+	movq	(%r14), %rbx
+	call	_compare
+	cmp	$9, %rax
+	jz	_cr_en
+	movq	16(%r14), %r14
+	cmp	$17, %r14
+	jz	_cr_en
+	jmp	_cr_lp
+_cr_en:	leaq	8(%r14), %rax
+	popq	%rdi
+	popq	%r14
+	ret
 
-		.global	distribute
-distribute:
-	mov	%r15, %rdi
-	pop	(%rbp)
-	lea	(%rdi), %rsi
-	xor	%rdi, %rdi
-	xor	%r9, %rdi
-	jmp	ds_fl
-ds_0:	push	%r10
-dn_0:	mov	%r8, %r10
-	jmp	ds_fl
-ds_1:	push	%r11
-dn_1:	mov	%r8, %r11
-	jmp	ds_fl
-ds_2:	push	%r12	
-dn_2:	mov	%r8, %r12
-	jmp	ds_fl
-ds_3:	push	%r13
-dn_3:	mov	%r8, %r13
-	jmp	ds_fl
-ds_4:	push	%r14
-dn_4:	mov	%r8, %r14
-	jmp	ds_fl
-ds_5:	push	%r15
-dn_5:	mov	%r8, %r15
-ds_fl:	cmp	$0, %r9
-	jz	ds_ar
-	cmp	$0, %r9
-	js	ds_en
-	cmpq	$17, 8(%rsi)
-	jz	ds_em
-	dec	%r9
-	mov	8(%rsi), %r8
-	mov	16(%rsi), %rsi
-	sar	$3, %rsi
-ds_f:	mov	%rdi, %rax
-	sub	%r9, %rax
-	cmp	$6, %rax
-	jg	dn_f
-	cmp	$1, %rax
-	jz	dn_0
-	cmp	$2, %rax
-	jz	dn_1
-	cmp	$3, %rax
-	jz	dn_2
-	cmp	$4, %rax
-	jz	dn_3
-	cmp	$5, %rax
-	jz	dn_4
-	cmp	$6, %rax
-	jz	dn_5	
-dn_f:	xor	%rdx, %rdx
-	mov	$6, %rcx
-	idiv	%rax
-	cmp	$1, %rdx
-	jz	ds_0
-	cmp	$2, %rdx
-	jz	ds_1
-	cmp	$3, %rdx
-	jz	ds_2
-	cmp	$4, %rdx
-	jz	ds_3
-	cmp	$5, %rdx
-	jz	ds_4
-	cmp	$0, %rdx
-	jz	ds_5
-ds_em:	mov	$17, %r8
-	jmp	ds_f
-ds_ar:	lea	131(, %rbp, 8), %r8
-	mov	%r8, 8(%rbp)
-	dec	%r9
-	jmp	ds_f
-ds_en:	mov	%rdi, %rax
-	mov	(%rbp), %rdx
-	lea	8(, %rax, 8), %rcx
-	mov	%rcx, (%rbp)
-	add	$16, %rbp
-	lea	_string_n(%rip), %rdi
-	lea	2(, %rax, 8), %rdi
-	mov	%rdi, (%rbp)
-	mov	%rax, 8(%rbp)
-	lea	4(, %rsi, 8), %rax
-	mov	%rax, 16(%rbp)
-	add	$24, %rbp
-ds_fn:	jmp	*%rdx
-	
-	.data
-	
-_string_n:
-	.quad	8
-	.asciz	"n"
+	.global _open
+	# %rax: size
+_open:
+	cmp	$0, %rax
+	jz	_op_en
+	dec	%rax
+	movq	16(%r14), %r14
+	jmp	_open
+_op_en:	ret

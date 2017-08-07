@@ -5,6 +5,7 @@ local ifct, whct, frct, rpct, fnct, doct = 0, 0, 0, 0, 0, 0
 local stack, level, size = {}, 0, 0
 local globals = {}
 local functions = "\n"
+local _CLO = 1
 
 ops = {}
 ops["+"]      = "add"
@@ -84,8 +85,13 @@ function compile(str, i, fname, flvl)
       if not expr then break end
 
       if expr == "end" then
-	 local tmp = stack[level]["clo"]
+	 local tmp = stack[level][_CLO]
 	 ret = ret .. poplevel()
+	 for i, v in pairs(tmp) do
+	    if v == 0 then
+	       tmp[i] = nil
+	    end
+	 end
 	 return ret, i, expr, tmp
 
       elseif expr == "else" then
@@ -136,7 +142,7 @@ function newlevel()
    level = level + 1
    stack[level] = {}
    stack[level]["size"] = size
-   stack[level]["clo"] = {}
+   stack[level][_CLO] = {}
 end
 
 function poplevel()
@@ -163,14 +169,13 @@ function access(var, flvl, def)
    local stk
    for i = level, 1, -1 do
       stk = stack[i]
-      if stk.clo[var] then
+      if stk[_CLO][var] then
 	 return "clo\t" .. var .. "\n"
       end
       if stk[var] then
 	 if i < flvl then
-	    local clo1, clo2 = stack[i]["clo"], stack[level]["clo"]
-	    clo1[var] = true
-	    clo2[var] = true
+	    local clo = stack[level][_CLO]
+	    clo[var] = true
 	    return "clo\t" .. var .. "\n"
 	 end
 	 if var == "..." then
@@ -283,7 +288,7 @@ function evaluate(str, i, fname, flvl, ...)
 	 if eq then
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, expr[c - eq])
 	 else
-	    tmp, i, expr[c], encl["code"][c] = funscope(str, i)
+	    tmp, i, expr[c], expr["code"][c] = funscope(str, i)
 	 end
 	 functions = functions .. tmp .. "\n"
 	 tmp, t = nextexpr(str, i)
@@ -546,11 +551,17 @@ function funscope(str, i, ...)
    for name in pairs(clo) do
       t = t + 1
       tmp = translate(name, fname, 0, false) .. "encl\t\"" .. name .. "\"\n" .. tmp
+      for i = level, 1, -1 do
+	 stk = stack[i]
+	 if stk[name] then
+	    stk[_CLO][name] = 0
+	 end
+      end
    end
    tmp = tmp .. "rfct\t" .. fnct .. "\n"
-   if t > 0 then
+   --[[if t > 0 then
       tmp = tmp .. "open\t" .. tostring(t) .. "\n"
-   end
+      end]]
    return ret, i, fnct, tmp
 end
 
