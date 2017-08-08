@@ -89,6 +89,8 @@ cstr:
 	.string	"true"
 .LC3:
 	.string	"nil"
+.LC4:
+	.string	"%.20g\n"
 	.text
 	.globl	print
 	.type	print, @function
@@ -100,55 +102,74 @@ print:
 	.cfi_offset 6, -16
 	movq	%rsp, %rbp
 	.cfi_def_cfa_register 6
-	subq	$32, %rsp
-	movq	%rdi, -24(%rbp)
-	movq	-24(%rbp), %rax
+	subq	$48, %rsp
+	movq	%rdi, -40(%rbp)
+	movq	-40(%rbp), %rax
 	andl	$7, %eax
-	movl	%eax, -12(%rbp)
-	movq	-24(%rbp), %rax
+	movl	%eax, -20(%rbp)
+	movq	-40(%rbp), %rax
 	sarq	$3, %rax
-	movq	%rax, -8(%rbp)
-	movl	-12(%rbp), %eax
+	movq	%rax, -16(%rbp)
+	movl	-20(%rbp), %eax
 	cmpl	$1, %eax
 	je	.L11
-	cmpl	$2, %eax
-	je	.L12
+	cmpl	$1, %eax
+	jg	.L12
 	testl	%eax, %eax
-	jne	.L10
-	movq	-8(%rbp), %rax
+	je	.L13
+	jmp	.L10
+.L12:
+	cmpl	$2, %eax
+	je	.L14
+	cmpl	$6, %eax
+	je	.L15
+	jmp	.L10
+.L13:
+	movq	-16(%rbp), %rax
 	movq	%rax, %rsi
 	leaq	.LC0(%rip), %rdi
 	movl	$0, %eax
 	call	printf@PLT
 	jmp	.L10
 .L11:
-	cmpq	$0, -8(%rbp)
-	jne	.L14
+	cmpq	$0, -16(%rbp)
+	jne	.L16
 	leaq	.LC1(%rip), %rdi
 	call	puts@PLT
-	jmp	.L17
-.L14:
-	cmpq	$1, -8(%rbp)
-	jne	.L16
+	jmp	.L20
+.L16:
+	cmpq	$1, -16(%rbp)
+	jne	.L18
 	leaq	.LC2(%rip), %rdi
 	call	puts@PLT
-	jmp	.L17
-.L16:
-	cmpq	$2, -8(%rbp)
-	jne	.L17
+	jmp	.L20
+.L18:
+	cmpq	$2, -16(%rbp)
+	jne	.L20
 	leaq	.LC3(%rip), %rdi
 	call	puts@PLT
-	jmp	.L17
-.L12:
-	movq	-8(%rbp), %rax
+	jmp	.L20
+.L14:
+	movq	-16(%rbp), %rax
 	addq	$8, %rax
 	movq	%rax, %rdi
 	call	puts@PLT
 	jmp	.L10
-.L17:
+.L15:
+	movq	-16(%rbp), %rax
+	movsd	(%rax), %xmm0
+	movsd	%xmm0, -8(%rbp)
+	movq	-8(%rbp), %rax
+	movq	%rax, -48(%rbp)
+	movsd	-48(%rbp), %xmm0
+	leaq	.LC4(%rip), %rdi
+	movl	$1, %eax
+	call	printf@PLT
+	jmp	.L10
+.L20:
 	nop
 .L10:
-	nop
+	movl	$1, %eax
 	leave
 	.cfi_def_cfa 7, 8
 	ret

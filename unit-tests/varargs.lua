@@ -3,6 +3,6 @@ function test(...)
    return x
 end
 
-print(test(1, 2, 3)[2])
+print(test(1, 2, 3)[3])
 --2
 

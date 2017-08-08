@@ -29,7 +29,7 @@ _f_lp:	movq	(%rbx), %rax
 	cmpq	%r15, %rsp
 	jz	_f_en
 	movq	%rax, (%r15)
-	addq	$8, %rbx
+	subq	$8, %rbx
 	subq	$8, %r15
 	jmp	_f_lp
 _f_en:	ret
@@ -37,8 +37,14 @@ _f_en:	ret
 	.global	_varargs
 	# %rax: final nargs, %r15: starting nargs
 _varargs:
+	pushq	%r12
 	pushq	%rax
 	pushq	%r14
+	subq	%r15, %rax
+	negq	%rax
+	leaq	16(%r12, %rax, 8), %r12
+	movq	8(%rsp), %rax
+	movq	%r12, 16(%rsp)
 	leaq	-6(%rax), %rbx
 _va_lp:	cmpq	%rax, %r15
 	jb	_va_en
@@ -67,20 +73,18 @@ _va_5:	movq	%r8, (%r12)
 	jmp	_va_cm
 _va_6:	movq	%r9, (%r12)
 	jmp	_va_cm
-_va_g:	movq	24(%rsp, %rbx, 8), %r14
+_va_g:	movq	32(%rsp, %rbx, 8), %r14
 	movq	%r14, (%r12)
 	inc	%rbx
-_va_cm:	addq	$8, %r12
+_va_cm:	subq	$8, %r12
 	inc	%rax
 	jmp	_va_lp
 _va_en:	popq	%r14
 	popq	%rax
 	movq	$33, (%r12)
+	popq	%r12
+	leaq	5(, %r12, 8), %r15
 	addq	$8, %r12
-	subq	%rax, %r15
-	xorq	$-1, %r15
-	leaq	-8(%r12, %r15, 8), %r15
-	leaq	5(, %r15, 8), %r15
 	ret
 	
 	.global	_nil_fill
@@ -190,6 +194,91 @@ _cp_f:	movq	$1, %rax
 _cp_t:	movq	$9, %rax
 	ret
 
+	.global	_gt
+	# %rax: arg1, %rbx: arg2
+_gt:
+	movq	%rax, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
+	jz	_comp_s_g
+	cmpq	%rax, %rbx
+	jb	_rs_gt
+	movq	$1, %rax
+	ret
+_rs_gt:	movq	$9, %rax
+	ret
+
+_comp_s_g:	
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
+	jnz	_gt_f
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movq	(%rax), %r15
+	cmpq	%r15, (%rbx)
+	jnz	_gt_f
+	addq	$8, %rax
+	addq	$8, %rbx
+_gt_lp:	xorq	%r15, %r15
+	mov	(%rbx), %r15b
+	cmp	(%rax), %r15b
+	jge	_gt_f
+	cmp	$0, %r15b
+	jz	_gt_t
+	cmpl	$0, (%rax)
+	jz	_gt_f
+	inc	%rax
+	inc	%rbx
+	jmp	_gt_lp
+_gt_f:	movq	$1, %rax
+	ret
+_gt_t:	movq	$9, %rax
+	ret
+
+	
+	.global	_lt
+	# %rax: arg1, %rbx: arg2
+_lt:
+	movq	%rax, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
+	jz	_comp_s_l
+	cmpq	%rax, %rbx
+	jg	_rs_lt
+	movq	$1, %rax
+	ret
+_rs_lt:	movq	$9, %rax
+	ret
+
+_comp_s_l:	
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
+	jnz	_lt_f
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movq	(%rax), %r15
+	cmpq	%r15, (%rbx)
+	jnz	_lt_f
+	addq	$8, %rax
+	addq	$8, %rbx
+_lt_lp:	xorq	%r15, %r15
+	mov	(%rbx), %r15b
+	cmp	(%rax), %r15b
+	jge	_lt_f
+	cmp	$0, %r15b
+	jz	_lt_t
+	cmpl	$0, (%rax)
+	jz	_lt_f
+	inc	%rax
+	inc	%rbx
+	jmp	_lt_lp
+_lt_f:	movq	$1, %rax
+	ret
+_lt_t:	movq	$9, %rax
+	ret
+
 	.global _not
 _not:
 	cmpq	$1, %rax
@@ -218,8 +307,7 @@ _ac_lp:	cmpq	$33, (%rbx)
 	subq	$8, %rbx
 	jmp	_ac_lp
 _ac_en:	movq	(%r12), %rax
-	leaq	(, %r15, 8), %rbx
-	movq	%rbx, (%rax)
+	movq	%r15, (%rax)
 	movq	$1, %rbx
 _lg_lp:	cmpq	%rbx, %r15
 	jb	_lg_en
@@ -244,6 +332,8 @@ _index:
 	movq	%rax, %r15
 	andq	$7, %r15
 	jz	_i_index
+	cmpq	$6, %r15
+	jz	_i_rev
 _ix_s:	movq	8(%rbx), %r15
 _ix_lp:	cmpq	$17, %r15
 	jz	_ix_nl
@@ -287,6 +377,20 @@ _i_miss:
 	popq	%rdi
 	popq	%rbx
 	ret
+_i_rev:
+	pushq	%rdi
+	sarq	$3, %rax
+	roundsd	$0, (%rax), %xmm0
+	movq	%xmm0, %rdi
+	cmpq	(%rax), %rdi
+	popq	%rdi
+	jz	_iv_rt
+	salq	$3, %rax
+	orq	%r15, %rax
+	jmp	_ix_s
+_iv_rt:	cvtsd2si (%rax), %rax
+	salq	$3, %rax
+	jmp	_i_index
 	
 	.global _new
 	# %rax: key, %rbx: table
@@ -295,7 +399,9 @@ _new:
 	movq	%rax, %r15
 	andq	$7, %r15
 	jz	_i_new
-	pushq	%rax
+	cmpq	$6, %r15
+	jz	_n_rev
+_nw_s:	pushq	%rax
 	call	_ix_s
 	cmpq	$17, (%rax)
 	jnz	_nw_rt
@@ -369,6 +475,21 @@ _mm_en:	movq	48(%rsp), %r8
 	popq	%rdx
 	jmp	_n_rt
 
+_n_rev:
+	pushq	%rdi
+	sarq	$3, %rax
+	roundsd	$0, (%rax), %xmm0
+	movq	%xmm0, %rdi
+	cmpq	(%rax), %rdi
+	popq	%rdi
+	jz	_nv_rt
+	salq	$3, %rax
+	orq	%r15, %rax
+	jmp	_nw_s
+_nv_rt:	cvtsd2si (%rax), %rax
+	salq	$3, %rax
+	jmp	_i_new
+
 	.global _check
 	# %rax: table
 _check:	
@@ -384,7 +505,7 @@ _ch_lp:	cmpq	$17, (%rax)
 	cmpq	%rax, %r15
 	jz	_ch_en
 	addq	$8, %rax
-	addq	$8, %rbx
+	inc	%rbx
 	jmp	_ch_lp
 _ch_en:	popq	%rax
 	movq	%rbx, (%rax)

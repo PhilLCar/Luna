@@ -43,6 +43,7 @@ function isOperator(str)
       str == "<" or
       str == ">" or
       str == "#" or
+      str == "%" or
       -- 2 char operators
       str == "~=" or
       str == ">=" or
@@ -60,7 +61,7 @@ function isOperator(str)
 end
 
 function isPunctuation(str)
-   return str == "=" or str == ","
+   return str == "=" or str == "," or str == ";"
 end
 
 function isDelimiter(str)
@@ -431,8 +432,8 @@ function scan(array, start, stop, indent)
    newarr = associate(newarr, false, false, indent, "^")
    -- Level 2 - Unary         : ~ - not #       [left-associative ]
    newarr = associate(newarr, true , true , indent)
-   -- Level 3 - Multiplicative: * /             [left-associative ]
-   newarr = associate(newarr, true , false, indent, "*", "/")
+   -- Level 3 - Multiplicative: * / %           [left-associative ]
+   newarr = associate(newarr, true , false, indent, "*", "/", "%")
    -- Level 4 - Additive      : + -             [left-associative ]
    newarr = associate(newarr, true , false, indent, "+", "-")
    -- Level 5 - Concatenation : ..              [right-associative]

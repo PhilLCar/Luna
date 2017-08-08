@@ -17,6 +17,13 @@ u_cont = { false , false , false , false , false , false , false , false  }
 c_size = 6
 c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 
+-- Double-precision registers (16)
+d_size = 12
+d_name = { "%xmm4" , "%xmm5" , "%xmm6" , "%xmm7" , "%xmm8" , "%xmm9" ,
+	   "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15" }
+d_cont = { false   , false   , false   , false   , false   , false   ,
+	   false   , false   , false   , false   , false   , false    }
+
 rsp = 0
 
 str_tbl = {}
@@ -76,41 +83,80 @@ outro =
 --------------------------------------------------------------------------------
 buf = false
 
+f_size  = 0
+
 v_stack = {}
 v_size  = 0
 
-r_stack = { true }
 r_size  = 1
 
 r_index = 1
 
 -- Register handling functions
 --------------------------------------------------------------------------------
-function available()
-   return not u_cont[((v_size - 1 + r_index) % u_size) + 1]
+function onstack()
+   return d_cont[(f_size % d_size) + 1]
 end
 
-function register()
+function available(double)
+   if double then
+      return not d_cont[(f_size % d_size) + 1]
+   else
+      return not u_cont[((v_size - 1 + r_index) % u_size) + 1]
+   end
+end
+
+function register(double)
    v_size = v_size + 1
-   u_cont[((v_size - 2 + r_index) % u_size) + 1] = true
-   v_stack[v_size] = true
-   return u_name[((v_size - 2 + r_index) % u_size) + 1]
+   if not double then
+      u_cont[((v_size - 2 + r_index) % u_size) + 1] = true
+      v_stack[v_size] = true
+      return u_name[((v_size - 2 + r_index) % u_size) + 1]
+   else
+      f_size = f_size + 1
+      -- Donne au %r son %xmm
+      u_cont[((v_size - 2 + r_index) % u_size) + 1] = ((f_size - 1) % d_size) + 1
+      -- Donne au %xmm son %r
+      d_cont[((f_size - 1) % d_size) + 1] = u_name[((v_size - 2 + r_index) % u_size) + 1]
+      return d_name[((f_size - 1) % d_size) + 1]
+   end
 end
 
 function current()
-   return u_name[((v_size - 2 + r_index) % u_size) + 1]
+   if v_stack[v_size] ~= nil then
+      return u_name[((v_size - 2 + r_index) % u_size) + 1]
+   else
+      return d_name[((f_size - 1) % d_size) + 1]
+   end
 end
 
-function future()
-   return u_name[((v_size - 1 + r_index) % u_size) + 1]
+function future(double)
+   if double then
+      return d_name[(f_size % d_size) + 1]
+   else
+      return u_name[((v_size - 1 + r_index) % u_size) + 1]
+   end
 end
 
 function release()
-   local tmp
+   local tmp = u_cont[((v_size - 2 + r_index) % u_size) + 1]
    u_cont[((v_size - 2 + r_index) % u_size) + 1] = false
-   if not v_stack[v_size] then
-      r_stack[r_size] = nil
+   if tonumber(tmp) then
+      d_cont[((f_size - 1) % d_size) + 1] = false
+      tmp = current()
+      f_size = f_size - 1
+   elseif not v_stack[v_size] then
       tmp = tostring(-8 * r_size) .. "(%rbp)"
+      if v_stack[v_size] == nil then
+	 for i, v in ipairs(d_cont) do
+	    if v == tmp then
+	       tmp = d_name[i]
+	       d_cont[i] = false
+	       f_size = f_size - 1
+	       break
+	    end
+	 end
+      end
       r_size = r_size - 1
    else
       tmp = u_name[((v_size - 2 + r_index) % u_size) + 1]
@@ -121,16 +167,20 @@ function release()
 end
 
 function replace()
+   local n = u_cont[((v_size - 1 + r_index) % u_size) + 1]
    local tmp = register()
    r_size = r_size + 1
-   v_stack[v_size - u_size] = false
-   r_stack[r_size] = false
-   return tmp
+   if tonumber(n) then
+      d_cont[n] = tostring(-8 * r_size) .. "(%rbp)"
+      return false
+   else
+      v_stack[v_size - u_size] = false
+      return tmp
+   end
 end
 
 function promote()
    v_stack[v_size] = true
-   r_stack[r_size] = nil
    r_size = r_size - 1
    return current()
 end
@@ -145,13 +195,55 @@ function align(reg)
 end
 
 ---------- EXTERNAL ----------
+function newdouble(value)
+   local l, d, r = str_tbl[tonumber(value)]
+   local ret = push(nil)
+   if tonumber(value) then
+      need_data = true
+      if not l then
+	 l = label("_DB")
+	 str_tbl[tonumber(value)] = l
+	 data = data .. l .. ":\n" ..
+	    "\t.double\t" .. value .. "\n"
+      end
+   end
+   if not available() then
+      r = replace()
+      ret = "#" .. tostring(-8 * r_size) .. "(%rbp)\t" .. tostring(u_cont[1]) .."\n"
+      if r then
+	 ret = ret .. "#\n\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      end
+      r = true
+   end
+   if not available(true) then
+      v_stack[v_size - f_size + 1] = false
+      ret = ret ..
+	 "\tmovsd\t" .. future(true) .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %r15\n" ..
+	 "\taddq\t$8, %r12\n" ..
+	 "\tmovq\t%r15, " .. onstack() .. "\n"
+   end
+   if r then
+      v_stack[v_size] = nil
+      v_size = v_size - 1
+   end
+   d = register(true)
+   if tonumber(value) then
+      ret = ret .. "\tmovsd\t" .. l .. "(%rip), " .. d .. "\n"
+   else
+      ret = ret .. "\tmovsd\t" .. value .. ", " .. d .. "\n"
+   end
+   return ret
+end
 
 function push(value)
    local ret, r = ""
    if buf then
       if not available() then
 	 r = replace()
-	 ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+	 if r then
+	    ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+	 end
       else
 	 r = register()
       end
@@ -165,7 +257,9 @@ function lea(value)
    local ret, r = push(nil)
    if not available() then
       r = replace()
-      ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      if r then
+	 ret = "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      end
    else
       r = register()
    end
@@ -179,9 +273,15 @@ function lock(value)
       tmp = tostring(-8 * r_size)
    end
    r_size = r_size + 1
-   r_stack[r_size] = true
    if isMem(value) then
       ret = "\tmovq\t" .. value .. ", %r15\n"
+      value = "%r15"
+   end
+   if isDouble(value) then
+      ret = ret ..
+	 "\tmovsd\t" .. value .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %r15\n" ..
+	 "\taddq\t$8, %r12\n"
       value = "%r15"
    end
    return ret .. "\tmovq\t" .. value .. ", " .. tmp .. "(%rbp)\n"
@@ -189,7 +289,6 @@ end
 
 function unlock()
    local tmp = ""
-   r_stack[r_size] = nil
    r_size = r_size - 1
    if r_size > 0 then
       tmp = tostring(-8 * r_size)
@@ -201,7 +300,9 @@ function use()
    local ret, r = push(nil)
    if not available() then
       r = replace()
-      ret = ret .. "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      if r then
+	 ret = ret .. "\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
+      end
    else
       r = register()
    end
@@ -219,15 +320,13 @@ function pop()
    end
 end
 
-function get(...)
-   
+function get() 
    if buf then
       return buf
-   end
-   if v_stack[v_size] then
-      return current()
-   else
+   elseif v_stack[v_size] == false then
       return tostring(-8 * r_size) .. "(%rbp)"
+   else
+      return current()
    end
 end
 
@@ -237,7 +336,14 @@ function isMem(reg)
       return false
    end
    return true
-end	 
+end
+
+function isDouble(reg)
+   if reg:find("xmm") then
+      return true
+   end
+   return false
+end
 
 ---------- FUNCTIONS ----------
 local _lab = 0
@@ -264,12 +370,7 @@ function prep(up)
    elseif dif < 0 then
       ret = "\taddq\t$" .. tostring(-8 * dif) .. ", %rsp\n"
       rsp = rsp + dif
-      end--[[
-   if up then
-      ret = "\tleaq\t" .. tostring(-8 * r_size + 8) .. "(%rbp), %rsp\n"
-   else
-      ret = "\tmovq\t(%rbp), %rsp\n"
-	 end]]
+   end
    return ret
 end
 
@@ -285,64 +386,75 @@ function num(op)
    return ret
 end
 
--- ATTENTION AU POP
-function arg1(op, tag)
-   local ret = ""
-   local v1 = pop()
-   local v2 = pop()
-   register()
-   if isMem(v1) and isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
-      v2 = current()
-   end
-   ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
-   return ret
-end
-
-function arg2(op, tag)
+function flt(op)
    local ret = ""
    local v1 = pop()
    local v2 = get()
-   if isMem(v1) and isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
-      v2 = current()
+   if not isDouble(v1) then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rax\n" ..
+	 "\tsarq\t$3, %rax\n"
+      v1 = "(%rax)"
    end
-   ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
+   if not isDouble(v2) then
+      pop()
+      if isDouble(v1) then
+	 ret = ret ..
+	    "\tmovsd\t" .. v1 .. ", %xmm0\n"
+	 v1 = "%xmm0"
+      end
+      ret = ret ..
+	 "\tmovq\t" .. v2 .. ", %rbx\n"  ..
+	 "\tsarq\t$3, %rbx\n" ..
+	 newdouble("(%rbx)")
+      v2 = get()
+   end
+   ret = ret ..
+      "\t" .. op .. "sd\t" .. v1 .. ", " .. v2 .. "\n"
    return ret
 end
 
--- div ET mod REQUIÈRE %r15 POUR FONCTIONNER!!!
-function div(op)
+function idiv(op)
    local ret = ""
    local v1 = pop()
    local v2 = get()
-   if u_cont[5] then
+   if u_cont[1] and v2 ~= "%rdx" then
       ret = "\tmovq\t%rdx, %r15\n"
+   end
+   if v1:sub(1, 1) == "$" then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rbx\n"
+      v1 = "%rbx"
    end
    ret = ret .. 
       "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
       "\tcdq\n" ..
       "\tidivq\t" .. v1 .. "\n" ..
-      "\tmovq\t" .. "%rax" .. ", " .. v2 .. "\n"      
-   if u_cont[5] then
+      "\tmovq\t%rax, " .. v2 .. "\n"      
+   if u_cont[1] and v2 ~= "%rdx" then
       ret = ret .. "\tmovq\t%r15, %rdx\n"
    end
    return ret
 end
 
-function mod(op)
+function imod(op)
    local ret = ""
    local v1 = pop()
    local v2 = get()
-   if u_cont[5] then
+   if u_cont[1] and v2 ~= "%rdx" then
       ret = "\tmovq\t%rdx, %r15\n"
+   end
+   if v1:sub(1, 1) == "$" then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rbx\n"
+      v1 = "%rbx"
    end
    ret = ret ..
       "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
       "\tcdq\n" ..
       "\tidivq\t" .. v1 .. "\n" ..
-      "\tmovq\t" .. "%rdx" .. ", " .. v2 .. "\n"      
-   if u_cont[5] then
+      "\tmovq\t%rdx, " .. v2 .. "\n"      
+   if u_cont[1] and v2 ~= "%rdx" then
       ret = ret .. "\tmovq\t%r15, %rdx\n"
    end
    return ret
@@ -355,7 +467,7 @@ function str(value)
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
-	 "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
+	 "\t.quad\t" .. (#value - 2) .. "\n" ..
 	 "\t.asciz\t" .. value .. "\n"
    end
    return r .. "\tleaq\t" .. l .. "(%rip), %rax\n" ..
@@ -384,21 +496,30 @@ function eq()
    return ret
 end
 
+function leq()
+   local ret
+   local v1 = pop()
+   local v2 = pop()
+   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
+      "\tmovq\t" .. v2 .. ", %rbx\n" ..
+      prep(true) ..
+      "\tcall\t_compare\n" ..
+      push("%rax")
+   return ret
+end
+
 function len()
    local ret
    local v1, lab = pop(), label()
-   ret = prep(true)
-   if isMem(v1) then
-      ret = ret .. "\tmovq\t" .. v1 .. ", %rax\n"
-      v1 = "%rax"
-   end
-   ret = ret ..
-      "\tsarq\t$3, " .. v1 .. "\n" ..
-      "\tcmpq\t$65, (" .. v1 .. ")\n" ..
+   ret = prep(true) ..
+      "\tmovq\t" .. v1 .. ", %rax\n" ..
+      "\tsarq\t$3, %rax\n" ..
+      "\tcmpq\t$65, (%rax)\n" ..
       "\tjnz\t" .. lab .. "\n" ..
       "\tcall\t_check\n" ..
       lab .. ":" ..
-      push("(" .. v1 .. ")")
+      "\tcvtsi2sd\t(%rax), %xmm0\n" ..
+      push("%xmm0")
    return ret
 end
 
@@ -409,7 +530,7 @@ function encl(value)
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
-	 "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
+	 "\t.quad\t" .. (#value - 2) .. "\n" ..
 	 "\t.asciz\t" .. value .. "\n"
    end
    return r ..
@@ -427,7 +548,7 @@ function clo(sets, value)
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
-	 "\t.quad\t" .. (#value - 2) * 8 .. "\n" ..
+	 "\t.quad\t" .. (#value - 2) .. "\n" ..
 	 "\t.asciz\t" .. value .. "\n"
    end
    if sets then
@@ -454,7 +575,7 @@ function index(address, global)
 	 str_tbl[global] = l
 	 need_data = true
 	 data = data .. l .. ":\n" ..
-	    "\t.quad\t" .. (#global - 2) * 8 .. "\n" ..
+	    "\t.quad\t" .. (#global - 2) .. "\n" ..
 	    "\t.asciz\t" .. global .. "\n"
       end
       ret = ret ..
@@ -462,7 +583,14 @@ function index(address, global)
 	 "\tleaq\t2(, %rax, 8), %rax\n"
       v = "%r13"
    else
-      ret = "\tmovq\t" .. pop() .. ", %rax\n"
+      local vd = pop()
+      if isDouble(vd) then
+	 ret = "\tmovq\t" .. vd .. ", (%r12)\n" ..
+	    "\tleaq\t6(, %r12, 8), %rax\n" ..
+	    "\taddq\t$8, %r12\n"
+      else
+	 ret = ret .. "\tmovq\t" .. vd .. ", %rax\n"
+      end
       v = pop()
    end
    ret = ret .. 
@@ -484,11 +612,42 @@ function index(address, global)
    return ret
 end
 
+function ifenv(text, i, p)
+   local ret, tmp1, tmp2 = "_IF" .. p .. ":\n"
+   local tag, jlab, v
+   tmp1, i = _translate(text, i, false)
+   v = pop()
+   tmp2, i, tag = _translate(text, i, false)
+   if tag == "else" then
+      jlab = "_EL" .. p
+   else
+      jlab = "_FI" .. p
+   end
+   if v:sub(1, 1) == "$" then
+      tmp = tmp .. "\tmovq\t" .. pop() .. ", %rax\n"
+      v = "%rax"
+   end
+   ret = ret .. tmp1 .. "_TH" .. p .. ":\n" ..
+      "\tcmpq\t$1, " .. v .. "\n" ..
+      "\tjz\t" .. jlab .. "\n" ..
+      "\tcmpq\t$17, " .. v .. "\n" ..
+      "\tjz\t" .. jlab .. "\n" ..
+      tmp2
+   if tag == "else" then
+      tmp1, i = _translate(text, i, false)
+      ret = ret ..
+	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
+	 tmp1 .. "_FI" .. p .. ":\n"
+   else
+      ret = ret .. jlab .. ":\n"
+   end
+   return ret, i
+end
+
 function init(text, i, p)
    local ret = push(nil)
    local rs, vs
    local tmp
-   local mrsp = rsp
    
    ret = ret ..
       "\tmovq\t$0, (%r12)\n" ..
@@ -508,10 +667,7 @@ function init(text, i, p)
       "\tmovq\t%rbp, %rsp\n"
 
    rsp = 0
-
-   for j = rs + 1, r_size do
-      r_stack[j] = nil
-   end
+   
    r_size = rs
    for j = vs + 1, v_size do
       v_stack[j] = nil
@@ -547,7 +703,6 @@ function build(nargs, varargs, fname)
    while p <= nargs and p <= 6 do
       ret = ret .. "\tmovq\t" .. c_name[p] .. ", " .. -8 * r_size .. "(%rbp)\n"
       r_size = r_size + 1
-      r_stack[r_size] = true
       p = p + 1
    end
    if nargs > 6 then
@@ -616,8 +771,14 @@ function _translate(text, i, sets)
       end
       --------------------
       if instr == "num" then
-	 value = 8 * tonumber(value)
-	 asm = asm .. push("$" .. tostring(value))
+	 asm = asm .. newdouble(value)
+
+      elseif instr == "neg" then
+	 tmp = get()
+	 asm = asm ..
+	    "\tmovsd\t" .. tmp .. ", (%r12)\n" ..
+	    "\txorpd\t" .. tmp .. ", " .. tmp .. "\n" ..
+	    "\tsubsd\t(%r12), " .. tmp .. "\n"
 	 
       elseif instr == "spec" then
 	 if value == "nil" then
@@ -673,27 +834,25 @@ function _translate(text, i, sets)
 	 vname = value
 	 --asm = asm .. var(value)
 
-      elseif instr == "add" then
-	 asm = asm .. num("addq")
-
-      elseif instr == "sub" then
-	 asm = asm .. num("subq")
-
-      elseif instr == "mul" then
-	 asm = asm .. num("imulq") ..
-	    "\tsarq\t$3, " .. get() .. "\n"
-
-      elseif instr == "div" then
-	 asm = asm .. div()
+      elseif instr == "add" or
+	 instr == "sub" or
+	 instr == "mul" or
+	 instr == "div"
+      then
+	 asm = asm .. flt(instr)
 
       elseif instr == "mod" then
-	 asm = asm .. mod()
+	 --tmp
+	 asm = asm .. imod()
 
       elseif instr == "not" then
 	 asm = asm .. nt()
 	 
       elseif instr == "eq" then
 	 asm = asm .. eq()
+
+      elseif instr == "leq" then
+	 asm = asm .. leq()
 
       elseif instr == "len" then
 	 asm = asm .. len()
@@ -732,6 +891,10 @@ function _translate(text, i, sets)
 	    "\tleaq\t7(, %r12, 8), " .. current() .. "\n" ..
 	    "\taddq\t$16, %r12\n"
 
+      elseif instr == "if" then
+	 tmp, i = ifenv(text, i, value)
+	 asm = asm .. tmp
+
       elseif instr == "fct" then
 	 tmp, i = fct(text, i, value)
 	 asm = asm .. tmp
@@ -740,10 +903,7 @@ function _translate(text, i, sets)
 	 return asm, i
 
       elseif instr == "free" then
-	 for j = 1, tonumber(value) do
-	    r_stack[r_size] = nil
-	    r_size = r_size - 1
-	 end
+	 r_size = r_size - tonumber(value)
 
       elseif
 	 instr == "stack" or
@@ -753,11 +913,19 @@ function _translate(text, i, sets)
       then
 	 return asm, i, instr
 
+      elseif
+         instr == "then" or
+         instr == "else" or
+	 instr == "iend"
+      then
+	 return asm, i, instr
+
       elseif instr == "tac" then
 	 return asm, i, struct
 
       elseif instr == "fend" then
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
+	    asm = asm .. "\tmovq\t$17, %rax\n"
 	    if rsp ~= 0 then
 	       asm = asm .. "\tleave\n\tret\n\n"
 	    else
@@ -801,10 +969,11 @@ function fct(text, i, value)
    
    align("%rdx")
    r_size  = 1
-   r_stack = { true }
    v_size  = 0
+   f_size  = 0
    v_stack = {}
    u_cont  = { false, false, false, false, false, false, false, false }
+   d_cont  = { false, false, false, false, false, false, false, false, false, false, false, false }
    rsp = 0
 
    ret = ret .. build(val, ins == "nargs", name)
@@ -842,7 +1011,7 @@ function develop()
       l4 .. ":\tmovq\t(%rbx), %r9\n" ..
       "\tjmp\t" .. la .. "\n" ..
       lg .. ":\tpushq\t(%rbx)\n" ..
-      la .. ":\taddq\t$8, %rbx\n" ..
+      la .. ":\tsubq\t$8, %rbx\n" ..
       "\tinc\t%r15\n" ..
       "\tjmp\t" .. lm .. "\n" .. le .. ":"
    return ret
@@ -850,15 +1019,11 @@ end
 
 ---------- MEMORY SETTING ----------
 function params(text, i, p, call)
-   if not call then
-      -- Closure env
-      r_size = r_size + 1
-   end
-   ----
    local rs, rs2 = r_size
    local asm, tmp, typ = ""
    local pp = p - 6
    local func, alg
+   local adjust
    if pp < 0 then pp = 0 end
    -- Protect
    ------------------------------
@@ -873,12 +1038,15 @@ function params(text, i, p, call)
    -- Set the stack pointer
    ------------------------------
    if r_size > 1 then
-      typ = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+      adjust = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
    else
-      typ = "\tleaq\t(%rbp), %rsp\n"
+      adjust = "\tleaq\t(%rbp), %rsp\n"
    end
    if pp > 1 then
-      r_size = r_size + pp - 1
+      r_size = r_size + pp
+      if call then
+	 r_size = r_size - 1
+      end
    end
    alg = r_index
    align("%rdi")
@@ -888,31 +1056,48 @@ function params(text, i, p, call)
       tmp, i, func = _translate(text, i, false)
       asm = asm .. tmp
    end
-   if rsp ~= rs2 - 1 then
-      asm = asm .. typ
-      rsp = rs2 - 1
-   end
    typ, i = readline(text, i)
-   if typ == "call" --[[TMP]] or typ == "tcall" then
+   if typ == "call" then
+      if rsp ~= rs2 - 1 then
+	 asm = asm .. adjust
+	 rsp = rs2 - 1
+      end
+      if not call then
+	 asm = asm .. "\tpushq\t%r14\n"
+      end
+      local t
       for j = 1, pp do
-	 asm = asm .. "\tpushq\t" .. pop() .. "\n"
+	 t = pop()
+	 if isDouble(t) then
+	    asm = asm ..
+	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	       "\tleaq\t6(, %r12, 8), %r15\n" ..
+	       "\taddq\t$8, %r12\n"
+	    t = "%r15"
+	 end
+	 asm = asm .. "\tpushq\t" .. t .. "\n"
       end
       for j = 1, p do
 	 if j > 6 then break end
-	 local t = pop()
+	 t = pop()
 	 if t:sub(1, 1) ~= "%" or t == "%rax" then
 	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
 	 end
+	 if isDouble(t) then
+	    asm = asm ..
+	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	       "\tleaq\t6(, %r12, 8), " .. future() .. "\n" ..
+	       "\taddq\t$8, %r12\n"
+	 end
       end
-      asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
+      if not call then
+	 asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
+      end
       if func then asm = asm .. develop() end
       -- Restore
       ------------------------------
       tmp = ""
-      for j = r_size, rs2 + 1, -1 do
-	 r_stack[r_size] = nil
-	 r_size = r_size - 1
-      end
+      r_size = rs2
       r_index = alg
       for j = r_size - 1, rs, -1 do
 	 tmp = tmp .. unlock()
@@ -927,9 +1112,10 @@ function params(text, i, p, call)
       ------------------------------
       if call then
 	 asm = asm ..
+	    "\tsubq\t$16, %rsp\n" ..
+	    "\tandq\t$-16, %rsp\n" .. 
 	    "\tcall\t" .. call .. "\n"
       else
-	 asm = "\tpushq\t%r14\n" .. asm
 	 local r = pop()
 	 if isMem(r) then
 	    asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
@@ -940,10 +1126,69 @@ function params(text, i, p, call)
 	    "\tmovq\t8(%rax), %r14\n" ..
 	    "\tcallq\t*(" .. r .. ")\n" ..
 	    "\tpopq\t%r14\n"
-	 r_size = r_size - 1
       end
       return asm .. tmp.. push("%rax"), i
    elseif typ == "tcall" then
+      for j = pp, 1, -1 do
+	 tmp = pop()
+	 if isMem(tmp) then
+	    asm = asm .. "\tmovq\t" .. tmp .. ", %rax\n"
+	    tmp = "%rax"
+	 elseif isDouble(tmp) then
+	    asm = asm ..
+	       "\tmovsd\t" .. tmp .. ", (%r12)\n" ..
+	       "\tleaq\t6(, %r12, 8), %rax\n" ..
+	       "\taddq\t$8, %r12\n"
+	    tmp = "%rax"
+	 end
+	 asm = asm .. "\tmovq\t" .. tmp .. ", " .. j * 8 + 8 ..  "(%rbp)\n"
+      end
+      for j = 1, p do
+	 if j > 6 then break end
+	 t = pop()
+	 if t:sub(1, 1) ~= "%" or t == "%rax" then
+	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
+	 end
+	 if isDouble(t) then
+	    asm = asm ..
+	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	       "\tleaq\t6(, %r12, 8), " .. future() .. "\n" ..
+	       "\taddq\t$8, %r12\n"
+	 end
+      end
+      if not call then
+	 asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
+      end
+      if func then asm = asm .. develop() end
+      -- Restore
+      ------------------------------
+      tmp = ""
+      r_size = rs2
+      r_index = alg
+      for j = r_size - 1, rs, -1 do
+	 tmp = tmp .. unlock()
+      end
+      rsp = r_size - 1
+      -- Terminal call
+      ------------------------------
+      if call then
+	 asm = asm ..
+	    "\tleave\n" ..
+	    "\tjmp\t" .. call .. "\n"
+      else
+	 local r = pop()
+	 if isMem(r) then
+	    asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
+	    r = "%rax"
+	 end
+	 asm = asm ..
+	    "\tsarq\t$3, %rax\n" ..
+	    "\tmovq\t8(%rax), %r14\n" ..
+	    "\tleave\n" ..
+	    "\tjmpq\t*(" .. r .. ")\n"
+	 r_size = r_size - 1
+      end
+      return asm .. tmp.. push("%rax"), i
    end
 end
 
@@ -971,9 +1216,6 @@ function chg(text, i, p)
 	 "\tmovq\t$" .. tostring(-p) .. ", %rbx\n" ..
 	 prep(true) ..
 	 "\tcall\t_transfer\n"
-   end
-   for j = rs + 1, r_size do
-      r_stack[j] = nil
    end
    r_size = rs
    buf = nil
@@ -1010,12 +1252,13 @@ function set(text, i, p)
       else
 	 local l1, l2 = label(), label()
 	 asm = asm .. prep(true) ..
+	    --"\taddq\t$16, %rsp\n" ..
 	    "\tcmp\t$0, %rbx\n" ..
 	    "\tjz\t" .. l1 .. "\n" ..
 	    l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
 	    "\tjz\t" .. l1 .. "\n" ..
 	    "\tpushq\t(%rbx)\n" ..
-	    "\taddq\t$8, %rbx\n" ..
+	    "\tsubq\t$8, %rbx\n" ..
 	    "\tjmp\t" .. l2 .. "\n" ..
 	    l1 .. ":\tpushq\t$33\n"
       end
@@ -1028,35 +1271,41 @@ end
 
 function ret(text, i, p)
    local asm, tmp = ""
-   local r
+   local r, base
+   local struct
+   ---- CANNOT RETURN MEMORY, WILL HAVE TO USE STACK
    tmp, i = _translate(text, i, false)
-   asm = asm .. tmp .. "\tmovq\t" .. pop() .. ", %rax\n"
+   asm = tmp .. lock(pop())
+   base = r_size
    for j = 2, p do
-      tmp, i = _translate(text, i, false)
-      asm = asm .. tmp
-      r = pop()
-      if j == 2 then
-	 tmp = "(%r12)"
-      else
-	 tmp = tostring(8 * (j - 2)) .. "(%r12)"
-      end
-      if isMem(r) then
-	 asm = asm ..
-	    "\tmovq\t" .. r .. ", %rbx\n" ..
-	    "\tmovq\t%rbx, " .. tmp .. "\n"
-      else
-	 asm = asm ..
-	    "\tmovq\t" .. r .. ", " .. tmp .. "\n"
-      end
+      tmp, i, struct = _translate(text, i, false)
+      asm = asm .. tmp .. lock(pop())
    end
    if p > 1 then
+      local l1, l2 = label(), label()
+      asm = asm .. prep(true)
+      if struct then
+	 asm = asm ..
+	    "\tcmp\t$0, %rbx\n" ..
+	    "\tjz\t" .. l1 .. "\n" ..
+	    l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
+	    "\tjz\t" .. l1 .. "\n" ..
+	    "\tpushq\t(%rbx)\n" ..
+	    "\tsubq\t$8, %rbx\n" ..
+	    "\tjmp\t" .. l2 .. "\n" ..
+	    l1 .. ":\tpushq\t$33\n"
+      else
+	 asm = asm .. "\tpushq\t$33\n"
+      end
+      r_size = base
       asm = asm ..
-	 "\tmovq\t$33, " .. 8 * (p - 1) .. "(%r12)\n" ..
-	 "\tmovq\t%r12, %rbx\n" ..
-	 "\taddq\t$" .. 8 * p .. ", %r12\n"
+	 "\tleaq\t" .. pop() .. ", %rbx\n" ..
+	 "\tmovq\t" .. pop() .. ", %rax\n"
    else
+      r_size = base - 1
       asm = asm ..
-	 "\txorq\t%rbx, %rbx\n"
+	 "\txorq\t%rbx, %rbx\n" ..
+	 "\tmovq\t" .. pop() .. ", %rax\n"
    end
    tmp, i = _translate(text, i, false)
    if rsp ~= 0 then

@@ -11,7 +11,6 @@ ops = {}
 ops["+"]      = "add"
 ops["-"]      = "sub"
 ops["%"]      = "mod"
-ops["--"]     = "neg"
 ops["*"]      = "mul"
 ops["/"]      = "div"
 ops["^"]      = "exp"
@@ -197,13 +196,20 @@ function translate(expr, fname, flvl, def)
    local ret, operation = "", ""
    local cnt = 1
    local trans, nval
+   local last, func = true
    
    while tmp do
       if ops[tmp] then
-	 operation = ops[tmp]
+	 if last and tmp == "-" then
+	    operation = "neg"
+	 else
+	    operation = ops[tmp]
+	 end
 	 tmp, t = nextexpr(expr, t)
       else
+	 last = false
 	 if tmp == "," then
+	    last = true
 	    cnt = cnt + 1
 	    ret = ret .. operation .. "tac\n"
 	    operation = ""
@@ -229,6 +235,7 @@ function translate(expr, fname, flvl, def)
 	       ret = ret .. "brk\n"
 	    else
 	       ret = ret .. access(tmp, flvl, def)
+	       func = tmp
 	    end
 	 end
 	 
@@ -242,7 +249,7 @@ function translate(expr, fname, flvl, def)
 		  trans, nval = translate(tmp, fname, flvl, false)
 	       end
 	       if nval > 0 then trans = trans .. "tac\n" end
-	       if fname then
+	       if fname == func then
 		  ret = ret .. "params\t" .. nval .. "\n" ..
 		     trans .. "tcall\n"
 	       else
@@ -254,6 +261,7 @@ function translate(expr, fname, flvl, def)
 	    end
 	       tmp, t = nextexpr(expr, t)
 	 end
+	 fname = nil
       end
    end
    ret = ret .. operation
@@ -286,6 +294,7 @@ function evaluate(str, i, fname, flvl, ...)
       -- This makes sure it can be accessed properly
       if tmp == "function" then
 	 if eq then
+	    globals[expr[c - eq]] = true
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, expr[c - eq])
 	 else
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i)
@@ -359,6 +368,16 @@ function evaluate(str, i, fname, flvl, ...)
    return ret .. tmp .. "stack\n", i
 end
 
+function trim(code)
+   local tmp = "chg\t0\nplace\n"
+   test(tmp, code:sub(1, #tmp))
+   code = code:sub(#tmp + 1, #code)
+   tmp = "tac\nstack\n"
+   test(tmp, code:sub(#code - #tmp + 1, #code))
+   code = code:sub(1, #code - #tmp)
+   return code
+end
+
 function ifscope(str, i, fname, flvl)
    ifct = ifct + 1
    
@@ -368,6 +387,7 @@ function ifscope(str, i, fname, flvl)
    ret = "if\t" .. tostring(ifct) .. "\n"
 
    tmp, i = evaluate(str, i, fname, flvl)
+   tmp = trim(tmp)
    ret = ret .. tmp
 
    tmp, i = nextexpr(str, i)

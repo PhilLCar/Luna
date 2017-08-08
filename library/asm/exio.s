@@ -16,7 +16,6 @@ print_ret:
 	ret
 
 #print lua choisi quelle fonction utiliser en fonction du type
-
 print_lua:
 	pushf
 	push	%rax
