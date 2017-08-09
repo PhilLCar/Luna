@@ -90,7 +90,7 @@ cstr:
 .LC3:
 	.string	"nil"
 .LC4:
-	.string	"%.20g\n"
+	.string	"%.16g\n"
 	.text
 	.globl	print
 	.type	print, @function

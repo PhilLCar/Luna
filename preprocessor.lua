@@ -176,6 +176,24 @@ function nexttoken(str, i)
       
    elseif isOperator(s) or isDelimiter(s) or isPunctuation(s) then
       return s, i + 1
+
+   elseif tonumber(s) then
+      while
+	 not isWhitespace(s) and
+	 (not isOperator(s) or s == ".") and
+	 not isDelimiter(s) and
+	 not isPunctuation(s) and
+	 s ~= "\n"
+      do
+	 ret = ret .. s
+	 i = i + 1
+	 chnum = chnum + 1
+	 if i > #str then
+	    return ret, i
+	 end
+	 s = str:sub(i, i)
+      end
+      return ret, i
    end
 
    -- ***Regular case***

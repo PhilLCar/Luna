@@ -42,7 +42,7 @@ _varargs:
 	pushq	%r14
 	subq	%r15, %rax
 	negq	%rax
-	leaq	16(%r12, %rax, 8), %r12
+	leaq	8(%r12, %rax, 8), %r12
 	movq	8(%rsp), %rax
 	movq	%r12, 16(%rsp)
 	leaq	-6(%rax), %rbx
@@ -380,8 +380,8 @@ _i_miss:
 _i_rev:
 	pushq	%rdi
 	sarq	$3, %rax
-	roundsd	$0, (%rax), %xmm0
-	movq	%xmm0, %rdi
+	roundsd	$0, (%rax), %xmm3
+	movq	%xmm3, %rdi
 	cmpq	(%rax), %rdi
 	popq	%rdi
 	jz	_iv_rt
@@ -478,8 +478,8 @@ _mm_en:	movq	48(%rsp), %r8
 _n_rev:
 	pushq	%rdi
 	sarq	$3, %rax
-	roundsd	$0, (%rax), %xmm0
-	movq	%xmm0, %rdi
+	roundsd	$0, (%rax), %xmm3
+	movq	%xmm3, %rdi
 	cmpq	(%rax), %rdi
 	popq	%rdi
 	jz	_nv_rt

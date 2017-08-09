@@ -41,7 +41,7 @@ int print(long i) {
   case 6:
     c = *(double*) val;
     //printf("%d\n", (int)c);
-    printf("%.20g\n", c);
+    printf("%.16g\n", c);
     break;
   }
   return 1;

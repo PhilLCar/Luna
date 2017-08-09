@@ -519,7 +519,7 @@ function len()
       "\tcall\t_check\n" ..
       lab .. ":" ..
       "\tcvtsi2sd\t(%rax), %xmm0\n" ..
-      push("%xmm0")
+      newdouble("%xmm0")
    return ret
 end
 
@@ -615,8 +615,10 @@ end
 function ifenv(text, i, p)
    local ret, tmp1, tmp2 = "_IF" .. p .. ":\n"
    local tag, jlab, v
+   local vs, rs
    tmp1, i = _translate(text, i, false)
    v = pop()
+   --vs, rs = v_size, r_size
    tmp2, i, tag = _translate(text, i, false)
    if tag == "else" then
       jlab = "_EL" .. p
@@ -624,7 +626,7 @@ function ifenv(text, i, p)
       jlab = "_FI" .. p
    end
    if v:sub(1, 1) == "$" then
-      tmp = tmp .. "\tmovq\t" .. pop() .. ", %rax\n"
+      tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n"
       v = "%rax"
    end
    ret = ret .. tmp1 .. "_TH" .. p .. ":\n" ..
@@ -634,6 +636,7 @@ function ifenv(text, i, p)
       "\tjz\t" .. jlab .. "\n" ..
       tmp2
    if tag == "else" then
+      --v_size, r_size = vs, rs
       tmp1, i = _translate(text, i, false)
       ret = ret ..
 	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
@@ -771,7 +774,7 @@ function _translate(text, i, sets)
       end
       --------------------
       if instr == "num" then
-	 asm = asm .. newdouble(value)
+	 asm = asm .. newdouble(tostring(tonumber(value)))
 
       elseif instr == "neg" then
 	 tmp = get()
@@ -810,8 +813,8 @@ function _translate(text, i, sets)
 	    asm = asm .. push("%rax") ..
 	       "\tmovq\t" .. tmp .. "(%rbp), %rax\n" ..
 	       "\tsarq\t$3, %rax\n" ..
-	       "\tleaq\t8(%rax), %rbx\n" ..
-	       "\tmovq\t(%rax), %rax\n" 
+	       "\tleaq\t-8(%rax), %rbx\n" ..
+	       "\tmovq\t(%rax), %rax\n"
 	 else
 	    asm = asm .. push(tmp .. "(%rbp)")
 	 end
@@ -1057,6 +1060,7 @@ function params(text, i, p, call)
       asm = asm .. tmp
    end
    typ, i = readline(text, i)
+   ------------------------------ CALL
    if typ == "call" then
       if rsp ~= rs2 - 1 then
 	 asm = asm .. adjust
@@ -1128,20 +1132,22 @@ function params(text, i, p, call)
 	    "\tpopq\t%r14\n"
       end
       return asm .. tmp.. push("%rax"), i
+      ------------------------------ TCALL
    elseif typ == "tcall" then
+      local t
       for j = pp, 1, -1 do
-	 tmp = pop()
-	 if isMem(tmp) then
-	    asm = asm .. "\tmovq\t" .. tmp .. ", %rax\n"
-	    tmp = "%rax"
-	 elseif isDouble(tmp) then
+	 t = pop()
+	 if isMem(t) then
+	    asm = asm .. "\tmovq\t" .. t.. ", %rax\n"
+	    t = "%rax"
+	 elseif isDouble(t) then
 	    asm = asm ..
-	       "\tmovsd\t" .. tmp .. ", (%r12)\n" ..
+	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
 	       "\tleaq\t6(, %r12, 8), %rax\n" ..
 	       "\taddq\t$8, %r12\n"
-	    tmp = "%rax"
+	    t = "%rax"
 	 end
-	 asm = asm .. "\tmovq\t" .. tmp .. ", " .. j * 8 + 8 ..  "(%rbp)\n"
+	 asm = asm .. "\tmovq\t" .. t .. ", " .. j * 8 + 8 ..  "(%rbp)\n"
       end
       for j = 1, p do
 	 if j > 6 then break end
