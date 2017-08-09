@@ -209,7 +209,7 @@ function newdouble(value)
    end
    if not available() then
       r = replace()
-      ret = "#" .. tostring(-8 * r_size) .. "(%rbp)\t" .. tostring(u_cont[1]) .."\n"
+      --ret = "#" .. tostring(-8 * r_size) .. "(%rbp)\t" .. tostring(u_cont[1]) .."\n"
       if r then
 	 ret = ret .. "#\n\tmovq\t" .. r .. ", " .. tostring(-8 * r_size) .. "(%rbp)\n"
       end
@@ -488,9 +488,33 @@ function eq()
    local ret
    local v1 = pop()
    local v2 = pop()
-   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
-      "\tmovq\t" .. v2 .. ", %rbx\n" ..
-      prep(true) ..
+   if isDouble(v1) then
+      if isDouble(v2) then
+	 ret =
+	    "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
+	    "\tmovsd\t" .. v2 .. ", 8(%r12)\n" ..
+	    "\tleaq\t6(, %r12, 8), %rax\n" ..
+	    "\tleaq\t70(, %r12, 8), %rbx\n" ..
+	    "\taddq\t$16, %r12\n"
+      else
+	 ret =
+	    "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
+	    "\tmovq\t" .. v2 .. ", %rbx\n" ..
+	    "\tleaq\t6(, %r12, 8), %rax\n" ..
+	    "\taddq\t$8, %r12\n"
+      end
+   elseif isDouble(v2) then
+      ret =
+	 "\tmovq\t" .. v1 .. ", %rax\n" ..
+	 "\tmovsd\t" .. v2 .. "\t, (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rbx\n" ..
+	 "\taddq\t$8, %r12\n"
+   else
+      ret =
+	 "\tmovq\t" .. v1 .. ", %rax\n" ..
+	 "\tmovq\t" .. v2 .. ", %rbx\n"
+   end
+   ret = ret .. prep(true) ..
       "\tcall\t_compare\n" ..
       push("%rax")
    return ret
@@ -1279,6 +1303,7 @@ function ret(text, i, p)
    local asm, tmp = ""
    local r, base
    local struct
+   local rs, vs = r_size, v_size
    ---- CANNOT RETURN MEMORY, WILL HAVE TO USE STACK
    tmp, i = _translate(text, i, false)
    asm = tmp .. lock(pop())
@@ -1319,6 +1344,7 @@ function ret(text, i, p)
    else
       asm = asm .. "\tpopq\t%rbp\n\tret\n"
    end
+   r_size, v_size = rs, vs
    return asm, i
 end
 

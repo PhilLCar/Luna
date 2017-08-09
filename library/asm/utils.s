@@ -159,6 +159,8 @@ _compare:
 	andq	$7, %r15
 	cmpq	$2, %r15
 	jz	_comp_string
+	cmpq	$6, %r15
+	jz	_comp_double
 	cmpq	%rax, %rbx
 	jz	_res_t
 	movq	$1, %rax
@@ -193,6 +195,18 @@ _cp_f:	movq	$1, %rax
 	ret
 _cp_t:	movq	$9, %rax
 	ret
+
+_comp_double:
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$6, %r15
+	jnz	_cp_f
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movq	(%rax), %r15
+	cmpq	%r15, (%rbx)
+	jnz	_cp_f
+	jmp	_cp_t
 
 	.global	_gt
 	# %rax: arg1, %rbx: arg2
