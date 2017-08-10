@@ -4,6 +4,6 @@ if true then
 else
    x = -3
 end
-_print
+print(x)
 --3
 

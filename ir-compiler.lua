@@ -194,7 +194,8 @@ function align(reg)
    end
 end
 
----------- EXTERNAL ----------
+-- Stack managment functions
+--------------------------------------------------------------------------------
 function newdouble(value)
    local l, d, r = str_tbl[tonumber(value)]
    local ret = push(nil)
@@ -345,18 +346,6 @@ function isDouble(reg)
    return false
 end
 
----------- FUNCTIONS ----------
-local _lab = 0
-function label(...)
-   local ret = {...}
-   ret = ret[1]
-   _lab = _lab + 1
-   if ret then
-      return ret .. _lab
-   end
-   return "_LU" .. _lab
-end
-
 function prep(up)
    local ret, dif = ""
    if up then
@@ -374,16 +363,17 @@ function prep(up)
    return ret
 end
 
-function num(op)
-   local ret = ""
-   local v1 = pop()
-   local v2 = get()
-   if isMem(v1) and isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
-      v2 = current()
+-- Code generation function
+--------------------------------------------------------------------------------
+local _lab = 0
+function label(...)
+   local ret = {...}
+   ret = ret[1]
+   _lab = _lab + 1
+   if ret then
+      return ret .. _lab
    end
-   ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
-   return ret
+   return "_LU" .. _lab
 end
 
 function flt(op)
@@ -414,48 +404,108 @@ function flt(op)
    return ret
 end
 
-function idiv(op)
-   local ret = ""
-   local v1 = pop()
-   local v2 = get()
-   if u_cont[1] and v2 ~= "%rdx" then
-      ret = "\tmovq\t%rdx, %r15\n"
-   end
-   if v1:sub(1, 1) == "$" then
+function pow(instr)
+   local ret
+   local v1, v2 = pop(), pop()
+   if not isDouble(v1) then
       ret = ret ..
-	 "\tmovq\t" .. v1 .. ", %rbx\n"
-      v1 = "%rbx"
+	 "\tmovq\t" .. v1 .. ", %rax\n" ..
+	 "\tsarq\t$3, %rax\n"
+      v1 = "(%rax)"
    end
-   ret = ret .. 
-      "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
-      "\tcdq\n" ..
-      "\tidivq\t" .. v1 .. "\n" ..
-      "\tmovq\t%rax, " .. v2 .. "\n"      
-   if u_cont[1] and v2 ~= "%rdx" then
-      ret = ret .. "\tmovq\t%r15, %rdx\n"
+   if not isDouble(v2) then
+      ret = ret ..
+	 "\tmovq\t" .. v2 .. ", %rbx\n" ..
+	 "\tsarq\t$3, %rbx\n"
+      v2 = "(%rbx)"
    end
+   ret = ret ..
+      "\tmovq\t" .. v1 .. ", %st\n" ..
+      "\tmovq\t" .. v2 .. ", %st(1)\n" ..
+      "\tfprem\n" ..
+      newdouble("%st")
+end
+
+function mod(intsr)
+   local ret = ""
+   local v1, v2 = pop(), pop()
+   if not isDouble(v1) then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rax\n" ..
+	 "\tsarq\t$3, %rax\n"
+      v1 = "(%rax)"
+   end
+   if not isDouble(v2) then
+      ret = ret ..
+	 "\tmovq\t" .. v2 .. ", %rbx\n" ..
+	 "\tsarq\t$3, %rbx\n"
+      v2 = "(%rbx)"
+   end
+   ret = ret ..
+      "\tmovsd\t" .. v1 .. ", %xmm1\n" ..
+      "\tmovsd\t" .. v2 .. ", %xmm0\n" ..
+      prep(true) ..
+      "\tcall\t_mod\n" ..
+      newdouble("%xmm0")
    return ret
 end
 
-function imod(op)
-   local ret = ""
+function inv(instr)
+   local ret = push(nil)
    local v1 = pop()
-   local v2 = get()
-   if u_cont[1] and v2 ~= "%rdx" then
-      ret = "\tmovq\t%rdx, %r15\n"
-   end
-   if v1:sub(1, 1) == "$" then
+   if not isDouble(v1) then
       ret = ret ..
-	 "\tmovq\t" .. v1 .. ", %rbx\n"
-      v1 = "%rbx"
+	 "\tmovq\t" .. v1 .. ", %rbx\n" ..
+	 "\tsarq\t$3, %rbx\n"
+      v1 = "(%rbx)"
    end
    ret = ret ..
-      "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
-      "\tcdq\n" ..
-      "\tidivq\t" .. v1 .. "\n" ..
-      "\tmovq\t%rdx, " .. v2 .. "\n"      
-   if u_cont[1] and v2 ~= "%rdx" then
-      ret = ret .. "\tmovq\t%r15, %rdx\n"
+      "\tcvtsd2si " .. v1 .. ", %rax\n" ..
+      "\txorq\t$-1, %rax\n" ..
+      "\tcvtsi2sd %rax, %xmm0\n"  ..
+      newdouble("%xmm0")
+   return ret
+end
+
+function shifts(instr, value)
+   local ret = ""
+   local v1, v2
+   local pres = false
+   if value then
+      v1 = pop()
+      value = "$" .. value
+   else
+      v2 = pop()
+      v1 = pop()
+      if not isDouble(v2) then
+	 ret = ret ..
+	    "\tmovq\t" .. v2 .. ", %rbx\n" ..
+	    "\tsarq\t$3, %rbx\n"
+	 v2 = "(%rbx)"
+      end
+   end
+   if not isDouble(v1) then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rax\n" ..
+	 "\tsarq\t$3, %rax\n"
+      v1 = "(%rax)"
+   end
+   ret = ret .. "\tcvtsd2si " .. v1 .. ", %rax\n"
+   if not value then
+      if u_cont[2] then
+	 ret = ret .. "\tmovq\t%rcx, %r15\n"
+	 pres = true
+      end
+      ret = ret ..
+	 "\tcvtsd2si " .. v2 .. ", %rcx\n"
+      value = "%cl"
+   end
+   ret = ret ..
+      "\t" .. instr .. "q\t" .. value .. ", %rax\n" ..
+      "\tcvtsi2sd %rax, %xmm0\n" ..
+      newdouble("%xmm0")
+   if u_cont[2] and pres then
+      ret = ret .. "\tmovq\t%r15, %rcx\n"
    end
    return ret
 end
@@ -474,6 +524,36 @@ function str(value)
       "\tleaq\t2(, %rax, 8), " .. current() .. "\n"
 end
 
+function bool(instr)
+   local l1, l2, ret = label(), label(), ""
+   local v1, v2 = pop(), pop()
+   if v1:sub(1, 1) == "$" or isDouble(v1) then
+      ret = "\tmovq\t" .. v1 .. ", %rax\n"
+      v1 = "%rax"
+   end
+   if isDouble(v2) then
+      ret = "\tmovq\t" .. v2 .. ", %rbx\n"
+      v1 = "%rbx"
+   end
+   if instr == "or" then
+      ret = ret ..
+	 "\torq\t" .. v1 .. ", " .. v2 .. "\n" ..
+	 "\torq\t$17, " .. v2 .. "\n" ..
+	 "\tcmpq\t$17, " .. v2 .. "\n"
+   else
+      ret = ret ..
+	 "\tandq\t$-18, " .. v1 .. "\n" ..
+	 "\tandq\t" .. v1 .. ", " .. v2 .. "\n"
+   end
+   ret = ret ..
+      "\tjz\t" .. l1 .. "\n" ..
+      "\tmovq\t$9, %rax\n" ..
+      "\tjmp\t" .. l2 .. "\n" ..
+      l1 .. ":\tmovq\t$1, %rax\n" ..
+      l2 .. ":" .. push("%rax")
+   return ret
+end
+
 function nt()
    local ret
    local v1 = pop()
@@ -484,7 +564,7 @@ function nt()
    return ret
 end
 
-function eq()
+function opcall2(func)
    local ret
    local v1 = pop()
    local v2 = pop()
@@ -510,24 +590,16 @@ function eq()
 	 "\tleaq\t6(, %r12, 8), %rbx\n" ..
 	 "\taddq\t$8, %r12\n"
    else
-      ret =
-	 "\tmovq\t" .. v1 .. ", %rax\n" ..
-	 "\tmovq\t" .. v2 .. ", %rbx\n"
+      if v1 ~= "%rax" then
+	 ret =
+	    "\tmovq\t" .. v1 .. ", %rax\n" ..
+	    "\tmovq\t" .. v2 .. ", %rbx\n"
+      else
+	 ret = "\tmovq\t" .. v2 .. ", %rbx\n"
+      end
    end
    ret = ret .. prep(true) ..
-      "\tcall\t_compare\n" ..
-      push("%rax")
-   return ret
-end
-
-function leq()
-   local ret
-   local v1 = pop()
-   local v2 = pop()
-   ret = "\tmovq\t" .. v1 .. ", %rax\n" ..
-      "\tmovq\t" .. v2 .. ", %rbx\n" ..
-      prep(true) ..
-      "\tcall\t_compare\n" ..
+      "\tcall\t_" .. func .. "\n" ..
       push("%rax")
    return ret
 end
@@ -542,11 +614,12 @@ function len()
       "\tjnz\t" .. lab .. "\n" ..
       "\tcall\t_check\n" ..
       lab .. ":" ..
-      "\tcvtsi2sd\t(%rax), %xmm0\n" ..
+      "\tcvtsi2sd (%rax), %xmm0\n" ..
       newdouble("%xmm0")
    return ret
 end
 
+---------- Closure related ----------
 function encl(value)
    local r, l = prep(true), str_tbl[value]
    need_data = true
@@ -586,6 +659,7 @@ function clo(sets, value)
       "\tcall\t_clo_ref\n"
 end
 
+---------- Array related ----------
 function index(address, global)
    local ret, v = ""
    if global then
@@ -636,41 +710,6 @@ function index(address, global)
    return ret
 end
 
-function ifenv(text, i, p)
-   local ret, tmp1, tmp2 = "_IF" .. p .. ":\n"
-   local tag, jlab, v
-   local vs, rs
-   tmp1, i = _translate(text, i, false)
-   v = pop()
-   --vs, rs = v_size, r_size
-   tmp2, i, tag = _translate(text, i, false)
-   if tag == "else" then
-      jlab = "_EL" .. p
-   else
-      jlab = "_FI" .. p
-   end
-   if v:sub(1, 1) == "$" then
-      tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n"
-      v = "%rax"
-   end
-   ret = ret .. tmp1 .. "_TH" .. p .. ":\n" ..
-      "\tcmpq\t$1, " .. v .. "\n" ..
-      "\tjz\t" .. jlab .. "\n" ..
-      "\tcmpq\t$17, " .. v .. "\n" ..
-      "\tjz\t" .. jlab .. "\n" ..
-      tmp2
-   if tag == "else" then
-      --v_size, r_size = vs, rs
-      tmp1, i = _translate(text, i, false)
-      ret = ret ..
-	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
-	 tmp1 .. "_FI" .. p .. ":\n"
-   else
-      ret = ret .. jlab .. ":\n"
-   end
-   return ret, i
-end
-
 function init(text, i, p)
    local ret = push(nil)
    local rs, vs
@@ -704,6 +743,7 @@ function init(text, i, p)
    return ret, i
 end
 
+---------- Function related ----------
 function build(nargs, varargs, fname)
    local ret = ""
    local p = 1
@@ -740,243 +780,45 @@ function build(nargs, varargs, fname)
    return ret
 end
 
----------- PARSING ----------
-function readline(str, i)
-   local s, ret = "", ""
-   while ret == "" do
-      if i > #str then
-	 return false, i
-      end
-      s = str:sub(i, i)
-      while s ~= "\n" and i <= #str do
-	 ret = ret .. s
-	 i = i + 1
-	 s = str:sub(i, i)
-      end
-      i = i + 1
+-- Environment functions
+--------------------------------------------------------------------------------
+function ifenv(text, i, p)
+   local ret, tmp1, tmp2 = "_IF" .. p .. ":\n"
+   local tag, jlab, v
+   local vs, rs
+   tmp1, i = _translate(text, i, false)
+   v = pop()
+   --vs, rs = v_size, r_size
+   tmp2, i, tag = _translate(text, i, false)
+   if tag == "else" then
+      jlab = "_EL" .. p
+   else
+      jlab = "_FI" .. p
+   end
+   if v:sub(1, 1) == "$" then
+      tmp1 = tmp1 .. "\tmovq\t" .. v .. ", %rax\n"
+      v = "%rax"
+   end
+   ret = ret .. tmp1 .. "_TH" .. p .. ":\n" ..
+      "\tcmpq\t$1, " .. v .. "\n" ..
+      "\tjz\t" .. jlab .. "\n" ..
+      "\tcmpq\t$17, " .. v .. "\n" ..
+      "\tjz\t" .. jlab .. "\n" ..
+      tmp2
+   if tag == "else" then
+      --v_size, r_size = vs, rs
+      tmp1, i = _translate(text, i, false)
+      ret = ret ..
+	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
+	 tmp1 .. "_FI" .. p .. ":\n"
+   else
+      ret = ret .. jlab .. ":\n"
    end
    return ret, i
 end
 
-function separate(instr)
-   local i = 1
-   local s, ret = instr:sub(i, i), ""
-   while s ~= "\t" and i <= #instr do
-      ret = ret .. s
-      i = i + 1
-      s = instr:sub(i, i)
-   end
-   return ret, instr:sub(i + 1, #instr)
-end
-
----------- PROGRAM ----------
-function translate(text)
-   local ret, i = _translate(text, 1, false)
-   ret = intro .. ret
-
-   if i < #text then
-      ret = ret .. func .. _translate(text, i, false)
-   end
-   
-   if need_data then
-      ret = ret .. data
-   end
-   return ret
-end
-
-function _translate(text, i, sets)
-   local asm, tmp = ""
-   local s, i = readline(text, i)
-   local instr, value
-   local struct, vname = 0
-   
-   while s do
-      instr, value = separate(s)
-      --------------------
-      if instr ~= "tac" then
-	 struct = nil
-      end
-      --------------------
-      if instr == "num" then
-	 asm = asm .. newdouble(tostring(tonumber(value)))
-
-      elseif instr == "neg" then
-	 tmp = get()
-	 asm = asm ..
-	    "\tmovsd\t" .. tmp .. ", (%r12)\n" ..
-	    "\txorpd\t" .. tmp .. ", " .. tmp .. "\n" ..
-	    "\tsubsd\t(%r12), " .. tmp .. "\n"
-	 
-      elseif instr == "spec" then
-	 if value == "nil" then
-	    asm = asm .. push("$17")
-	 elseif value == "true" then
-	    asm = asm .. push("$9")
-	 else
-	    asm = asm .. push("$1")
-	 end
-	 
-      elseif instr == "str" then
-	 asm = asm .. str(value)
-
-      elseif instr == "ref" or instr == "arg" then
-	 struct = instr == "arg"
-	 tmp = tonumber(value) + 1
-	 if ref_mask and tmp > ref_mask_low and tmp <= ref_mask_up then
-	    tmp = tmp - ref_mask_low - 1
-	    tmp = tostring(16 + 8 * tmp)
-	 elseif ref_mask and tmp > ref_mask_up then
-	    tmp = tmp - ref_mask_up + ref_mask_low
-	    tmp = tostring(-8 * tmp)
-	 elseif tmp > 0 then
-	    tmp = tostring(-8 * tmp)
-	 else
-	    tmp = ""
-	 end
-	 if struct then
-	    asm = asm .. push("%rax") ..
-	       "\tmovq\t" .. tmp .. "(%rbp), %rax\n" ..
-	       "\tsarq\t$3, %rax\n" ..
-	       "\tleaq\t-8(%rax), %rbx\n" ..
-	       "\tmovq\t(%rax), %rax\n"
-	 else
-	    asm = asm .. push(tmp .. "(%rbp)")
-	 end
-
-      elseif instr == "clo" then
-	 asm = asm .. clo(sets, value)
-
-      elseif instr == "encl" then
-	 asm = asm .. encl(value)
-
-      elseif instr == "open" then
-	 asm = asm .. prep(true) ..
-	    "\tmovq\t$" .. value .. ", %rax\n" ..
-	    "\tcall\t_open\n"
-
-      elseif instr == "gbl" then
-	 asm = asm .. index(sets, value)
-	 
-      elseif instr == "var" then
-	 vname = value
-	 --asm = asm .. var(value)
-
-      elseif instr == "add" or
-	 instr == "sub" or
-	 instr == "mul" or
-	 instr == "div"
-      then
-	 asm = asm .. flt(instr)
-
-      elseif instr == "mod" then
-	 --tmp
-	 asm = asm .. imod()
-
-      elseif instr == "not" then
-	 asm = asm .. nt()
-	 
-      elseif instr == "eq" then
-	 asm = asm .. eq()
-
-      elseif instr == "leq" then
-	 asm = asm .. leq()
-
-      elseif instr == "len" then
-	 asm = asm .. len()
-
-      elseif instr == "init" then
-	 tmp, i = init(text, i, tonumber(value))
-	 asm = asm .. tmp
-
-      elseif instr == "index" then
-	 asm = asm .. index(sets, false)
-	 
-
-      elseif instr == "params" then
-	 tmp, i = params(text, i, tonumber(value), vname)
-	 vname = false
-	 struct = true
-	 asm = asm .. tmp
-	 
-      elseif instr == "chg" then
-	 tmp, i = chg(text, i, tonumber(value))
-	 asm = asm .. tmp
-	 
-      elseif instr == "set" then
-	 tmp, i = set(text, i, tonumber(value))
-	 asm = asm .. tmp
-
-      elseif instr == "ret" then
-	 tmp, i = ret(text, i, tonumber(value))
-	 asm = asm .. tmp
-
-      elseif instr == "rfct" then
-	 asm = asm .. use() ..
-	    "\tleaq\t_FN" .. value .. "(%rip), " .. current() .. "\n" ..
-	    "\tmovq\t" .. current() .. ", (%r12)\n" ..
-	    "\tmovq\t%r14, 8(%r12)\n" ..
-	    "\tleaq\t7(, %r12, 8), " .. current() .. "\n" ..
-	    "\taddq\t$16, %r12\n"
-
-      elseif instr == "if" then
-	 tmp, i = ifenv(text, i, value)
-	 asm = asm .. tmp
-
-      elseif instr == "fct" then
-	 tmp, i = fct(text, i, value)
-	 asm = asm .. tmp
-	 
-      elseif instr == "call" or instr == "tcall" then
-	 return asm, i
-
-      elseif instr == "free" then
-	 r_size = r_size - tonumber(value)
-
-      elseif
-	 instr == "stack" or
-	 instr == "place" or
-	 instr == "done" or
-	 instr == "struct"
-      then
-	 return asm, i, instr
-
-      elseif
-         instr == "then" or
-         instr == "else" or
-	 instr == "iend"
-      then
-	 return asm, i, instr
-
-      elseif instr == "tac" then
-	 return asm, i, struct
-
-      elseif instr == "fend" then
-	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
-	    asm = asm .. "\tmovq\t$17, %rax\n"
-	    if rsp ~= 0 then
-	       asm = asm .. "\tleave\n\tret\n\n"
-	    else
-	       asm = asm .. "\tpopq\t%rbp\n\tret\n\n"
-	    end
-	 else
-	    asm = asm .. "\n"
-	 end
-	 return asm, i
-
-      elseif instr == "exit" then
-	 if rsp ~= 0 then
-	    asm = asm .. "\tleave\n"
-	 else
-	    asm = asm .. "\tpopq\t%rbp\n"
-	 end
-	 return asm .. outro, i
-      end
-      --------------------
-      s, i = readline(text, i)
-   end
-   return asm
-end
-
+-- State altering functions
+--------------------------------------------------------------------------------
 function fct(text, i, value)
    local ins, val
    local name
@@ -1044,7 +886,6 @@ function develop()
    return ret
 end
 
----------- MEMORY SETTING ----------
 function params(text, i, p, call)
    local rs, rs2 = r_size
    local asm, tmp, typ = ""
@@ -1304,7 +1145,6 @@ function ret(text, i, p)
    local r, base
    local struct
    local rs, vs = r_size, v_size
-   ---- CANNOT RETURN MEMORY, WILL HAVE TO USE STACK
    tmp, i = _translate(text, i, false)
    asm = tmp .. lock(pop())
    base = r_size
@@ -1348,6 +1188,262 @@ function ret(text, i, p)
    return asm, i
 end
 
+---------- Parsing functions ----------
+function readline(str, i)
+   local s, ret = "", ""
+   while ret == "" do
+      if i > #str then
+	 return false, i
+      end
+      s = str:sub(i, i)
+      while s ~= "\n" and i <= #str do
+	 ret = ret .. s
+	 i = i + 1
+	 s = str:sub(i, i)
+      end
+      i = i + 1
+   end
+   return ret, i
+end
+
+function separate(instr)
+   local i = 1
+   local s, ret = instr:sub(i, i), ""
+   while s ~= "\t" and i <= #instr do
+      ret = ret .. s
+      i = i + 1
+      s = instr:sub(i, i)
+   end
+   return ret, instr:sub(i + 1, #instr)
+end
+
+-- PROGRAM
+--------------------------------------------------------------------------------
+function translate(text)
+   local ret, i = _translate(text, 1, false)
+   ret = intro .. ret
+
+   if i < #text then
+      ret = ret .. func .. _translate(text, i, false)
+   end
+   
+   if need_data then
+      ret = ret .. data
+   end
+   return ret
+end
+
+function _translate(text, i, sets)
+   local asm, tmp = ""
+   local s, i = readline(text, i)
+   local instr, value
+   local struct, vname = 0
+   
+   while s do
+      instr, value = separate(s)
+      --------------------
+      if instr ~= "tac" then
+	 struct = nil
+      end
+      --------------------
+      if instr == "num" then
+	 asm = asm .. newdouble(tostring(tonumber(value)))
+
+      elseif instr == "neg" then
+	 tmp = get()
+	 asm = asm ..
+	    "\tmovsd\t" .. tmp .. ", (%r12)\n" ..
+	    "\txorpd\t" .. tmp .. ", " .. tmp .. "\n" ..
+	    "\tsubsd\t(%r12), " .. tmp .. "\n"
+	 
+      elseif instr == "spec" then
+	 if value == "nil" then
+	    asm = asm .. push("$17")
+	 elseif value == "true" then
+	    asm = asm .. push("$9")
+	 else
+	    asm = asm .. push("$1")
+	 end
+	 
+      elseif instr == "str" then
+	 asm = asm .. str(value)
+
+      elseif instr == "ref" or instr == "arg" then
+	 struct = instr == "arg"
+	 tmp = tonumber(value) + 1
+	 if ref_mask and tmp > ref_mask_low and tmp <= ref_mask_up then
+	    tmp = tmp - ref_mask_low - 1
+	    tmp = tostring(16 + 8 * tmp)
+	 elseif ref_mask and tmp > ref_mask_up then
+	    tmp = tmp - ref_mask_up + ref_mask_low
+	    tmp = tostring(-8 * tmp)
+	 elseif tmp > 0 then
+	    tmp = tostring(-8 * tmp)
+	 else
+	    tmp = ""
+	 end
+	 if struct then
+	    asm = asm .. push("%rax") ..
+	       "\tmovq\t" .. tmp .. "(%rbp), %rax\n" ..
+	       "\tsarq\t$3, %rax\n" ..
+	       "\tleaq\t-8(%rax), %rbx\n" ..
+	       "\tmovq\t(%rax), %rax\n"
+	 else
+	    asm = asm .. push(tmp .. "(%rbp)")
+	 end
+
+      elseif instr == "clo" then
+	 asm = asm .. clo(sets, value)
+
+      elseif instr == "encl" then
+	 asm = asm .. encl(value)
+
+      elseif instr == "open" then
+	 asm = asm .. prep(true) ..
+	    "\tmovq\t$" .. value .. ", %rax\n" ..
+	    "\tcall\t_open\n"
+
+      elseif instr == "gbl" then
+	 asm = asm .. index(sets, value)
+	 
+      elseif instr == "var" then
+	 vname = value
+	 --asm = asm .. var(value)
+
+      elseif instr == "add" or
+	 instr == "sub" or
+	 instr == "mul" or
+	 instr == "div"
+      then
+	 asm = asm .. flt(instr)
+
+      elseif instr == "sal" or instr == "sar" then
+	 asm = asm .. shifts(instr, false)
+
+      elseif instr == "inv" then
+	 asm = asm .. inv()
+
+      elseif instr == "eq" then
+	 asm = asm .. opcall2("compare")
+	 
+      elseif
+	 instr == "lt"  or
+	 instr == "lte" or
+	 instr == "gt"  or
+	 instr == "gte" or
+	 instr == "neq" 
+      then
+	 asm = asm .. opcall2(instr)
+
+      elseif instr == "and" or instr == "or" then
+	 asm = asm .. bool(instr)
+
+      elseif instr == "con" then
+	 asm = asm .. opcall2("concat")
+
+      elseif instr == "mod" then
+	 asm = asm .. mod()
+	 --asm = asm .. imod()
+	 
+      elseif instr == "not" then
+	 asm = asm .. nt()
+
+      elseif instr == "len" then
+	 asm = asm .. len()
+
+      elseif instr == "init" then
+	 tmp, i = init(text, i, tonumber(value))
+	 asm = asm .. tmp
+
+      elseif instr == "index" then
+	 asm = asm .. index(sets, false)
+	 
+
+      elseif instr == "params" then
+	 tmp, i = params(text, i, tonumber(value), vname)
+	 vname = false
+	 struct = true
+	 asm = asm .. tmp
+	 
+      elseif instr == "chg" then
+	 tmp, i = chg(text, i, tonumber(value))
+	 asm = asm .. tmp
+	 
+      elseif instr == "set" then
+	 tmp, i = set(text, i, tonumber(value))
+	 asm = asm .. tmp
+
+      elseif instr == "ret" then
+	 tmp, i = ret(text, i, tonumber(value))
+	 asm = asm .. tmp
+
+      elseif instr == "rfct" then
+	 asm = asm .. use() ..
+	    "\tleaq\t_FN" .. value .. "(%rip), " .. current() .. "\n" ..
+	    "\tmovq\t" .. current() .. ", (%r12)\n" ..
+	    "\tmovq\t%r14, 8(%r12)\n" ..
+	    "\tleaq\t7(, %r12, 8), " .. current() .. "\n" ..
+	    "\taddq\t$16, %r12\n"
+
+      elseif instr == "if" then
+	 tmp, i = ifenv(text, i, value)
+	 asm = asm .. tmp
+
+      elseif instr == "fct" then
+	 tmp, i = fct(text, i, value)
+	 asm = asm .. tmp
+	 
+      elseif instr == "call" or instr == "tcall" then
+	 return asm, i
+
+      elseif instr == "free" then
+	 r_size = r_size - tonumber(value)
+
+      elseif
+	 instr == "stack" or
+	 instr == "place" or
+	 instr == "done" or
+	 instr == "struct"
+      then
+	 return asm, i, instr
+
+      elseif
+         instr == "then" or
+         instr == "else" or
+	 instr == "iend"
+      then
+	 return asm, i, instr
+
+      elseif instr == "tac" then
+	 return asm, i, struct
+
+      elseif instr == "fend" then
+	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
+	    asm = asm .. "\tmovq\t$17, %rax\n"
+	    if rsp ~= 0 then
+	       asm = asm .. "\tleave\n\tret\n\n"
+	    else
+	       asm = asm .. "\tpopq\t%rbp\n\tret\n\n"
+	    end
+	 else
+	    asm = asm .. "\n"
+	 end
+	 return asm, i
+
+      elseif instr == "exit" then
+	 if rsp ~= 0 then
+	    asm = asm .. "\tleave\n"
+	 else
+	    asm = asm .. "\tpopq\t%rbp\n"
+	 end
+	 return asm .. outro, i
+      end
+      --------------------
+      s, i = readline(text, i)
+   end
+   return asm
+end
+
 ---------- MAIN ----------
 local file = io.open(comp_file .. ".lir", "r")
 text = file:read("all")
@@ -1355,3 +1451,64 @@ file:close()
 file = io.open(comp_file .. ".s", "w+")
 file:write(translate(text))
 file:close()
+
+--[[
+INTEGER FUNCTIONS ## DEPRECATED ##
+function idiv(op)
+   local ret = ""
+   local v1 = pop()
+   local v2 = get()
+   if u_cont[1] and v2 ~= "%rdx" then
+      ret = "\tmovq\t%rdx, %r15\n"
+   end
+   if v1:sub(1, 1) == "$" then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rbx\n"
+      v1 = "%rbx"
+   end
+   ret = ret .. 
+      "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
+      "\tcdq\n" ..
+      "\tidivq\t" .. v1 .. "\n" ..
+      "\tmovq\t%rax, " .. v2 .. "\n"      
+   if u_cont[1] and v2 ~= "%rdx" then
+      ret = ret .. "\tmovq\t%r15, %rdx\n"
+   end
+   return ret
+end
+
+function imod(op)
+   local ret = ""
+   local v1 = pop()
+   local v2 = get()
+   if u_cont[1] and v2 ~= "%rdx" then
+      ret = "\tmovq\t%rdx, %r15\n"
+   end
+   if v1:sub(1, 1) == "$" then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rbx\n"
+      v1 = "%rbx"
+   end
+   ret = ret ..
+      "\tmovq\t" .. v2 .. ", " .. "%rax\n" ..
+      "\tcdq\n" ..
+      "\tidivq\t" .. v1 .. "\n" ..
+      "\tmovq\t%rdx, " .. v2 .. "\n"      
+   if u_cont[1] and v2 ~= "%rdx" then
+      ret = ret .. "\tmovq\t%r15, %rdx\n"
+   end
+   return ret
+end
+
+function num(op)
+   local ret = ""
+   local v1 = pop()
+   local v2 = get()
+   if isMem(v1) and isMem(v2) then
+      ret = "\tmovq\t" .. v2 .. ", " .. promote() .. "\n"
+      v2 = current()
+   end
+   ret = ret .. "\t" .. op .. "\t" .. v1 .. ", " .. v2 .. "\n"
+   return ret
+end
+]]

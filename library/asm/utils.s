@@ -1,7 +1,9 @@
 	.text
 # Internal routines to reduce compiled file size
 
-#MEMORY ROUTINES
+# MEMORY ROUTINES
+################################################################################
+	
 	.global _transfer
 	# %rax: frame size, %rbx: transfer size
 _transfer:
@@ -9,7 +11,7 @@ _transfer:
 _tf_lp:	movq	(%rbp, %rax, 8), %rdi
 	leaq	(%rax, %rbx, ), %r15
 	leaq	(%rbp, %r15, 8), %r15
-	cmp	%r15, %rsp
+	cmpq	%r15, %rsp
 	jz	_tf_en
 	movq	(%r15), %r15
 	movq	%r15, (%rdi)
@@ -106,7 +108,7 @@ _resize:
 	neg	%rax
 	leaq	5(%rbx), %rbx
 	leaq	(%rsp, %rax, 8), %rdi
-_rs_lp:	cmp	$0, %rbx
+_rs_lp:	cmpq	$0, %rbx
 	jz	_rs_dn
 	movq	(%rsp), %r15
 	movq	%r15, (%rsp, %rax, 8)
@@ -114,9 +116,9 @@ _rs_lp:	cmp	$0, %rbx
 	addq	$8, %rsp
 	jmp	_rs_lp
 _rs_dn:	movq	%rdi, %rsp
-_rs_fn:	pop	%r15
-	pop	%rdi
-	pop	%rax
+_rs_fn:	popq	%r15
+	popq	%rdi
+	popq	%rax
 _rs_en:	xorq	%rbx, %rbx
 _nf_lp:	cmpq	%rax, %r15
 	jge	_nf_en
@@ -151,7 +153,9 @@ _nf_cm:	inc	%r15
 	jmp	_nf_lp
 _nf_en:	ret
 
-#BOOLEAN ROUTINES
+# OPERATOR ROUTINES
+################################################################################
+	
 	.global	_compare
 	# %rax: arg1, %rbx: arg2
 _compare:
@@ -180,13 +184,13 @@ _comp_string:
 	jnz	_cp_f
 	addq	$8, %rax
 	addq	$8, %rbx
-_cp_lp:	xorq	%r15, %r15
-	mov	(%rbx), %r15b
-	cmp	(%rax), %r15b
+	xorq	%r15, %r15
+_cp_lp:	movb	(%rbx), %r15b
+	cmpb	(%rax), %r15b
 	jnz	_cp_f
-	cmp	$0, %r15b
+	cmpb	$0, %r15b
 	jz	_cp_t
-	cmpl	$0, (%rax)
+	cmpb	$0, (%rax)
 	jz	_cp_f
 	inc	%rax
 	inc	%rbx
@@ -215,8 +219,10 @@ _gt:
 	andq	$7, %r15
 	cmpq	$2, %r15
 	jz	_comp_s_g
+	cmpq	$6, %r15
+	jz	_comp_d_g
 	cmpq	%rax, %rbx
-	jb	_rs_gt
+	jg	_rs_gt
 	movq	$1, %rax
 	ret
 _rs_gt:	movq	$9, %rax
@@ -226,29 +232,36 @@ _comp_s_g:
 	movq	%rbx, %r15
 	andq	$7, %r15
 	cmpq	$2, %r15
-	jnz	_gt_f
+	jnz	_cp_f
 	sarq	$3, %rax
 	sarq	$3, %rbx
-	movq	(%rax), %r15
-	cmpq	%r15, (%rbx)
-	jnz	_gt_f
 	addq	$8, %rax
 	addq	$8, %rbx
-_gt_lp:	xorq	%r15, %r15
-	mov	(%rbx), %r15b
-	cmp	(%rax), %r15b
-	jge	_gt_f
-	cmp	$0, %r15b
-	jz	_gt_t
-	cmpl	$0, (%rax)
-	jz	_gt_f
+	xorq	%r15, %r15
+_gt_lp:	movb	(%rbx), %r15b
+	cmpb	(%rax), %r15b
+	jg	_cp_t
+	cmpb	$0, %r15b
+	jz	_cp_f
+	cmpb	$0, (%rax)
+	jz	_cp_t
 	inc	%rax
 	inc	%rbx
 	jmp	_gt_lp
-_gt_f:	movq	$1, %rax
-	ret
-_gt_t:	movq	$9, %rax
-	ret
+
+_comp_d_g:
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$6, %r15
+	jnz	_cp_f
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movsd	(%rax), %xmm1
+	cmpsd	$1, (%rbx), %xmm1 #NLTE
+	movq	%xmm1, %rax
+	cmpq	$-1, %rax
+	jz	_cp_t
+	jmp	_cp_f
 
 	
 	.global	_lt
@@ -258,8 +271,10 @@ _lt:
 	andq	$7, %r15
 	cmpq	$2, %r15
 	jz	_comp_s_l
+	cmpq	$6, %r15
+	jz	_comp_d_l
 	cmpq	%rax, %rbx
-	jg	_rs_lt
+	jb	_rs_lt
 	movq	$1, %rax
 	ret
 _rs_lt:	movq	$9, %rax
@@ -269,31 +284,73 @@ _comp_s_l:
 	movq	%rbx, %r15
 	andq	$7, %r15
 	cmpq	$2, %r15
-	jnz	_lt_f
+	jnz	_cp_f
 	sarq	$3, %rax
 	sarq	$3, %rbx
-	movq	(%rax), %r15
-	cmpq	%r15, (%rbx)
-	jnz	_lt_f
 	addq	$8, %rax
 	addq	$8, %rbx
-_lt_lp:	xorq	%r15, %r15
-	mov	(%rbx), %r15b
-	cmp	(%rax), %r15b
-	jge	_lt_f
-	cmp	$0, %r15b
-	jz	_lt_t
-	cmpl	$0, (%rax)
-	jz	_lt_f
+	xorq	%r15, %r15
+_lt_lp:	movb	(%rbx), %r15b
+	cmpb	(%rax), %r15b
+	jb	_cp_t
+	cmpb	$0, (%rax)
+	jz	_cp_f
+	cmpb	$0, %r15b
+	jz	_cp_t
 	inc	%rax
 	inc	%rbx
 	jmp	_lt_lp
-_lt_f:	movq	$1, %rax
-	ret
-_lt_t:	movq	$9, %rax
+
+_comp_d_l:
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$6, %r15
+	jnz	_cp_f
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movsd	(%rax), %xmm1
+	cmpsd	$6, (%rbx), %xmm1 #LT
+	movq	%xmm1, %rax
+	cmpq	$-1, %rax
+	jz	_cp_t
+	jmp	_cp_f
+
+	.global	_gte
+	# %rax: arg1, %rbx: arg2
+_gte:	
+	pushq	%rax
+	pushq	%rbx
+	call	_gt
+	cmpq	$1, %rax
+	popq	%rbx
+	popq	%rax
+	jz	_compare
+	movq	$9, %rax
 	ret
 
+	.global	_lte
+	# %rax: arg1, %rbx: arg2
+_lte:	
+	pushq	%rax
+	pushq	%rbx
+	call	_lt
+	cmpq	$1, %rax
+	popq	%rbx
+	popq	%rax
+	jz	_compare
+	movq	$9, %rax
+	ret
+
+	.global	_neq
+	# %rax: arg1, %rbx: arg2
+_neq:	
+	call	_compare
+	cmpq	$1, %rax
+	jz	_cp_t
+	jmp	_cp_f	
+
 	.global _not
+	# %rax: arg1
 _not:
 	cmpq	$1, %rax
 	jz	_nt_t
@@ -304,7 +361,70 @@ _not:
 _nt_t:	movq	$9, %rax
 	ret
 
-#ARRAY ROUTINES
+	.global _concat
+	# %rax: str1, %rbx: str2
+_concat:
+	pushq	%rdi
+	movq	%rax, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
+	#call	_to_str_a
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$2, %r15
+	#call	_to_str_b
+	sarq	$3, %rax
+	sarq	$3, %rbx
+	movq	(%rax), %r15
+	addq	(%rbx), %r15
+	movq	%r15, (%r12)
+	xorq	%r15, %r15
+	subq	(%rbx), %rax
+_cn_b:	cmpq	%r15, (%rbx)
+	jz	_cn_a
+	movb	8(%rbx, %r15, ), %dil
+	movb	%dil, 8(%r12, %r15, )
+	inc	%r15
+	jmp	_cn_b
+_cn_a:	cmpq	%r15, (%r12)
+	jz	_cn_en
+	movb	8(%rax, %r15, ), %dil
+	movb	%dil, 8(%r12, %r15, )
+	inc	%r15
+	jmp	_cn_a
+_cn_en:	movb	$0, 8(%r12, %r15, )
+	leaq	2(, %r12, 8), %rax
+	leaq	9(%r12, %r15, ), %r12
+	popq	%rdi
+	ret
+
+_to_str_a:
+_to_str_b:
+	nop
+	ret
+	
+	.global _pow
+	# %xmm0: base, %xmm1: power
+_pow:	
+	#fld	%rax
+	#fld	%rbx
+	#fyl2x
+
+	ret
+
+	.global _mod
+	# %xmm0: number, %xmm1: mod
+_mod:
+	movsd	%xmm0, %xmm2
+	divsd	%xmm1, %xmm2
+	roundsd	$3, %xmm2, %xmm2
+	mulsd	%xmm1, %xmm2
+	subsd	%xmm2, %xmm0
+	ret
+
+# ARRAY ROUTINES
+################################################################################
+
 	.global _array_copy
 	# %rax: table
 _array_copy:
@@ -526,6 +646,8 @@ _ch_en:	popq	%rax
 	ret
 	
 # CLOSURE ROUTINES
+################################################################################
+
 	.global _encl
 	# %rax: key, %rbx: value
 _encl:	
@@ -545,10 +667,10 @@ _clo_ref:
 _cr_lp:	movq	%rdi, %rax
 	movq	(%r14), %rbx
 	call	_compare
-	cmp	$9, %rax
+	cmpq	$9, %rax
 	jz	_cr_en
 	movq	16(%r14), %r14
-	cmp	$17, %r14
+	cmpq	$17, %r14
 	jz	_cr_en
 	jmp	_cr_lp
 _cr_en:	leaq	8(%r14), %rax
@@ -559,7 +681,7 @@ _cr_en:	leaq	8(%r14), %rax
 	.global _open
 	# %rax: size
 _open:
-	cmp	$0, %rax
+	cmpq	$0, %rax
 	jz	_op_en
 	dec	%rax
 	movq	16(%r14), %r14

@@ -44,6 +44,7 @@ function isOperator(str)
       str == ">" or
       str == "#" or
       str == "%" or
+      str == "~" or
       -- 2 char operators
       str == "~=" or
       str == ">=" or
@@ -51,6 +52,8 @@ function isOperator(str)
       str == "==" or
       str == ".." or
       str == "or" or
+      str == ">>" or
+      str == "<<" or
       -- 3 char operators
       str == "and"  or
       str == "not"
@@ -311,7 +314,9 @@ function associate(arr, left, unary, indent, ...)
    if unary then
       local i = 1
       while i <= #arr do
-	 if mem and (arr[i] == "-" or arr[i] == "not" or arr[i] == "~" or arr[i] == "#") then
+	 if mem and
+	    (arr[i] == "-" or arr[i] == "not" or arr[i] == "~" or arr[i] == "#")
+	 then
 	    j = 1
 	    while arr[i + j] == "\n" do
 	       arr[i] = arr[i] .. "\n" .. strgen(_SPACE, indent + 1)
@@ -446,6 +451,8 @@ function scan(array, start, stop, indent)
    end
    ret = ""
    -- PRIORITY LEVELS --
+   -- Level 0 - Bitwise       : 
+   newarr = associate(newarr, true, false, indent, "<<", ">>")
    -- Level 1 - Power         : ^               [right-associative]
    newarr = associate(newarr, false, false, indent, "^")
    -- Level 2 - Unary         : ~ - not #       [left-associative ]

@@ -25,6 +25,8 @@ ops["and"]    = "and"
 ops["or"]     = "or"
 ops["not"]    = "not"
 ops["~"]      = "inv"
+ops["<<"]     = "sal"
+ops[">>"]     = "sar"
 ops["#"]      = "len"
 
 function isWhitespace(c)
