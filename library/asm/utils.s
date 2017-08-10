@@ -402,15 +402,22 @@ _to_str_a:
 _to_str_b:
 	nop
 	ret
-	
+
 	.global _pow
 	# %xmm0: base, %xmm1: power
 _pow:	
-	#fld	%rax
-	#fld	%rbx
-	#fyl2x
+	movsd	%xmm0, %rax
+	## remeber sign
+	movq	%rax, %rbx
+	andq	$0x7FFFFFFFFFFFFFFF, %rbx
+	sarq	$52, %rbx
+	subq	$1023, %rbx # n = %rbx
+	movq	%rax, %r15
+	andq	$0x000FFFFFFFFFFFFF, %r15
 
-	ret
+_lg:
+	
+	
 
 	.global _mod
 	# %xmm0: number, %xmm1: mod

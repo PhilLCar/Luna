@@ -404,26 +404,31 @@ function flt(op)
    return ret
 end
 
-function pow(instr)
+function pow()
    local ret
    local v1, v2 = pop(), pop()
    if not isDouble(v1) then
-      ret = ret ..
+      ret = 
 	 "\tmovq\t" .. v1 .. ", %rax\n" ..
 	 "\tsarq\t$3, %rax\n"
-      v1 = "(%rax)"
+   else
+      ret =
+	 "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
+	 "\tmovq\t%r12, %rax\n"
    end
    if not isDouble(v2) then
       ret = ret ..
 	 "\tmovq\t" .. v2 .. ", %rbx\n" ..
 	 "\tsarq\t$3, %rbx\n"
-      v2 = "(%rbx)"
+   else
+      ret = ret ..
+	 "\tmovsd\t" .. v2 .. ", 8(%r12)\n" ..
+	 "\tleaq\t8(%r12), %rax\n"
    end
    ret = ret ..
-      "\tmovq\t" .. v1 .. ", %st\n" ..
-      "\tmovq\t" .. v2 .. ", %st(1)\n" ..
-      "\tfprem\n" ..
-      newdouble("%st")
+      "\tcall\t_pow\n" ..
+      push("6(, %r12, 8)")
+   return ret
 end
 
 function mod(intsr)
@@ -1316,6 +1321,9 @@ function _translate(text, i, sets)
 	 instr == "div"
       then
 	 asm = asm .. flt(instr)
+
+      elseif instr == "pow" then
+	 asm = asm .. pow()
 
       elseif instr == "sal" or instr == "sar" then
 	 asm = asm .. shifts(instr, false)
