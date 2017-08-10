@@ -403,21 +403,145 @@ _to_str_b:
 	nop
 	ret
 
+	// https://stackoverflow.com/questions/1375953/how-to-calculate-an-arbitrary-power-root
 	.global _pow
 	# %xmm0: base, %xmm1: power
-_pow:	
-	movsd	%xmm0, %rax
-	## remeber sign
+_pow:
+	pushq	%rcx
+	pushq	%rdi
+	movq	$1, 40(%r12) #sign
+	movq	%xmm0, %rax
 	movq	%rax, %rbx
-	andq	$0x7FFFFFFFFFFFFFFF, %rbx
 	sarq	$52, %rbx
+	movq	%rbx, %r15
+	andq	$0x800, %r15
+	jz	_pos
+	roundsd	$0, %xmm1, %xmm2
+	cmpsd	$0, %xmm1, %xmm2
+	movq	%xmm2, %r15
+	cmpq	$-1, %r15
+	jz	_neg
+	popq	%rdi
+	popq	%rcx
+	movq	$0xFFF, %rax
+	salq	$52, %rax
+	orq	$1, %rax
+	movq	%rax, %xmm0
+	ret
+_neg:	cvtsd2si %xmm1, %r15
+	andq	$1, %r15
+	jz	_pos
+	movq	$0, 40(%r12)
+_pos:	andq	$0x7FF, %rbx
+	jz	_sb_n
 	subq	$1023, %rbx # n = %rbx
-	movq	%rax, %r15
-	andq	$0x000FFFFFFFFFFFFF, %r15
+	jmp	_nrm
+_sb_n:	movq	$-1022, %rbx
+_nrm:	movq	%rax, %r15
+	movq	$0x3FF, %rcx
+	salq	$52, %rcx
+	movq	$0xFFF, %rax
+	salq	$52, %rax
+	xorq	$-1, %rax
+	andq	%rax, %r15
+	jz	_find_u
+	orq	%rcx, %r15 # %r15 = x/2^n
+	movq	%r15, %xmm3
+	xorq	%r15, %r15
+	movq	$53, %rdi # %rdi = [m]
+	
+	// https://en.wikipedia.org/wiki/Binary_logarithm
+_lg:	# Log recursion
+	###################
+	# check xmm0 for 1
+	movsd	_db2(%rip), %xmm2
+	mulsd	%xmm3, %xmm3
+	dec	%rdi
+	#cmpq	$52, %rdi
+	js	_lg_dn
+	cmpsd	$5, %xmm3, %xmm2
+	movq	%xmm2, %rax
+	cmpq	$-1, %rax
+	jz	_lg
+	movq	$1, %rax
+	movb	%dil, %cl
+	salq	%cl, %rax
+	orq	%rax, %r15
+	movsd	_db2(%rip), %xmm2
+	divsd	%xmm2, %xmm3
+	jmp	_lg
+_lg_dn:
+	movq	$0xFFF, %rax
+	salq	$52, %rax
+	xorq	$-1, %rax
+	andq	%rax, %r15
+	movq	$0x3FE, %rax
+	salq	$52, %rax
+	orq	%rax, %r15
+_find_u:	
+	movq	%r15, %xmm3
+	cvtsi2sd %rbx, %xmm0
+	addsd	%xmm3, %xmm0
+	mulsd	%xmm1, %xmm0 # %xmm2 = u
+	roundsd	$1, %xmm0, %xmm3 # %xmm3 = v
+	subsd	%xmm3, %xmm0
 
-_lg:
+	movsd	%xmm3,   (%r12)
+	movsd	%xmm4,  8(%r12)
+	movsd	%xmm5, 16(%r12)
+	movsd	%xmm6, 24(%r12)
+	movsd	%xmm7, 32(%r12)
 	
+_pow2:  # Taylor expansion
+	####################%xmm0  # x
+	movsd	_ln2(%rip), %xmm1  # ln2
+	movsd	_db1(%rip), %xmm2  # cnt
+	movsd	_db1(%rip), %xmm3  # x   accumulator
+	movsd	_db1(%rip), %xmm4  # ln2 accumulator
+	movsd	_db1(%rip), %xmm5  # cnt accumulator
+	movsd	_db0(%rip), %xmm6  # total part
+	movsd	_db1(%rip), %xmm7  # total
+_p2_lp:	
+	mulsd	%xmm0, %xmm3
+	mulsd	%xmm1, %xmm4
+	divsd	%xmm2, %xmm5
+
+	movsd	_db0(%rip), %xmm6
+	addsd	%xmm3, %xmm6
+	mulsd	%xmm4, %xmm6
+	mulsd	%xmm5, %xmm6
+
+	cvtsd2si %xmm2, %rax
+	cmpq	$52, %rax
+	jz	_p2_en
+
+	addsd	_db1(%rip), %xmm2
+	addsd	%xmm6, %xmm7
+	jmp	_p2_lp
+_p2_en:
+	movsd	  (%r12), %xmm3
 	
+	cvtsd2si %xmm3, %rax
+	addq	$1023, %rax
+	salq	$52, %rax
+	movq	%rax, %xmm0
+	mulsd	%xmm7, %xmm0
+
+	cmpq	$1, 40(%r12)
+	jz	_pw_ret
+	movsd	%xmm0, %xmm2
+	movsd	_db1(%rip), %xmm0
+	subsd	%xmm2, %xmm0
+	
+_pw_ret:	
+	movsd	 8(%r12), %xmm4
+	movsd	16(%r12), %xmm5
+	movsd	24(%r12), %xmm6
+	movsd	32(%r12), %xmm7
+
+	popq	%rdi
+	popq	%rcx
+	ret
 
 	.global _mod
 	# %xmm0: number, %xmm1: mod
@@ -694,3 +818,18 @@ _open:
 	movq	16(%r14), %r14
 	jmp	_open
 _op_en:	ret
+
+# DATA
+################################################################################
+	.data
+
+_db4:
+	.double	4
+_db2:
+	.double 2
+_db1:
+	.double 1
+_db0:
+	.double 0
+_ln2:
+	.double 0.69314718056

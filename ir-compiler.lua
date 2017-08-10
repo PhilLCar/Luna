@@ -410,24 +410,22 @@ function pow()
    if not isDouble(v1) then
       ret = 
 	 "\tmovq\t" .. v1 .. ", %rax\n" ..
-	 "\tsarq\t$3, %rax\n"
+	 "\tsarq\t$3, %rax\n" .. 
+	 "\tmovsd\t(%rax), %xmm1\n"
    else
-      ret =
-	 "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
-	 "\tmovq\t%r12, %rax\n"
+      ret = "\tmovsd\t" .. v1 .. ", %xmm1\n"
    end
    if not isDouble(v2) then
       ret = ret ..
 	 "\tmovq\t" .. v2 .. ", %rbx\n" ..
-	 "\tsarq\t$3, %rbx\n"
+	 "\tsarq\t$3, %rbx\n" .. 
+	 "\tmovsd\t(%rax), %xmm0\n"
    else
-      ret = ret ..
-	 "\tmovsd\t" .. v2 .. ", 8(%r12)\n" ..
-	 "\tleaq\t8(%r12), %rax\n"
+      ret = ret .. "\tmovsd\t" .. v2 .. ", %xmm0\n"
    end
    ret = ret ..
       "\tcall\t_pow\n" ..
-      push("6(, %r12, 8)")
+      newdouble("%xmm0")
    return ret
 end
 

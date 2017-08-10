@@ -364,7 +364,16 @@ function associate(arr, left, unary, indent, ...)
 	    while arr[i + j] == "\n" do
 	       mem = mem .. "\n" .. strgen(_SPACE, indent + 1)
 	       j = j + inc
-	    end
+	    end--[[ ARRANGER
+	    while
+	       (arr[i + j] == "-" or
+		   arr[i + j] == "not" or
+		   arr[i + j] == "~" or
+		   arr[i + j] == "#")
+	    do
+	       mem = mem .. " (" .. arr[i + j]
+	       j = j + inc
+	       end]]
 	    if j > inc then
 	       arr[i + j] = "(" .. arr[i - inc] .. " " .. mem .. arr[i + j] .. ")"
 	    elseif j < inc then
