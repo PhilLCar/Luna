@@ -438,11 +438,11 @@ _pos:	andq	$0x7FF, %rbx
 	subq	$1023, %rbx # n = %rbx
 	jmp	_nrm
 _sb_n:	movq	$-1022, %rbx
-_nrm:	movq	%xmm1, %r15
-	sarq	$63, %r15
-	jz	_pw_ct
-	neg	%rbx
-	movq	$0, 48(%r12)
+_nrm:	#movq	%xmm1, %r15
+	#sarq	$63, %r15
+	#jz	_pw_ct
+	#neg	%rbx
+	#movq	$0, 48(%r12)
 _pw_ct:	movq	%rax, %r15
 	movq	$0x3FF, %rcx
 	salq	$52, %rcx
@@ -463,7 +463,6 @@ _lg:	# Log recursion
 	movsd	_db2(%rip), %xmm2
 	mulsd	%xmm3, %xmm3
 	dec	%rdi
-	#cmpq	$52, %rdi
 	js	_lg_dn
 	cmpsd	$5, %xmm3, %xmm2
 	movq	%xmm2, %rax
@@ -490,14 +489,6 @@ _trnct:	xorq	%rax, %r15
 	orq	%rdi, %r15
 _find_u:	
 	movq	%r15, %xmm3
-
-	#TMP
-	#popq	%rcx
-	#popq	%rdi
-	#movq	%xmm3, %xmm0
-	#ret
-	#TMP
-	
 	cvtsi2sd %rbx, %xmm0
 	addsd	%xmm3, %xmm0
 	mulsd	%xmm1, %xmm0 # %xmm2 = u
@@ -551,11 +542,11 @@ _p2_en:
 	movsd	_db0(%rip), %xmm0
 	subsd	%xmm2, %xmm0
 _pw_dn:	
-	cmpq	$1, 48(%r12)
-	jz	_pw_ret
-	movsd	%xmm0, %xmm2
-	movsd	_db1(%rip), %xmm0
-	divsd	%xmm2, %xmm0
+	#cmpq	$1, 48(%r12)
+	#jz	_pw_ret
+	#movsd	%xmm0, %xmm2
+	#movsd	_db1(%rip), %xmm0
+	#divsd	%xmm2, %xmm0
 	
 _pw_ret:	
 	movsd	 8(%r12), %xmm4
