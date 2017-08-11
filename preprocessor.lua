@@ -359,30 +359,54 @@ function associate(arr, left, unary, indent, ...)
 	       break
 	    end
 	 end
+	 local w
 	 if mem then
-	    j = inc
-	    while arr[i + j] == "\n" do
-	       mem = mem .. "\n" .. strgen(_SPACE, indent + 1)
-	       j = j + inc
-	    end--[[ ARRANGER
+	    j = 1
+	    w = 0
 	    while
-	       (arr[i + j] == "-" or
-		   arr[i + j] == "not" or
-		   arr[i + j] == "~" or
-		   arr[i + j] == "#")
-	    do
-	       mem = mem .. " (" .. arr[i + j]
-	       j = j + inc
-	       end]]
-	    if j > inc then
-	       arr[i + j] = "(" .. arr[i - inc] .. " " .. mem .. arr[i + j] .. ")"
-	    elseif j < inc then
-	       arr[i + j] = "(" .. arr[i + j] .. " " .. mem .. arr[i - inc] .. ")"
-	    else
-	       arr[i + j] = "(" .. arr[i - 1] .. " " .. mem .. " " .. arr[i + 1] .. ")"
+	       arr[i + j + w] == "-" or
+	       arr[i + j + w] == "not" or
+	       arr[i + j + w] == "~" or
+	       arr[i + j + w] == "#" or
+	       arr[i + j + w] == "\n"
+	       do
+	       while arr[i + j + w] == "\n" do
+		  mem = mem .. "\n" .. strgen(_SPACE, indent + 1)
+		  j = j + 1
+	       end
+	       while
+		  arr[i + j + w] == "-" or
+		  arr[i + j + w] == "not" or
+		  arr[i + j + w] == "~" or
+		  arr[i + j + w] == "#"
+	       do
+		  mem = mem .. " (" .. arr[i + j + w] .. " "
+		  w = w + 1
+	       end
 	    end
-	    for k = i - inc, i + j - inc, inc do
-	       arr[k] = nil
+	    if j + w > 1 and inc > 0 then
+	       arr[i + j + w] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
+	       for k = 1, w do
+		  arr[i + j + w] = arr[i + j + w] .. ")"
+	       end
+	    elseif j + w > 1 then
+	       arr[i - 1] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
+	       for k = 1, w do
+		  arr[i - 1] = arr[i - 1] .. ")"
+	       end
+	    else
+	       arr[i + inc] = "(" .. arr[i - 1] .. " " .. mem .. " " .. arr[i + 1] .. ")"
+	    end
+	    if inc > 0 then
+	       for k = i - 1, i + j + w - 1, 1 do
+		  arr[k] = nil
+	       end
+	       i = i + j + w
+	    else
+	       for k = i, i + j + w, 1 do
+		  arr[k] = nil
+	       end
+	       i = i - 1
 	    end
 	 end
 	 i = i + inc
