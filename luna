@@ -2,6 +2,7 @@
 local i = 1
 comp_flags = {}
 comp_code = ""
+comp_name = ""
 
 function help()
    print("Usage:\tluna -o1 -o2 -ox ... file\n\n" ..
@@ -48,6 +49,26 @@ end
 if comp_file then
    if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
       comp_file = comp_file:sub(1, #comp_file - 4)
+
+      for i = 1, #comp_file do
+	 local s = comp_file:sub(i, i)
+	 if s == "/" then
+	    comp_name = ""
+	 else
+	    comp_name = comp_name .. s
+	 end
+      end
+
+      if arg[i + 1] ~= nil then
+	 comp_target = arg[i + 1]
+	 if comp_target:sub(#comp_target - 1, #comp_target) == ".s" then
+	    comp_target = comp_target:sub(1, #comp_target - 2)
+	 elseif comp_target:sub(#comp_target, #comp_target) ~= "/" then
+	    comp_target = comp_target .. "/" .. comp_name
+	 else
+	    comp_target = comp_target .. comp_name
+	 end
+      end
       
       local file = io.open(comp_file .. ".lua", "r")
       local text = file:read("all")
@@ -60,11 +81,11 @@ if comp_file then
    require("compiler")
    require("ir-compiler")
    -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
-   if not comp_flags.asm then
+   if not comp_flags.asm and not comp_flags.lib then
       os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s ./library/asm/mmap.s ./library/asm/base.s ./library/asm/utils.s " ..
 		    comp_file .. ".s -o " .. comp_file .. ".exe")
    end
-   if comp_file and not comp_flags.asm and not comp_flags.sub then
+   if comp_file and not comp_flags.asm and not comp_flags.sub and not comp_flags.lib then
       os.execute("rm " .. comp_file .. ".s")
    end
 end

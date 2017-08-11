@@ -610,7 +610,12 @@ newlevel()
 comp_code = compile(comp_code, 1, nil, level)
 
 if comp_flags.sub then
-   file = io.open(comp_file .. ".lir", "w+")
+   local file
+   if comp_target then
+      file = io.open(comp_target .. ".lir", "w+")
+   else
+      file = io.open(comp_file .. ".lir", "w+")
+   end
    file:write(comp_code)
    file:close()
 end

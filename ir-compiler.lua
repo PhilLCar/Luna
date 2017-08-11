@@ -1,7 +1,7 @@
 -- Register information
 --------------------------------------------------------------------------------
 -- Registers (16)
-r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
+local r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
       "%r8", "%r9", "%r10", "%r11", "%r12", "%r13", "%r14", "%r15" }
 
 -- Reserved:  %rax, %rbx, %rsp, %rbp
@@ -9,73 +9,84 @@ r = { "%rax", "%rbx", "%rcx", "%rdx", "%rbp", "%rsp", "%rsi", "%rdi",
 --             MEM,  GBL,  CLO,  VAR
 
 -- Usable registers (8)
-u_size = 8
-u_name = { "%rdx", "%rcx", "%r8" , "%r9" , "%r10", "%r11", "%rdi", "%rsi" }
-u_cont = { false , false , false , false , false , false , false , false  }
+local u_size = 8
+local u_name = { "%rdx", "%rcx", "%r8" , "%r9" , "%r10", "%r11", "%rdi", "%rsi" }
+local u_cont = { false , false , false , false , false , false , false , false  }
 
 -- Calling registers (6)
-c_size = 6
-c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
+local c_size = 6
+local c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 
 -- Double-precision registers (16)
-d_size = 12
-d_name = { "%xmm4" , "%xmm5" , "%xmm6" , "%xmm7" , "%xmm8" , "%xmm9" ,
+local d_size = 12
+local d_name = { "%xmm4" , "%xmm5" , "%xmm6" , "%xmm7" , "%xmm8" , "%xmm9" ,
 	   "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15" }
-d_cont = { false   , false   , false   , false   , false   , false   ,
+local d_cont = { false   , false   , false   , false   , false   , false   ,
 	   false   , false   , false   , false   , false   , false    }
 
-rsp = 0
+local rsp = 0
 
-str_tbl = {}
+local str_tbl = {}
 
-ref_mask = false
+local ref_mask = false
 
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
-intro =
-   "\t.text\n" ..
-   "\t.global\t_main\n" ..
-   "\t.global\tmain\n" ..
-   "_main:\n" ..
-   "main:\n" ..
-   "\tpushq\t%rbx\n" ..
-   "\tpushq\t%r12\n" ..
-   "\tpushq\t%r13\n" ..
-   "\tpushq\t%r14\n" ..
-   "\tpushq\t%r15\n" ..
-   "\tpushq\t%rbp\n" ..
-   "\tmovq\t%rsp, %rbp\n" ..
-   "\txor\t%rbx, %rbx\n" .. 
-   -- MEMORY
-   "\tmovq\t$134217728, %rax\n" ..
-   --"\tmovq\t%rax, _mem_size(%rip)\n" ..
-   "\tpushq\t%rax\n" ..
-   "\tcall\tmmap\n" ..
-   "\tmovq\t%rax, %r12\n" ..
-   -- INIT
-   "\tmovq\t$0, (%r12)\n" ..
-   "\tmovq\t$17, 8(%r12)\n" ..
-   "\tmovq\t$17, 16(%r12)\n" ..
-   "\tlea\t3(, %r12, 8), %r13\n" ..
-   "\taddq\t$24, %r12\n" ..
-   "\tmovq\t$17, %r14\n" ..
-   "\n# GENERATED CODE BEGINING" ..	    
+local intro
+if comp_flags.lib then
+   intro = "_load_" .. comp_name .. ":\n"
+else
+   intro =
+      "\t.text\n" ..
+      "\t.global\t_main\n" ..
+      "\t.global\tmain\n" ..
+      "_main:\n" ..
+      "main:\n" ..
+      "\tpushq\t%rbx\n" ..
+      "\tpushq\t%r12\n" ..
+      "\tpushq\t%r13\n" ..
+      "\tpushq\t%r14\n" ..
+      "\tpushq\t%r15\n" ..
+      "\tpushq\t%rbp\n" ..
+      "\tmovq\t%rsp, %rbp\n" ..
+      "\txor\t%rbx, %rbx\n" .. 
+      -- MEMORY
+      "\tmovq\t$134217728, %rax\n" ..
+      --"\tmovq\t%rax, _mem_size(%rip)\n" ..
+      "\tpushq\t%rax\n" ..
+      "\tcall\tmmap\n" ..
+      "\tmovq\t%rax, %r12\n" ..
+      -- INIT
+      "\tmovq\t$0, (%r12)\n" ..
+      "\tmovq\t$17, 8(%r12)\n" ..
+      "\tmovq\t$17, 16(%r12)\n" ..
+      "\tlea\t3(, %r12, 8), %r13\n" ..
+      "\taddq\t$24, %r12\n" ..
+      "\tmovq\t$17, %r14\n" ..
+      "\n# GENERATED CODE BEGINING" ..	    
+      "\n################################################################################\n\n"
+end
+
+local func = "\n# FUNCTIONS" ..	    
    "\n################################################################################\n\n"
 
-func = "\n# FUNCTIONS" ..	    
-   "\n################################################################################\n\n"
-
-need_data = false
-data = "\n# DATA" ..	    
+local need_data = false
+local data = "\n# DATA" ..	    
    "\n################################################################################\n\n" ..
    "\t.data\n\n"
 
-outro =
-   "\tpopq\t%r15\n" ..
-   "\tpopq\t%r14\n" ..
-   "\tpopq\t%r13\n" ..
-   "\tpopq\t%r12\n" ..
-   "\tpopq\t%rbx\n" ..
+local outro = ""
+
+if  not comp_flags.lib then
+   outro = 
+      "\tpopq\t%r15\n" ..
+      "\tpopq\t%r14\n" ..
+      "\tpopq\t%r13\n" ..
+      "\tpopq\t%r12\n" ..
+      "\tpopq\t%rbx\n"
+end
+   
+outro = outro ..
    "\tmovq\t$0, %rax\n" ..
    "\tret\n"
 
@@ -1627,9 +1638,36 @@ end
 ---------- MAIN ----------
 comp_code = translate(comp_code)
 
-file = io.open(comp_file .. ".s", "w+")
+local file
+if comp_target then
+   file = io.open(comp_target .. ".s", "w+")
+else
+   file = io.open(comp_file .. ".s", "w+")
+end
 file:write(comp_code)
 file:close()
+
+if comp_flags.lib then
+   local pres, line = false
+   local name = "_" .. comp_name
+   file = io.open("library/av.lib", "r")
+   if file then
+      repeat
+	 line = file:read("line")
+	 if line == name then
+	    pres = true
+	    break
+	 end
+      until not line
+      file:close()
+   end
+   
+   if not pres then
+      file = io.open("library/av.lib", "a+")
+      file:write("_" .. comp_name .. "\n")
+      file:close()
+   end
+end
 
 --[[
 INTEGER FUNCTIONS ## DEPRECATED ##

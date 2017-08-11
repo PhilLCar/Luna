@@ -22,7 +22,7 @@ long cstr(char* s) {
 int print(long i) {
   int type = i & 7;
   long val = i >> 3;
-  double c;
+  int first = 0;
   switch(type) {
   case 0:
     printf("%d\n", val);
@@ -38,10 +38,16 @@ int print(long i) {
   case 2:
     printf("%s\n", (char*)(val + 8));
     break;
+  case 5:
+    while (*(int*)val != 33) {
+      if (first) printf("\t");
+      else first = 1;
+      print(val);
+      val = val + 8;
+    }
+  break;
   case 6:
-    c = *(double*) val;
-    //printf("%d\n", (int)c);
-    printf("%.13g\n", c);
+    printf("%.13g\n", *(double *) val);
     break;
   }
   return 1;

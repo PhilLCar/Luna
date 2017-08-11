@@ -2,16 +2,43 @@
 
 .SUFFIXES: .lua .s .c .o .exe .tex .pdf
 
-PDFLATEX=pdflatex
-MKFILE_PATH:=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PDFLATEX = pdflatex
+CC = gcc
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+CSRC := library/c
+SSRC := library/asm
+LSRC := library/lua
+OBJ  := library/o
 
-all: stdio.o
+CFILES := $(wildcard $(CSRC)/*.c)
+SFILES := $(wildcard $(SSRC)/*.s)
+LFILES := $(wildcard $(LSRC)/*.lua)
+
+ASML := $(patsubst $(LSRC)/%.lua, $(SSRC)/%.s, $(LFILES))
+OBJC := $(patsubst $(CSRC)/%.c, $(OBJ)/%.o, $(CFILES))
+OBJS := $(patsubst $(SSRC)/%.s, $(OBJ)/%.o, $(SFILES))
+
+all: lib
 	@echo "Please add $(MKFILE_PATH) to your PATH to use Luna from any folder"
 	@echo "You can do this by executing :"
 	@echo '	% export PATH=$(MKFILE_PATH):$$PATH'
 
-.s.o.c:
-	gcc -c -o $*.s $*.o $*.c
+lib: $(ASML) $(OBJC) $(OBJS)
+
+$(OBJ)/%.o: $(CSRC)/%.c
+	$(CC) -c $< -o $@
+
+$(OBJ)/%.o: $(SSRC)/%.s
+	$(CC) -c $< -o $@
+
+$(SSRC)/%.s: $(LSRC)/%.lua
+	./luna -lib $< $@
+	OBJS := $(patsubst $(SSRC)/%.s, $(OBJ)/%.o, $(SFILES))
+
+rmlib:
+	rm $(OBJ)/*.o
+	rm library/av.lib
+	rm $(ASML)
 
 test: ut
 
