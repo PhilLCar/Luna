@@ -33,12 +33,11 @@ $(OBJ)/%.o: $(SSRC)/%.s
 
 $(SSRC)/%.s: $(LSRC)/%.lua
 	./luna -lib $< $@
-	OBJS := $(patsubst $(SSRC)/%.s, $(OBJ)/%.o, $(SFILES))
 
 rmlib:
 	rm $(OBJ)/*.o
-	rm library/av.lib
 	rm $(ASML)
+	rm library/av.lib
 
 test: ut
 

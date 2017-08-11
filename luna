@@ -82,8 +82,7 @@ if comp_file then
    require("ir-compiler")
    -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
    if not comp_flags.asm and not comp_flags.lib then
-      os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s ./library/asm/mmap.s ./library/asm/base.s ./library/asm/utils.s " ..
-		    comp_file .. ".s -o " .. comp_file .. ".exe")
+      os.execute("gcc ./library/o/*.o " .. comp_file .. ".s -o " .. comp_file .. ".exe")
    end
    if comp_file and not comp_flags.asm and not comp_flags.sub and not comp_flags.lib then
       os.execute("rm " .. comp_file .. ".s")
