@@ -951,7 +951,7 @@ function frenv(text, i, p, n)
       "\tjz\t_FRE" .. p .. "\n" ..
       "\tjmp\t_FRS" .. p .. "\n" ..
       "_FRN" .. p .. ":\tmovsd\t%xmm0, %xmm1\n" ..
-      "\tcmpsd\t$1," .. -8 * (r_size - 2) .. "(%rbp), %xmm1\n" ..
+      "\tcmpsd\t$1, " .. -8 * (r_size - 2) .. "(%rbp), %xmm1\n" ..
       "\tmovq\t%xmm1, %rax\n" ..
       "\tcmpq\t$-1, %rax\n" ..
       "\tjz\t_FRE" .. p .. "\n" ..
@@ -964,11 +964,14 @@ function frenv(text, i, p, n)
       "\tmovsd\t" .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
       "\tmovsd\t" .. -8 * (r_size - 3) .. "(%rbp), %xmm0\n" ..
       "\taddsd\t%xmm1, %xmm0\n" ..
+      "\tmovsd\t%xmm0, " .. -8 * (r_size - 3) .. "(%rbp)\n" ..
       "\tmovq\t" .. -8 * (r_size - 4) .. "(%rbp), %rax\n" ..
       "\tsarq\t$3, %rax\n" ..
       "\tmovsd\t%xmm0, (%rax)\n" ..
       "\tjmp\t_FRC" .. p .. "\n" ..
       "_FRE" .. p .. ":\n"
+
+   r_size = r_size - 4
    
    return ret, i
 end
