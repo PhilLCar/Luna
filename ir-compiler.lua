@@ -1625,11 +1625,10 @@ function _translate(text, i, sets, loop)
 end
 
 ---------- MAIN ----------
-local file = io.open(comp_file .. ".lir", "r")
-text = file:read("all")
-file:close()
+comp_code = translate(comp_code)
+
 file = io.open(comp_file .. ".s", "w+")
-file:write(translate(text))
+file:write(comp_code)
 file:close()
 
 --[[

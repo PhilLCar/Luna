@@ -1,5 +1,5 @@
 -- Constant
-_SPACE = "   "
+local _SPACE = "   "
 
 --------------------------------------------------------------------------------
 -- Error managment values
@@ -322,10 +322,19 @@ function associate(arr, left, unary, indent, ...)
 	       arr[i] = arr[i] .. "\n" .. strgen(_SPACE, indent + 1)
 	       j = j + 1
 	    end
+	    local ts = trysolve(arr[i], arr[j + 1])
 	    if j > 1 then
-	       arr[i + j] = "(" .. arr[i] .. arr[i + j] .. ")"
+	       if ts then
+		  arr[i + j] = ts
+	       else
+		  arr[i + j] = "(" .. arr[i] .. arr[i + j] .. ")"
+	       end
 	    else
-	       arr[i + j] = "(" .. arr[i] .. " " .. arr[i + j] .. ")"
+	       if ts then
+		  arr[i + j] = ts
+	       else
+		  arr[i + j] = "(" .. arr[i] .. " " .. arr[i + j] .. ")"
+	       end
 	    end
 	    for k = i, i + j - 1 do
 	       arr[k] = nil
@@ -384,18 +393,31 @@ function associate(arr, left, unary, indent, ...)
 		  w = w + 1
 	       end
 	    end
+	    local ts = trysolve(mem, arr[i + j + w], arr[i - 1])
 	    if j + w > 1 and inc > 0 then
-	       arr[i + j + w] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
-	       for k = 1, w do
-		  arr[i + j + w] = arr[i + j + w] .. ")"
+	       if ts then
+		  arr[i + j + w] = ts
+	       else
+		  arr[i + j + w] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
+		  for k = 1, w do
+		     arr[i + j + w] = arr[i + j + w] .. ")"
+		  end
 	       end
 	    elseif j + w > 1 then
-	       arr[i - 1] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
-	       for k = 1, w do
-		  arr[i - 1] = arr[i - 1] .. ")"
+	       if ts then
+		  arr[i - 1] = ts
+	       else
+		  arr[i - 1] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
+		  for k = 1, w do
+		     arr[i - 1] = arr[i - 1] .. ")"
+		  end
 	       end
 	    else
-	       arr[i + inc] = "(" .. arr[i - 1] .. " " .. mem .. " " .. arr[i + 1] .. ")"
+	       if ts then
+		  arr[i + inc] = ts
+	       else
+		  arr[i + inc] = "(" .. arr[i - 1] .. " " .. mem .. " " .. arr[i + 1] .. ")"
+	       end
 	    end
 	    if inc > 0 then
 	       for k = i - 1, i + j + w - 1, 1 do
@@ -927,6 +949,201 @@ function _preprocess(str, i, indent, stops)
 end
 
 --------------------------------------------------------------------------------
+-- Precompiling
+--------------------------------------------------------------------------------
+function mem(elem, ...)
+   elems = {...}
+   for i, e in elems do
+      if e == elem then
+	 return true
+      end
+   end
+   return false
+end
+
+function constant(val)
+   if tonumber(val) then
+      return tonumber(val)
+   elseif val:sub(1, 1) == "\"" then
+      return val:sub(2, #val - 1)
+   elseif val == "nil" then
+      return nil
+   elseif val == "true" then
+      return true
+   elseif val == "false" then
+      return false
+   end
+end
+
+function isConstant(val)
+   if tonumber(val) then
+      return "number"
+   elseif val and val:sub(1, 1) == "\"" then
+      return "string"
+   elseif
+      val == "nil" or
+      val == "true" or
+      val == "false"
+   then
+      return val
+   end
+   return false
+end
+
+function trysolve(op, arg1, arg2)
+   local t, u
+   if arg1:sub(1, 1) == "(" then
+      arg1 = arg1:sub(2, #arg1 - 1)
+   end
+   if arg2 and arg2:sub(1, 1) == "(" then
+      arg2 = arg2:sub(2, #arg2 - 1)
+   end
+   if arg2 then
+      if op == "*" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u * t)
+	 end
+      elseif op == "/" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    if tonumber(tostring(u / t)) then
+	       return tostring(u / t)
+	    end
+	 end
+      elseif op == "+" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u + t)
+	 end
+      elseif op == "-" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u - t)
+	 end
+      elseif op == "^" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    if tonumber(tostring(u ^ t)) then
+	       return tostring(u ^ t)
+	    end
+	 end
+      elseif op == "%" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    if tonumber(tostring(u % t)) then
+	       return tostring(u % t)
+	    end
+	 end
+      elseif op == ".." then
+	 t = isConstant(arg1)
+	 u = isConstant(arg2)
+	 if t and u and t == "string" and u == "string" then
+	    return tostring("\"" .. t:sub(2, #t - 1) .. u:sub(2, #u - 1) .. "\"")
+	 end
+      elseif op == "and" then
+	 t = arg1
+	 u = arg2
+	 if isConstant(t) and isConstant(u) then
+	    if t == "false" or t == "nil" or u == "false" or u == "nil" then
+	       return "false"
+	    elseif t == "true" then
+	       return u
+	    elseif u == "true" then
+	       return t
+	    end
+	 end
+      elseif op == "or" then
+	 t = arg1
+	 u = arg2
+	 if isConstant(t) and isConstant(u) then
+	    if t == "true" or u == "true" then
+	       return "true"
+	    elseif t == "false" or t == "nil" then
+	       return u
+	    elseif u == "false" or u == "nil" then
+	       return t
+	    end
+	 end
+      elseif op == "==" then
+	 t = arg1
+	 t = arg2
+	 if t == u then
+	       return "true"
+	 end
+      elseif op == "~=" then
+	 t = arg1
+	 t = arg2
+	 if isConstant(t) and isConstant(u) and t ~= u then
+	    return "true"
+	 end
+      elseif op == "<" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u < t)
+	 end
+      elseif op == ">" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u > t)
+	 end
+      elseif op == "<=" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u <= t)
+	 end
+      elseif op == ">=" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u >= t)
+	 end
+      elseif op == "<<" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u << t)
+	 end
+      elseif op == ">>" then
+	 t = tonumber(arg1)
+	 u = tonumber(arg2)
+	 if t and u then
+	    return tostring(u >> t)
+	 end
+   end
+   else
+      if op == "-" then
+	 t = tonumber(arg1)
+	 if t then
+	    return tostring(-t)
+	 end
+      elseif op == "~" then
+	 t = tonumber(arg1)
+	 if t then
+	    return tostring(~t)
+	 end
+      elseif op == "not" then
+	 if arg1 == "nil" or arg1 == "false" then
+	    return "true"
+	 elseif arg1 == "true" then
+	    return "false"
+	 end
+      end
+   end
+   
+   return false
+end
+
+--------------------------------------------------------------------------------
 -- Error handling
 --------------------------------------------------------------------------------
 function helperror()
@@ -948,9 +1165,11 @@ end
 --------------------------------------------------------------------------------
 -- Program
 --------------------------------------------------------------------------------
-local file = io.open(comp_file .. ".lua", "r")
-local text = file:read("all")
-file:close()
-file = io.open(comp_file .. ".pp.lua", "w+")
-file:write(preprocess(text))
-file:close()
+
+comp_code = preprocess(comp_code)
+
+if comp_flags.sub then
+   file = io.open(comp_file .. ".pp.lua", "w+")
+   file:write(comp_code)
+   file:close()
+end

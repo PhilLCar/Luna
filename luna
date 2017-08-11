@@ -1,13 +1,70 @@
 #! /usr/bin/env lua
+local i = 1
+comp_flags = {}
+comp_code = ""
 
-comp_file = arg[1]
-if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
-   comp_file = comp_file:sub(1, #comp_file - 4)
+function help()
+   print("Usage:\tluna -o1 -o2 -ox ... file\n\n" ..
+	    "\t-lib\tCompiles the target file as a library file\n\n" ..
+	    "\t-i\tPrints information about the compiler\n\n" ..
+	 "\t-S\tProduces an assembly code for the program\n\n" ..
+	    "\t-f\tCompiles the program as a collection of C functions\n" ..
+	    "\t\tIn this mode there is no variable number of arguments or closure support.\n\n" ..
+	    "\t-s\tKeeps the subfiles created during the compiling process.\n\n" ..
+	    "\t-h\tHelp command\n")
+   os.exit()
 end
 
-require("preprocessor")
-require("compiler")
-require("ir-compiler")
--- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
-os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s ./library/asm/mmap.s ./library/asm/base.s ./library/asm/utils.s " ..
-	      comp_file .. ".s -o " .. comp_file .. ".exe")
+while arg[i] and arg[i]:sub(1, 1) == "-" do
+   local a = arg[i]
+   if a == "-lib" then   -- Compiles a librairy file
+      comp_flags.lib = true
+   elseif a == "-i" then -- Gives information about the program
+      comp_flags.inf = true
+   elseif a == "-S" then -- Stops compilation at the assembler level
+      comp_flags.asm = true
+   elseif a == "-f" then -- Compile code to be executed by C code
+      comp_flags.fnc = true
+   elseif a == "-s" then -- Saves the subfiles
+      comp_flags.sub = true
+   elseif a == "-h" then -- help
+      help()
+   end
+   i = i + 1
+end
+
+if not comp_flags.inf then
+   comp_file = arg[i]
+   if comp_file == nil then
+      print("No configuration of luna takes 0 arguments. Try with -h for help.")
+      os.exit()
+   end
+end
+
+if comp_flags.inf then
+   print("LUNA [Lua Compiler] V1.0 (2017)\n\tAuthor: Philippe Caron\n")
+end
+
+if comp_file then
+   if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
+      comp_file = comp_file:sub(1, #comp_file - 4)
+      
+      local file = io.open(comp_file .. ".lua", "r")
+      local text = file:read("all")
+      file:close()
+      
+      comp_code = text
+   end
+   
+   require("preprocessor")
+   require("compiler")
+   require("ir-compiler")
+   -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
+   if not comp_flags.asm then
+      os.execute("gcc ./library/asm/exio.s ./library/asm/stdio.s ./library/asm/mmap.s ./library/asm/base.s ./library/asm/utils.s " ..
+		    comp_file .. ".s -o " .. comp_file .. ".exe")
+   end
+   if comp_file and not comp_flags.asm and not comp_flags.sub then
+      os.execute("rm " .. comp_file .. ".s")
+   end
+end

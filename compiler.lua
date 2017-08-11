@@ -602,10 +602,15 @@ function test(t1, t2)
    end
 end
 
+--------------------------------------------------------------------------------
+-- Program
+--------------------------------------------------------------------------------
+
 newlevel()
-local file = io.open(comp_file .. ".pp.lua", "r")
-local text = file:read("all")
-file:close()
-file = io.open(comp_file .. ".lir", "w+")
-file:write(compile(text, 1, nil, level))
-file:close()
+comp_code = compile(comp_code, 1, nil, level)
+
+if comp_flags.sub then
+   file = io.open(comp_file .. ".lir", "w+")
+   file:write(comp_code)
+   file:close()
+end
