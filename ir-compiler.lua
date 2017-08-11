@@ -419,11 +419,11 @@ function pow()
       ret = ret ..
 	 "\tmovq\t" .. v2 .. ", %rbx\n" ..
 	 "\tsarq\t$3, %rbx\n" .. 
-	 "\tmovsd\t(%rax), %xmm0\n"
+	 "\tmovsd\t(%rbx), %xmm0\n"
    else
       ret = ret .. "\tmovsd\t" .. v2 .. ", %xmm0\n"
    end
-   ret = ret ..
+   ret = ret .. prep(true) ..
       "\tcall\t_pow\n" ..
       newdouble("%xmm0")
    return ret
@@ -450,6 +450,27 @@ function mod(intsr)
       prep(true) ..
       "\tcall\t_mod\n" ..
       newdouble("%xmm0")
+   return ret
+end
+
+function neg()
+   local ret = push(nil)
+   local v1, v2 = get(), nil
+   if not isDouble(v1) then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rbx\n" ..
+	 "\tsarq\t$3, %rbx\n" ..
+	 "\tmovq\t(%rbx), %xmm0\n"
+      v1 = "%xmm0"
+      v2 = "(%rbx)"
+   end
+   ret = ret ..
+      "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
+      "\txorpd\t" .. v1 .. ", " .. v1 .. "\n" ..
+      "\tsubsd\t(%r12), " .. v1 .. "\n"
+   if v2 then
+      ret = ret .. "\tmovsd\t" .. v1 .. ", " .. v2 .. "\n"
+   end
    return ret
 end
 
@@ -844,7 +865,111 @@ function whenv(text, i, p)
    
    ret = ret .. tmp ..
       "\tjmp\t_WH" .. p .. "\n" ..
-      "_WE" .. p .. ":\n"
+      "_WE" .. p .. ":\n" ..
+      "\tmovq\t%rbp, %rsp\n"
+   rsp = 0
+   return ret, i
+end
+
+function rpenv(text, i, p)
+   local ret, tmp = "_RP" .. p .. ":\n"
+   local tag, v
+   local vs, rs
+   ret = ret .. "\tmovq\t%rbp, %rsp\n"
+   rsp = 0
+   tmp, i = _translate(text, i, false, false)
+   ret = ret .. tmp .. "_UN" .. p .. ":\n"
+   
+   tmp, i, tag = _translate(text, i, false, "_RE" .. p)
+   v = pop()
+   if v:sub(1, 1) == "$" then
+      tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n"
+      v = "%rax"
+   end
+   
+   ret = ret .. tmp ..
+      "\tcmpq\t$1, " .. v .. "\n" ..
+      "\tjz\t_RP" .. p .. "\n" ..
+      "\tcmpq\t$17, " .. v .. "\n" ..
+      "\tjz\t_RP" .. p .. "\n" ..
+      "_RE" .. p .. ":\n"
+      .. "\tmovq\t%rbp, %rsp\n"
+   rsp = 0
+   return ret, i
+end
+
+function frenv(text, i, p, n)
+   local ret, tmp
+   local tag, v
+   tmp, i = _translate(text, i, false, false)
+   v = pop()
+   if isMem(v) then
+      tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n" ..
+	 "\tsarq\t$3, %rax\n" ..
+	 "\tmovq\t(%rax), %xmm0\n" ..
+	 lock("%xmm0")
+   elseif isDouble(v) then
+      tmp = tmp .. "\tmovsd\t" .. v .. ", %xmm0" ..
+	 lock("%xmm0")
+   else
+      tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n" ..
+	 "\tsarq\t$3, %rax\n" ..
+	 "\tmovq\t(%rax), %xmm0\n" ..
+	 lock("%xmm0")
+   end
+   ret = tmp .. "\tmovq\t%xmm0, " .. -8 * r_size .. "(%rbp)\n"
+   r_size = r_size + 1
+   for k = 1, 2 do
+      tmp, i = _translate(text, i, false, false)
+      v = pop()
+      if isMem(v) then
+	 tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n" ..
+	    "\tsarq\t$3, %rax\n" .. lock("(%rax)")
+      elseif isDouble(v) then
+	 tmp = tmp .. "\tmovsd\t" .. v .. ", " .. -8 * r_size .. "(%rbp)\n"
+	 r_size = r_size + 1
+      else
+	 tmp = tmp ..
+	    "\tsarq\t$3, " .. v .. "\n" .. lock(v)
+      end
+      ret = ret .. tmp
+   end
+   
+   rsp = 0
+   ret = ret .. 
+      "_FRC" .. p .. ":\n" ..
+      "\tmovq\t%rbp, %rsp\n" ..
+      "\txorpd\t%xmm1, %xmm1\n" ..
+      "\tcmpsd\t$6, " .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
+      "\tmovq\t%xmm1, %rax\n" ..
+      "\tcmpq\t$-1, %rax\n" ..
+      "\tjz\t_FRN" .. p .. "\n" ..
+      "\tmovsd\t%xmm0, %xmm1\n" .. -- Base
+      "\tcmpsd\t$6, " .. -8 * (r_size - 2) .. "(%rbp), %xmm1\n" .. -- Comparateur
+      "\tmovq\t%xmm1, %rax\n" ..
+      "\tcmpq\t$-1, %rax\n" ..
+      "\tjz\t_FRE" .. p .. "\n" ..
+      "\tjmp\t_FRS" .. p .. "\n" ..
+      "_FRN" .. p .. ":\tmovsd\t%xmm0, %xmm1\n" ..
+      "\tcmpsd\t$1," .. -8 * (r_size - 2) .. "(%rbp), %xmm1\n" ..
+      "\tmovq\t%xmm1, %rax\n" ..
+      "\tcmpq\t$-1, %rax\n" ..
+      "\tjz\t_FRE" .. p .. "\n" ..
+      "_FRS" .. p .. ":\n"
+
+   tmp, i = _translate(text, i, false, "_FRE" .. p)
+
+   rsp = 0
+   ret = ret .. tmp ..
+      "\tmovsd\t" .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
+      "\tmovsd\t" .. -8 * (r_size - 3) .. "(%rbp), %xmm0\n" ..
+      "\taddsd\t%xmm1, %xmm0\n" ..
+      "\tmovq\t" .. -8 * (r_size - 4) .. "(%rbp), %rax\n" ..
+      "\tsarq\t$3, %rax\n" ..
+      "\tmovsd\t%xmm0, (%rax)\n" ..
+      "\tjmp\t_FRC" .. p .. "\n" ..
+      "_FRE" .. p .. ":\n"
+   
    return ret, i
 end
 
@@ -1281,11 +1406,7 @@ function _translate(text, i, sets, loop)
 	 asm = asm .. newdouble(tostring(tonumber(value)))
 
       elseif instr == "neg" then
-	 tmp = get()
-	 asm = asm ..
-	    "\tmovsd\t" .. tmp .. ", (%r12)\n" ..
-	    "\txorpd\t" .. tmp .. ", " .. tmp .. "\n" ..
-	    "\tsubsd\t(%r12), " .. tmp .. "\n"
+	 asm = asm .. neg()
 	 
       elseif instr == "spec" then
 	 if value == "nil" then
@@ -1424,42 +1545,51 @@ function _translate(text, i, sets, loop)
 	 asm = asm .. tmp
 
       elseif instr == "while" then
-	 tmp, i = whenv(text, i, value, false)
+	 tmp, i = whenv(text, i, value)
+	 asm = asm .. tmp
+
+      elseif instr == "repeat" then
+	 tmp, i = rpenv(text, i, value)
+	 asm = asm .. tmp
+
+      elseif instr == "for" then
+	 local t
+	 tmp, i = nextexpr(text, i)
+	 tmp, t = separate(tmp)
+	 tmp, i = frenv(text, i, value, tonumber(t))
 	 asm = asm .. tmp
 
       elseif instr == "fct" then
 	 tmp, i = fct(text, i, value)
 	 asm = asm .. tmp
-	 
-      elseif instr == "call" or instr == "tcall" then
-	 return asm, i
 
       elseif instr == "free" then
 	 r_size = r_size - tonumber(value)
 
       elseif
-	 instr == "stack" or
-	 instr == "place" or
-	 instr == "done" or
-	 instr == "struct"
-      then
-	 return asm, i, instr
-
-      elseif
-         instr == "then" or
-         instr == "else" or
-	 instr == "iend"
+	 instr == "stack"  or
+	 instr == "place"  or
+	 instr == "done"   or
+	 instr == "struct" or
+         instr == "wdo"    or
+	 instr == "wend"   or
+         instr == "until"  or
+	 instr == "rend"   or
+	 instr == "frdo"   or
+	 instr == "frend"  or
+         instr == "then"   or
+         instr == "else"   or
+	 instr == "iend"   or
+	 instr == "call"   or
+	 instr == "tcall"
       then
 	 return asm, i, instr
 
       elseif instr == "brk" then
-	 asm = asm .. "\tjmp\t" .. loop .. "\n"
-
-      elseif
-         instr == "wdo" or
-	 instr == "wend"
-      then
-	 return asm, i, instr
+	 asm = asm ..
+	    "\tjmp\t" .. loop .. "\n"..
+	    "\tmovq\t%rbp, %rsp\n"
+	 rsp = 0
 
       elseif instr == "tac" then
 	 return asm, i, struct

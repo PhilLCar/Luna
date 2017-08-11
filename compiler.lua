@@ -100,8 +100,6 @@ function compile(str, i, fname, flvl)
 	 return ret, i, expr
 
       elseif expr == "until" then
-	 tmp, i = evaluate(str, i, fname, flvl)
-	 ret = ret .. tmp .. poplevel()
 	 return ret, i, expr
 
       elseif expr == "if" then
@@ -494,6 +492,7 @@ function forscope(str, i, fname, flvl)
       register(true, fp[1])
       register(true, nil)
       register(true, nil)
+      register(true, nil)
       test("=", fp[2])
       c = 3
       tmp = ""
@@ -527,7 +526,13 @@ function repscope(str, i, fname, flvl)
    newlevel()
    tmp, i, t = compile(str, i, fname, flvl)
    test("until", t)
-   ret = ret .. tmp .. "rend\t" .. tostring(rpct) .. "\n"
+   ret = ret .. tmp
+   
+   tmp, i = evaluate(str, i, fname, flvl)
+   tmp = "until\n" .. trim(tmp) 
+   ret = ret .. tmp .. poplevel()
+   
+   ret = ret .. "rend\t" .. tostring(rpct) .. "\n"
    return ret, i
 end
 
