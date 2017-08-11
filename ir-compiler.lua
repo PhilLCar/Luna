@@ -785,14 +785,14 @@ end
 
 -- Environment functions
 --------------------------------------------------------------------------------
-function ifenv(text, i, p)
+function ifenv(text, i, p, loop)
    local ret, tmp1, tmp2 = "_IF" .. p .. ":\n"
    local tag, jlab, v
    local vs, rs
-   tmp1, i = _translate(text, i, false)
+   tmp1, i = _translate(text, i, false, false)
    v = pop()
    --vs, rs = v_size, r_size
-   tmp2, i, tag = _translate(text, i, false)
+   tmp2, i, tag = _translate(text, i, false, loop)
    if tag == "else" then
       jlab = "_EL" .. p
    else
@@ -810,13 +810,41 @@ function ifenv(text, i, p)
       tmp2
    if tag == "else" then
       --v_size, r_size = vs, rs
-      tmp1, i = _translate(text, i, false)
+      tmp1, i = _translate(text, i, false, loop)
       ret = ret ..
 	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
 	 tmp1 .. "_FI" .. p .. ":\n"
    else
       ret = ret .. jlab .. ":\n"
    end
+   return ret, i
+end
+
+function whenv(text, i, p)
+   local ret, tmp = "_WH" .. p .. ":\n"
+   local tag, v
+   local vs, rs
+   ret = ret .. "\tmovq\t%rbp, %rsp\n"
+   rsp = 0
+   tmp, i = _translate(text, i, false, false)
+   v = pop()
+   if v:sub(1, 1) == "$" then
+      tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n"
+      v = "%rax"
+   end
+   ret = ret .. tmp .. "_WD" .. p .. ":\n" ..
+      "\tcmpq\t$1, " .. v .. "\n" ..
+      "\tjz\t_WE" .. p .. "\n" ..
+      "\tcmpq\t$17, " .. v .. "\n" ..
+      "\tjz\t_WE" .. p .. "\n"
+
+   ret = ret .. "\tmovq\t%rbp, %rsp\n"
+   rsp = 0
+   tmp, i, tag = _translate(text, i, false, "_WE" .. p)
+   
+   ret = ret .. tmp ..
+      "\tjmp\t_WH" .. p .. "\n" ..
+      "_WE" .. p .. ":\n"
    return ret, i
 end
 
@@ -850,7 +878,7 @@ function fct(text, i, value)
 
    ret = ret .. build(val, ins == "nargs", name)
    
-   tmp, i = _translate(text, i, false)
+   tmp, i = _translate(text, i, false, false)
    return ret .. tmp, i
 end
 
@@ -924,7 +952,7 @@ function params(text, i, p, call)
    -- Get the parameters
    ------------------------------
    for j = 1, p do
-      tmp, i, func = _translate(text, i, false)
+      tmp, i, func = _translate(text, i, false, false)
       asm = asm .. tmp
    end
    typ, i = readline(text, i)
@@ -1070,17 +1098,17 @@ function chg(text, i, p)
    local asm, tmp = ""
    local rs, done = r_size
    for j = 1, p do
-      tmp, i, done = _translate(text, i, true)
+      tmp, i, done = _translate(text, i, true, false)
       if buf and isMem(buf) then
 	 tmp = tmp .. lea(pop())
       end
       asm = asm .. tmp .. lock(pop())
    end
-   tmp, i, done = _translate(text, i, true)
+   tmp, i, done = _translate(text, i, true, false)
    if p == 0 then
       done = false
       while not (done == "stack") do
-	 tmp, i, done = _translate(text, i, false)
+	 tmp, i, done = _translate(text, i, false, false)
 	 asm = asm .. tmp
       end
    else
@@ -1101,9 +1129,9 @@ function set(text, i, p)
    local func, j = false, 1
    local fill, r = false
    while j <= p do
-      tmp, i, func = _translate(text, i, false)
+      tmp, i, func = _translate(text, i, false, false)
       if func == "struct" then
-	 tmp, i, func = _translate(text, i, false)
+	 tmp, i, func = _translate(text, i, false, false)
 	 asm = asm .. tmp .. lock(pop())
 	 if func then
 	    asm = asm .. prep(true) ..
@@ -1118,7 +1146,7 @@ function set(text, i, p)
    if not func then
       r = true
    end
-   tmp, i, func = _translate(text, i, false)
+   tmp, i, func = _translate(text, i, false, false)
    if func == "done" then
       if r then
 	 asm = asm .. prep(true) ..
@@ -1148,11 +1176,11 @@ function ret(text, i, p)
    local r, base
    local struct
    local rs, vs = r_size, v_size
-   tmp, i = _translate(text, i, false)
+   tmp, i = _translate(text, i, false, false)
    asm = tmp .. lock(pop())
    base = r_size
    for j = 2, p do
-      tmp, i, struct = _translate(text, i, false)
+      tmp, i, struct = _translate(text, i, false, false)
       asm = asm .. tmp .. lock(pop())
    end
    if p > 1 then
@@ -1181,7 +1209,7 @@ function ret(text, i, p)
 	 "\txorq\t%rbx, %rbx\n" ..
 	 "\tmovq\t" .. pop() .. ", %rax\n"
    end
-   tmp, i = _translate(text, i, false)
+   tmp, i = _translate(text, i, false, false)
    if rsp ~= 0 then
       asm = asm .. "\tleave\n\tret\n"
    else
@@ -1223,11 +1251,11 @@ end
 -- PROGRAM
 --------------------------------------------------------------------------------
 function translate(text)
-   local ret, i = _translate(text, 1, false)
+   local ret, i = _translate(text, 1, false, false)
    ret = intro .. ret
 
    if i < #text then
-      ret = ret .. func .. _translate(text, i, false)
+      ret = ret .. func .. _translate(text, i, false, false)
    end
    
    if need_data then
@@ -1236,7 +1264,7 @@ function translate(text)
    return ret
 end
 
-function _translate(text, i, sets)
+function _translate(text, i, sets, loop)
    local asm, tmp = ""
    local s, i = readline(text, i)
    local instr, value
@@ -1392,7 +1420,11 @@ function _translate(text, i, sets)
 	    "\taddq\t$16, %r12\n"
 
       elseif instr == "if" then
-	 tmp, i = ifenv(text, i, value)
+	 tmp, i = ifenv(text, i, value, loop)
+	 asm = asm .. tmp
+
+      elseif instr == "while" then
+	 tmp, i = whenv(text, i, value, false)
 	 asm = asm .. tmp
 
       elseif instr == "fct" then
@@ -1417,6 +1449,15 @@ function _translate(text, i, sets)
          instr == "then" or
          instr == "else" or
 	 instr == "iend"
+      then
+	 return asm, i, instr
+
+      elseif instr == "brk" then
+	 asm = asm .. "\tjmp\t" .. loop .. "\n"
+
+      elseif
+         instr == "wdo" or
+	 instr == "wend"
       then
 	 return asm, i, instr
 

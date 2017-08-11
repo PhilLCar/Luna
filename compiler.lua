@@ -283,6 +283,9 @@ function evaluate(str, i, fname, flvl, ...)
    if not tmp then
       tmp, i = nextexpr(str, i)
    end
+   if tmp == "break" then
+      return "brk\n", i
+   end
    if tmp == "local" then
       typ = 1
       tmp, i = nextexpr(str, i)
@@ -431,6 +434,7 @@ function whilescope(str, i, fname, flvl)
    ret = "while\t" .. tostring(whct) .. "\n"
 
    tmp, i = evaluate(str, i, fname, flvl)
+   tmp = trim(tmp)
    ret = ret .. tmp
 
    tmp, i = nextexpr(str, i)

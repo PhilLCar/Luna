@@ -537,16 +537,10 @@ _p2_en:
 	mulsd	%xmm7, %xmm0
 
 	cmpq	$1, 40(%r12)
-	jz	_pw_dn
+	jz	_pw_ret
 	movsd	%xmm0, %xmm2
 	movsd	_db0(%rip), %xmm0
 	subsd	%xmm2, %xmm0
-_pw_dn:	
-	#cmpq	$1, 48(%r12)
-	#jz	_pw_ret
-	#movsd	%xmm0, %xmm2
-	#movsd	_db1(%rip), %xmm0
-	#divsd	%xmm2, %xmm0
 	
 _pw_ret:	
 	movsd	 8(%r12), %xmm4
