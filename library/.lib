@@ -1,0 +1,10 @@
+io:
+	print
+lua:
+	tostring
+	inext
+	tonumber
+	ipairs
+	type
+	next
+	pairs

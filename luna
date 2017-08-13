@@ -5,8 +5,11 @@ comp_code = ""
 comp_name = ""
 
 function help()
-   print("Usage:\tluna -o1 -o2 -ox ... file\n\n" ..
-	    "\t-lib\tCompiles the target file as a library file\n\n" ..
+   print("Usage:\n\n\tluna {-flag} file[.lua] [target[.s|.o|.exe]]\n\n" ..
+	    "If no extension is specified in the target, it will be considered as a path.\n\n" ..
+	    "\t-lib\tCompiles the target file as a library file.\n" ..
+	       "\t\tWill compile to .s by default but can compile an object" ..
+	       "file if the extension\n\t\t.o is specified\n\n" ..
 	    "\t-i\tPrints information about the compiler\n\n" ..
 	 "\t-S\tProduces an assembly code for the program\n\n" ..
 	    "\t-f\tCompiles the program as a collection of C functions\n" ..
@@ -14,6 +17,17 @@ function help()
 	    "\t-s\tKeeps the subfiles created during the compiling process.\n\n" ..
 	    "\t-h\tHelp command\n")
    os.exit()
+end
+
+function getname(name)
+   for i = 1, #name do
+      local s = name:sub(i, i)
+      if s == "/" then
+	 comp_name = ""
+      else
+	 comp_name = comp_name .. s
+      end
+   end
 end
 
 while arg[i] and arg[i]:sub(1, 1) == "-" do
@@ -49,42 +63,52 @@ end
 if comp_file then
    if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
       comp_file = comp_file:sub(1, #comp_file - 4)
-
-      for i = 1, #comp_file do
-	 local s = comp_file:sub(i, i)
-	 if s == "/" then
-	    comp_name = ""
-	 else
-	    comp_name = comp_name .. s
-	 end
-      end
-
-      if arg[i + 1] ~= nil then
-	 comp_target = arg[i + 1]
-	 if comp_target:sub(#comp_target - 1, #comp_target) == ".s" then
-	    comp_target = comp_target:sub(1, #comp_target - 2)
-	 elseif comp_target:sub(#comp_target, #comp_target) ~= "/" then
-	    comp_target = comp_target .. "/" .. comp_name
-	 else
-	    comp_target = comp_target .. comp_name
-	 end
-      end
-      
-      local file = io.open(comp_file .. ".lua", "r")
-      local text = file:read("all")
-      file:close()
-      
-      comp_code = text
    end
+
+   -- EVENTUALLY: CHECK FOR FLAG CONFLICTS
+   if arg[i + 1] ~= nil then
+      comp_target = arg[i + 1]
+      local ext = comp_target:sub(#comp_target - 1, #comp_target)
+      if ext == ".s" then
+	 comp_target = comp_target:sub(1, #comp_target - 2)
+	 comp_flags.asm = true
+	 getname(comp_target)
+      elseif ext == ".o" then
+	 comp_target = comp_target:sub(1, #comp_target - 2)
+	 comp_flags.lib = true
+	 getname(comp_target)
+      elseif comp_target:sub(#comp_target - 3, #comp_target) == ".exe" then
+	 comp_target = comp_target:sub(1, #comp_target - 2)
+	 getname(comp_target)
+      elseif comp_target:sub(#comp_target, #comp_target) ~= "/" then
+	 getname(comp_file)
+	 comp_target = comp_target .. "/" .. comp_name
+      else
+	 getname(comp_file)
+	 comp_target = comp_target .. comp_name
+      end
+   else
+      comp_target = comp_file
+      getname(comp_target)
+   end
+      
+   local file = io.open(comp_file .. ".lua", "r")
+   local text = file:read("all")
+   file:close()
+   comp_code = text
    
    require("preprocessor")
    require("compiler")
    require("ir-compiler")
    -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
-   if not comp_flags.asm and not comp_flags.lib then
-      os.execute("gcc ./library/o/*.o " .. comp_file .. ".s -o " .. comp_file .. ".exe")
+   if not comp_flags.asm then
+      if comp_flags.lib then
+	 os.execute("gcc -c " .. comp_target .. ".s -o " .. comp_target .. ".o")
+      else
+	 os.execute("gcc ./library/o/*.o " .. comp_target .. ".s -o " .. comp_target .. ".exe")
+      end
    end
-   if comp_file and not comp_flags.asm and not comp_flags.sub and not comp_flags.lib then
-      os.execute("rm " .. comp_file .. ".s")
+   if not comp_flags.asm and not comp_flags.sub then
+      os.execute("rm " .. comp_target .. ".s")
    end
 end

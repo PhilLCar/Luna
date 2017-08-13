@@ -1165,16 +1165,11 @@ end
 --------------------------------------------------------------------------------
 -- Program
 --------------------------------------------------------------------------------
-
 comp_code = preprocess(comp_code)
 
 if comp_flags.sub then
    local file
-   if comp_target then
-      file = io.open(comp_target .. ".pp.lua", "w+")
-   else
-      file = io.open(comp_file .. ".pp.lua", "w+")
-   end
+   file = io.open(comp_target .. ".pp.lua", "w+")
    file:write(comp_code)
    file:close()
 end

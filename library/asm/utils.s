@@ -654,7 +654,8 @@ _i_miss:
 _i_rev:
 	pushq	%rdi
 	sarq	$3, %rax
-	roundsd	$0, (%rax), %xmm3
+	cvtsd2si (%rax), %rdi
+	cvtsi2sd %rdi, %xmm3
 	movq	%xmm3, %rdi
 	cmpq	(%rax), %rdi
 	popq	%rdi
@@ -717,17 +718,16 @@ _os_lp:	salq	$1, %rcx
 	cmpq	$8, %r15
 	jb	_os_lp
 	leaq	(%rcx, %rdi, ), %r15
-_ca_lp:	salq	$1, %rdx
-	cmpq	%r15, %rdx
-	jb	_ca_lp
-	jmp	_mem_copy
+	jmp	_ca_lp
 _n_overflow:
 	pushq	%rdx
 	pushq	%rcx
 	movq	%rdi, %rdx
 	movq	%rsi, %rcx
 	leaq	(%rcx, %rdi, ), %r15
-	jmp	_ca_lp
+_ca_lp:	salq	$1, %rdx
+	cmpq	%r15, %rdx
+	jb	_ca_lp
 _mem_copy:
 	pushq	%r8
 	movq	%rdx, (%r12)
@@ -752,7 +752,8 @@ _mm_en:	movq	48(%rsp), %r8
 _n_rev:
 	pushq	%rdi
 	sarq	$3, %rax
-	roundsd	$0, (%rax), %xmm3
+	cvtsd2si (%rax), %rdi
+	cvtsi2sd %rdi, %xmm3
 	movq	%xmm3, %rdi
 	cmpq	(%rax), %rdi
 	popq	%rdi
@@ -760,7 +761,7 @@ _n_rev:
 	salq	$3, %rax
 	orq	%r15, %rax
 	jmp	_nw_s
-_nv_rt:	cvtsd2si (%rax), %rax
+_nv_rt:	cvtsd2si %xmm3, %rax
 	salq	$3, %rax
 	jmp	_i_new
 
@@ -828,6 +829,95 @@ _open:
 	jmp	_open
 _op_en:	ret
 
+# LUA SUPPORT
+################################################################################
+	.global _type
+	# %rdi: arg1
+_type:	
+	movq	%rdi, %xmm0
+	movq	%rdi, %rax
+	and	$7, %rax
+	cmp	$6, %rax
+	jnz	_type_end
+	cvtsd2si %xmm0, %rax
+	cvtsi2sd %rax, %xmm1
+	cmpsd	$4, %xmm1, %xmm0
+	movq	%xmm0, %rax
+	andq	$6, %rax
+_type_end:
+	ret
+
+	.global _next
+	# %rdi: table, %rsi: index
+_next:
+	cmpq	$17, %rsi
+	jz	_next_nil
+	movq	%rsi, %rax
+	sarq	$3, %rax
+	movq	(%rax), %xmm0
+	cvtsd2si %xmm0, %rbx
+	cvtsi2sd %rbx, %xmm0
+	movq	%xmm0, %rdx
+	cmpq	%rax, %rdx
+	jnz	_next_str
+	movq	%rbx, %rsi
+_next_nil:	
+	sarq	$3, %rdi
+	movq	16(%rdi), %rax	
+	movq	(%rax), %rdx # MAX CAP
+	leaq	16(%rax, %rdx, ), %rdx # LIMIT
+	movq	8(%rax), %rcx # OFFSET
+	cmpq	$17, %rsi
+	jnz	_next_gsi
+	leaq	8(%rax), %r8 # ITERATOR
+	jmp	_next_lp
+_next_gsi:	
+	leaq	(%rcx, %rsi, 8), %r8
+	addq	%rax, %r8
+_next_lp:
+	addq	$8, %r8
+	cmpq	%rdx, %r8
+	jge	_next_str
+	cmpq	$17, (%r8)
+	jz	_next_lp
+	movq	$33, 8(%r12)
+	movq	(%r8), %rbx
+	movq	%rbx, 16(%r12)
+	subq	%rax, %r8
+	subq	%rcx, %r8
+	sarq	$3, %r8
+	cvtsi2sd %r8, %xmm0
+	movsd	%xmm0, (%r12)
+	leaq	6(, %r12, 8), %rax
+	addq	$8, %r12
+	leaq	8(%r12), %rbx
+	ret
+_next_str:
+	cmpq	$17, %rsi
+	jnz	_next_gsd
+	sarq	$3, %rdi
+	movq	8(%rdi), %rax
+_next_s_ret:	
+	movq	$33, (%r12)
+	movq	8(%rax), %rbx
+	movq	%rbx, 8(%r12)
+	movq	(%rax), %rax
+	movq	%r12, %rbx
+	ret
+_next_gsd:
+	movq	%rdi, %rbx
+	movq	%rsi, %rax
+	call	_index
+	movq	8(%rax), %rax
+	movq	(%rax), %rax
+	jmp	_next_s_ret
+
+	.global _inext
+	# %rdi: table, %rsi: index
+_inext:
+	nop
+	ret
+	
 # DATA
 ################################################################################
 	.data

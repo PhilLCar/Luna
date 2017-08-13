@@ -3,61 +3,61 @@
 .SUFFIXES: .lua .s .c .o .exe .tex .pdf
 
 PDFLATEX = pdflatex
-CC = gcc
+CC   := gcc
+LUAC := ./luna
 MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-CSRC := library/c
-SSRC := library/asm
-LSRC := library/lua
-OBJ  := library/o
+LIB  := library
+CSRC := $(LIB)/c
+SSRC := $(LIB)/asm
+LSRC := $(LIB)/lua
+OBJ  := $(LIB)/o
+
 
 CFILES := $(wildcard $(CSRC)/*.c)
 SFILES := $(wildcard $(SSRC)/*.s)
 LFILES := $(wildcard $(LSRC)/*.lua)
 
-ASML := $(patsubst $(LSRC)/%.lua, $(SSRC)/%.s, $(LFILES))
+OBJL := $(patsubst $(LSRC)/%.lua, $(OBJ)/%.o, $(LFILES))
 OBJC := $(patsubst $(CSRC)/%.c, $(OBJ)/%.o, $(CFILES))
 OBJS := $(patsubst $(SSRC)/%.s, $(OBJ)/%.o, $(SFILES))
 
 all: lib
-	@echo "Please add $(MKFILE_PATH) to your PATH to use Luna from any folder"
+	@echo "You can add $(MKFILE_PATH) to your PATH to use Luna from any folder"
 	@echo "You can do this by executing :"
 	@echo '	% export PATH=$(MKFILE_PATH):$$PATH'
 
-lib: $(ASML) $(OBJC) $(OBJS)
+lib: rmlib $(OBJL) $(OBJC) $(OBJS)
 
 $(OBJ)/%.o: $(CSRC)/%.c
-	$(CC) -c $< -o $@
+	@$(CC) -c $< -o $@
 
 $(OBJ)/%.o: $(SSRC)/%.s
-	$(CC) -c $< -o $@
+	@$(CC) -c $< -o $@
 
-$(SSRC)/%.s: $(LSRC)/%.lua
-	./luna -lib $< $@
+$(OBJ)/%.o: $(LSRC)/%.lua
+	@$(LUAC) -lib $< $@
 
 rmlib:
-	rm $(OBJ)/*.o
-	rm $(ASML)
-	rm library/av.lib
+	@$(RM) $(OBJ)/*.o $(LIB)/.lib
 
 test: ut
 
-ut: clean
-	./run-unit-tests.lua
+ut: cleancompile lib
+	@./run-unit-tests.lua
 
-clean: cleanrapport
-	rm -f *.o *.ir *.exe *.out.s *~ unit-tests/*.s unit-tests/*.exe unit-tests/*~ unit-tests/*.lir unit-tests/*.pp.lua
+clean: cleancompile cleanrapport
+
+cleancompile:
+	@$(RM) unit-tests/*.s unit-tests/*.exe unit-tests/*.lir unit-tests/*.pp.lua
 
 cleanrapport:
-	rm -f *.aux *.log *.pdf *.out
+	@$(RM) doc/*.aux doc/*.log doc/*.pdf doc/*.out
 
 cleansubfiles:
-	rm -f *.pp.lua *.lir *.out.s *.aux *.log unit-tests/*.s unit-tests/*.lir unit-tests/*.pp.lua
-
-cleancompile: cleansubfiles
-	rm -f *.exe unit-tests/*.exe
+	@$(RM) doc/*.aux doc/*.log doc/*.out unit-tests/*.s unit-tests/*.lir unit-tests/*.pp.lua
 
 rapport:
-	for f in *.tex; do $(PDFLATEX) "$$f"; done
+	@for f in doc/*.tex; do $(PDFLATEX) "$$f"; done
 	make cleansubfiles
 
 .tex.pdf:
@@ -78,6 +78,6 @@ help:
 	@echo "    clean         : cleans all generated files"
 	@echo "    cleanrapport  : cleans .tex related subfiles"
 	@echo "    cleansubfiles : cleans byproducts of compiling (.ir, .out.s, .log and .aux files)"
-	@echo "    cleancompile  : cleans all compiler generated files (keeps the compiler usable)"
+	@echo "    cleancompile  : cleans all unit-tests generated files"
 
 h: help

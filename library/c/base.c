@@ -1,25 +1,25 @@
 #include <stdio.h>
 
-long lint(long i) {
+long _lint(long i) {
   return i >> 3;
 }
 
-long cint(long i) {
+long _cint(long i) {
   return i << 3;
 }
 
-char* lstr(long s) {
+char* _lstr(long s) {
   s >>= 3;
   return (char*)(s + 8);
 }
 
-long cstr(char* s) {
+long _cstr(char* s) {
   long r = (long)s;
   r <<= 3;
   return r + 2;
 }
 
-int print(long i) {
+int _print(long i) {
   int type = i & 7;
   long val = i >> 3;
   int first = 0;
@@ -42,7 +42,7 @@ int print(long i) {
     while (*(int*)val != 33) {
       if (first) printf("\t");
       else first = 1;
-      print(val);
+      _print(val);
       val = val + 8;
     }
   break;

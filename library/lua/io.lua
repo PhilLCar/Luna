@@ -1,3 +1,3 @@
-function print(...)
-   _print(...)
+function print(a)
+   _print(a)
 end

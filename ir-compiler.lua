@@ -24,18 +24,12 @@ local d_name = { "%xmm4" , "%xmm5" , "%xmm6" , "%xmm7" , "%xmm8" , "%xmm9" ,
 local d_cont = { false   , false   , false   , false   , false   , false   ,
 	   false   , false   , false   , false   , false   , false    }
 
-local rsp = 0
-
 local str_tbl = {}
-
-local ref_mask = false
 
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
 local intro
-if comp_flags.lib then
-   intro = "_load_" .. comp_name .. ":\n"
-else
+if not comp_flags.lib then
    intro =
       "\t.text\n" ..
       "\t.global\t_main\n" ..
@@ -62,10 +56,22 @@ else
       "\tmovq\t$17, 16(%r12)\n" ..
       "\tlea\t3(, %r12, 8), %r13\n" ..
       "\taddq\t$24, %r12\n" ..
-      "\tmovq\t$17, %r14\n" ..
-      "\n# GENERATED CODE BEGINING" ..	    
-      "\n################################################################################\n\n"
+      "\tmovq\t$17, %r14\n"
+   for i in pairs(libs) do
+      intro = intro .. "\tcall\t_load_" .. i .. "\n"
+   end
+else
+   intro =
+      "\t.text\n" ..
+      "\t.global\t_load_" .. comp_name .. "\n" ..
+      "_load_" .. comp_name .. ":\n" ..
+      "\tpushq\t%rbp\n" ..
+      "\tmovq\t%rsp, %rbp\n"
 end
+
+intro = intro ..
+   "\n# GENERATED CODE BEGINING" ..	    
+   "\n################################################################################\n\n"
 
 local func = "\n# FUNCTIONS" ..	    
    "\n################################################################################\n\n"
@@ -83,25 +89,30 @@ if  not comp_flags.lib then
       "\tpopq\t%r14\n" ..
       "\tpopq\t%r13\n" ..
       "\tpopq\t%r12\n" ..
-      "\tpopq\t%rbx\n"
+      "\tpopq\t%rbx\n" ..
+      "\tmovq\t$0, %rax\n" ..
+      "\tret\n"
+else
+   outro = 
+      "\tmovq\t$0, %rax\n" ..
+      "\tret\n"
 end
-   
-outro = outro ..
-   "\tmovq\t$0, %rax\n" ..
-   "\tret\n"
 
 -- Internal stack structure
 --------------------------------------------------------------------------------
-buf = false
+local buf = false
 
-f_size  = 0
+local f_size  = 0
 
-v_stack = {}
-v_size  = 0
+local v_stack = {}
+local v_size  = 0
 
-r_size  = 1
+local r_size = 1
+local rsp = 0
 
-r_index = 1
+local r_index = 1
+
+local ref_mask = false
 
 -- Register handling functions
 --------------------------------------------------------------------------------
@@ -1315,38 +1326,43 @@ function ret(text, i, p)
    local r, base
    local struct
    local rs, vs = r_size, v_size
-   tmp, i = _translate(text, i, false, false)
-   asm = tmp .. lock(pop())
-   base = r_size
-   for j = 2, p do
+   if p == 1 then
       tmp, i, struct = _translate(text, i, false, false)
-      asm = asm .. tmp .. lock(pop())
-   end
-   if p > 1 then
-      local l1, l2 = label(), label()
-      asm = asm .. prep(true)
-      if struct then
-	 asm = asm ..
-	    "\tcmp\t$0, %rbx\n" ..
-	    "\tjz\t" .. l1 .. "\n" ..
-	    l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
-	    "\tjz\t" .. l1 .. "\n" ..
-	    "\tpushq\t(%rbx)\n" ..
-	    "\tsubq\t$8, %rbx\n" ..
-	    "\tjmp\t" .. l2 .. "\n" ..
-	    l1 .. ":\tpushq\t$33\n"
-      else
-	 asm = asm .. "\tpushq\t$33\n"
-      end
-      r_size = base
-      asm = asm ..
-	 "\tleaq\t" .. pop() .. ", %rbx\n" ..
-	 "\tmovq\t" .. pop() .. ", %rax\n"
+      asm = asm .. tmp
    else
-      r_size = base - 1
+      for j = 1, p do
+	 tmp, i, struct = _translate(text, i, false, false)
+	 asm = asm .. tmp .. lock(pop())
+      end
+   end
+   if struct then
+      local l1, l2 = label(), label()
+      asm = asm .. prep(true) ..
+	 "\tcmp\t$0, %rbx\n" ..
+	 "\tjz\t" .. l1 .. "\n" ..
+	 l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
+	 "\tjz\t" .. l1 .. "\n" ..
+	 "\tpushq\t(%rbx)\n" ..
+	 "\tsubq\t$8, %rbx\n" ..
+	 "\tjmp\t" .. l2 .. "\n" ..
+	 l1 .. ":\tpushq\t$33\n" ..
+	 "\tleaq\t" .. -8 * rs .. "(%rbp), %rbx\n"
+      r_size = rs
+   elseif p > 1 then
+      asm = asm .. "\tmovq\t$33, " ..  -8 * r_size .. "(%rbp)\n"..
+	 "\tleaq\t" .. -8 * (rs + 1) .. "(%rbp), %rbx\n"
+      r_size = rs
+   else
+      asm = asm .. "\txorq\t%rbx, %rbx\n"
+   end
+   r = pop()
+   if isDouble(r) then
       asm = asm ..
-	 "\txorq\t%rbx, %rbx\n" ..
-	 "\tmovq\t" .. pop() .. ", %rax\n"
+	 "\tmovq\t" .. r .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
+	 "\taddq\t$8, %r12\n"
+   elseif r ~= "%rax" then
+      asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
    end
    tmp, i = _translate(text, i, false, false)
    if rsp ~= 0 then
@@ -1639,35 +1655,9 @@ end
 comp_code = translate(comp_code)
 
 local file
-if comp_target then
-   file = io.open(comp_target .. ".s", "w+")
-else
-   file = io.open(comp_file .. ".s", "w+")
-end
+file = io.open(comp_target .. ".s", "w+")
 file:write(comp_code)
 file:close()
-
-if comp_flags.lib then
-   local pres, line = false
-   local name = "_" .. comp_name
-   file = io.open("library/av.lib", "r")
-   if file then
-      repeat
-	 line = file:read("line")
-	 if line == name then
-	    pres = true
-	    break
-	 end
-      until not line
-      file:close()
-   end
-   
-   if not pres then
-      file = io.open("library/av.lib", "a+")
-      file:write("_" .. comp_name .. "\n")
-      file:close()
-   end
-end
 
 --[[
 INTEGER FUNCTIONS ## DEPRECATED ##

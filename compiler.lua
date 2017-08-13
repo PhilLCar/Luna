@@ -3,9 +3,11 @@
 --------------------------------------------------------------------------------
 local ifct, whct, frct, rpct, fnct, doct = 0, 0, 0, 0, 0, 0
 local stack, level, size = {}, 0, 0
-local globals = {}
 local functions = "\n"
 local _CLO = 1
+local globals = {}
+local prelibs = {}
+libs = {}
 
 ops = {}
 ops["+"]      = "add"
@@ -187,6 +189,12 @@ function access(var, flvl, def)
    if def or globals[var] then
       globals[var] = true
       return "gbl\t" .. var .. "\n"
+   end
+   for g, v in pairs(prelibs) do
+      if v[var] then
+	 libs[g] = true
+	 return "gbl\t" .. var .. "\n"
+      end
    end
    return "var\t" .. var .. "\n"
 end
@@ -602,20 +610,64 @@ function test(t1, t2)
    end
 end
 
+function loadlibs()
+   local file, line = io.open("library/.lib", "r")
+   local current
+   if file then
+      repeat
+	 line = file:read("line")
+	 if line then
+	    if line:sub(1,1) == "\t" then
+	       prelibs[current][line:sub(2, #line)] = true
+	    else
+	       current = line:sub(1, #line - 1)
+	       prelibs[current] = {}
+	    end
+	 end
+      until not line
+      file:close()
+   end
+end
+
 --------------------------------------------------------------------------------
 -- Program
 --------------------------------------------------------------------------------
-
+if not comp_flags.lib then loadlibs() end
 newlevel()
 comp_code = compile(comp_code, 1, nil, level)
 
 if comp_flags.sub then
    local file
-   if comp_target then
-      file = io.open(comp_target .. ".lir", "w+")
-   else
-      file = io.open(comp_file .. ".lir", "w+")
-   end
+   file = io.open(comp_target .. ".lir", "w+")
    file:write(comp_code)
    file:close()
+end
+
+-------------------
+-- Saves library --
+-------------------
+if comp_flags.lib then
+   local pres, line = false
+   local name = comp_name .. ":"
+   
+   file = io.open("library/.lib", "r")
+   if file then
+      repeat
+	 line = file:read("line")
+	 if line == name then
+	    pres = true
+	    break
+	 end
+      until not line
+      file:close()
+   end
+   
+   if not pres then
+      file = io.open("library/.lib", "a+")
+      file:write(name .. "\n")
+      for i in pairs(globals) do
+	 file:write("\t" .. i .. "\n")
+      end
+      file:close()
+   end
 end
