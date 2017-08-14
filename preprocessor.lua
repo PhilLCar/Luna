@@ -61,7 +61,9 @@ function isOperator(str)
       str == "^^" or
       -- 3 char operators
       str == "and"  or
-      str == "not"
+      str == "not"  or
+      str == "==="  or
+      str == ">>>"
    then
       return true
    end
@@ -305,7 +307,7 @@ function readexpr(str, i, indent)
       typerr = "Parenthesis mismatch."
       helperror()
    end
-   expr = removeMacros(expr)
+   expr = removeMacros(expr, indent)
    ret = scan(expr, 1, nil, indent)
    return ret, i
 end
@@ -516,24 +518,24 @@ function scan(array, start, stop, indent)
    end
    ret = ""
    -- PRIORITY LEVELS --
-   -- Level 0 - Bitwise       : << >> | & ^^ ~     [left-associative ]
+   -- Level 0 - Bitwise       : << >> >>> | & ^^ ~ === != [left-associative ]
    newarr = associate(newarr, true , true , indent, "~")
-   newarr = associate(newarr, true, false, indent, "<<", ">>", "|", "&", "^^")
-   -- Level 1 - Power         : ^                  [right-associative]
+   newarr = associate(newarr, true, false, indent, "<<", ">>", ">>>", "|", "&", "^^", "===", "!=")
+   -- Level 1 - Power         : ^                         [right-associative]
    newarr = associate(newarr, false, false, indent, "^")
-   -- Level 2 - Unary         : - not #            [left-associative ]
+   -- Level 2 - Unary         : - not #                   [left-associative ]
    newarr = associate(newarr, true , true , indent, "-", "not", "#")
-   -- Level 3 - Multiplicative: * / %              [left-associative ]
+   -- Level 3 - Multiplicative: * / %                     [left-associative ]
    newarr = associate(newarr, true , false, indent, "*", "/", "%")
-   -- Level 4 - Additive      : + -                [left-associative ]
+   -- Level 4 - Additive      : + -                       [left-associative ]
    newarr = associate(newarr, true , false, indent, "+", "-")
-   -- Level 5 - Concatenation : ..                 [right-associative]
+   -- Level 5 - Concatenation : ..                        [right-associative]
    newarr = associate(newarr, false, false, indent, "..")
-   -- Level 6 - Boolean       : == ~= <= >= < > != [left-associative ]
-   newarr = associate(newarr, true , false, indent, "==", "~=", "<=", ">=", "<", ">", "!=")
-   -- Level 7 - Conjunction   : and                [left-associative ]
+   -- Level 6 - Boolean       : == ~= <= >= < >           [left-associative ]
+   newarr = associate(newarr, true , false, indent, "==", "~=", "<=", ">=", "<", ">")
+   -- Level 7 - Conjunction   : and                       [left-associative ]
    newarr = associate(newarr, true , false, indent, "and")
-   -- Level 8 - Disjunction   : or                 [left-associative ]
+   -- Level 8 - Disjunction   : or                        [left-associative ]
    newarr = associate(newarr, true , false, indent, "or")
 
    for i, v in ipairs(newarr) do
@@ -545,11 +547,31 @@ function scan(array, start, stop, indent)
 end
 
 -- This function removes lua macros '.' and ':'
-function removeMacros(array)
+function removeMacros(array, indent)
    local nex, pre
    local i = 1
    while i < #array do
-      if array[i] == "." then
+      if array[i] == "[" then
+	 pre = array[i - 1]
+	 nex = {}
+	 do
+	    local j = i + 1
+	    while array[j] ~= "]" do
+	       nex[#nex + 1] = array[j]
+	       j = j + 1
+	    end
+	 end
+	 array[i - 1] = pre .. " [" .. scan(nex, 1, nil, indent) .. "]"
+	 -- Removal
+	 pre = #array
+	 for j = i, #array - #nex - 2 do
+	    array[j] = array[j + #nex + 2]
+	 end
+	 for j = pre - #nex - 1, pre do
+	    array[j] = nil
+	 end
+	 i = i - 1	 
+      elseif array[i] == "." then
 	 if i == 1 then
 	    typerr = "No table to be referenced by \".\"."
 	    helperror()
@@ -1056,7 +1078,7 @@ function trysolve(op, arg1, arg2)
 	 t = isConstant(arg1)
 	 u = isConstant(arg2)
 	 if t and u and t == "string" and u == "string" then
-	    return tostring("\"" .. t:sub(2, #t - 1) .. u:sub(2, #u - 1) .. "\"")
+	    return tostring("\"" .. arg2:sub(2, #arg2 - 1) .. arg1:sub(2, #arg1 - 1) .. "\"")
 	 end
       elseif op == "and" then
 	 t = arg1

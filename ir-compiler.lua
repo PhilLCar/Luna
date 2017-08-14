@@ -426,7 +426,7 @@ function flt(op)
    return ret
 end
 
-function eq()
+function eq(n)
    local ret = ""
    local v1 = pop()
    local v2 = get()
@@ -444,8 +444,13 @@ function eq()
       v2 = "%rax"
    end
    ret =
-      "\tcmpq\t" .. v1 .. ", " .. v2 .. "\n" ..
-      "\tjz\t" .. l1 .. "\n" ..
+      "\tcmpq\t" .. v1 .. ", " .. v2 .. "\n"
+   if n then
+      ret = ret .. "\tjz\t" .. l1 .. "\n"
+   else
+      ret = ret .. "\tjnz\t" .. l1 .. "\n"
+   end
+   ret = ret ..
       "\tmovq\t$1, " .. v2 .. "\n" ..
       "\tjmp\t" .. l2 .. "\n" ..
       l1 .. ":\tmovq\t$9, " .. v2 .. "\n" ..
@@ -564,21 +569,28 @@ function bits(instr, value)
       v1 = "(%rax)"
    end
    ret = ret .. "\tcvtsd2si " .. v1 .. ", %rax\n"
-   if not value then
-      if u_cont[2] then
-	 ret = ret .. "\tmovq\t%rcx, %r15\n"
-	 pres = true
+   if instr == "sal" or instr == "sar" or instr == "shr" then
+      if not value then
+	 if u_cont[2] then
+	    ret = ret .. "\tmovq\t%rcx, %r15\n"
+	    pres = true
+	 end
+	 ret = ret ..
+	    "\tcvtsd2si " .. v2 .. ", %rcx\n"
+	 value = "%cl"
       end
-      ret = ret ..
-	 "\tcvtsd2si " .. v2 .. ", %rcx\n"
-      value = "%cl"
+   else
+      ret = ret .. "\tcvtsd2si " .. v2 .. ", %rbx\n"
+      value = "%rbx"
    end
    ret = ret ..
       "\t" .. instr .. "q\t" .. value .. ", %rax\n" ..
       "\tcvtsi2sd %rax, %xmm0\n" ..
       newdouble("%xmm0")
-   if u_cont[2] and pres then
-      ret = ret .. "\tmovq\t%r15, %rcx\n"
+   if instr == "sal" or instr == "sar" or instr == "shr" then
+      if u_cont[2] and pres then
+	 ret = ret .. "\tmovq\t%r15, %rcx\n"
+      end
    end
    return ret
 end
@@ -820,16 +832,18 @@ end
 function build(nargs, varargs, fname)
    local ret = ""
    local p = 1
-   ret = 
+   if varargs then ret = "\tmovq\t%r15, (%r12)\n" end
+   ret = ret ..
       "\tmovq\t$" .. nargs .. ", %rax\n" ..
       "\tcall\t_nil_fill\n"
    if varargs then
       ret = ret ..
 	 "\tcall\t_varargs\n"
-      if nargs <= 6 then
-	 ret = ret .. "\tmovq\t%r15, " .. c_name[nargs] .. "\n"
-      elseif nargs == 0 then
+      if nargs == 0 then
 	 ret = ret .. "\tmovq\t%r15, %rdi\n"
+	 nargs = 1
+      elseif nargs <= 6 then
+	 ret = ret .. "\tmovq\t%r15, " .. c_name[nargs] .. "\n"
       else
 	 ret = ret .. "\tmovq\t%r15, " .. 8 * (nargs - 6) .. "(%rsp)\n"
       end
@@ -1033,6 +1047,7 @@ function frenv(text, i, p)
    rsp = r_size - 1
    
    ret = ret .. 
+      "\tmovsd\t" .. -8 * (r_size - 3) .. "(%rbp), %xmm0\n" ..
       "_FRC" .. p .. ":\n" ..
       "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
       "\txorpd\t%xmm1, %xmm1\n" ..
@@ -1103,6 +1118,8 @@ function fienv(text, i, p)
       "\tcmpq\t$17, %rax\n" ..
       "\tjz\t_FIE" .. p .. "\n" ..
       "\tmovq\t%rax, " .. -8 * (r_size - 1) .. "(%rbp)\n" ..
+      "\tcmpq\t$33, %rax\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
       "\tpushq\t%rax\n" ..
       "\tleaq\t" .. -8 * (v - 1) .. "(%rsp), %r15\n" ..
       "\tcmp\t$0, %rbx\n" ..
@@ -1167,17 +1184,40 @@ function fct(text, i, value)
    return ret .. tmp, i
 end
 
+function flatten()
+   local l0, l1, l2 = label(), label(), label()
+   local ret = prep(true) ..
+      "\tcmpq\t$33, %rax\n" ..
+      "\tjnz\t" .. l0 .. "\n" ..
+      "\taddq\t$8, %rsp\n" ..
+      "\tjmp\t" .. l1 .. "\n" ..
+      l0 .. ":\tcmp\t$0, %rbx\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      "\tpushq\t(%rbx)\n" ..
+      "\tsubq\t$8, %rbx\n" ..
+      "\tjmp\t" .. l2 .. "\n" ..
+      l1 .. ":\tpushq\t$33\n"
+   return ret
+end
+
 function develop()
-   local lm, le, la = label("_DM"), label("_DE"), label("_DA")
-   local l1, l2, l3, l4, lg = label("_DV"), label("_DV"), label("_DV"), label("_DV"), label("_DV")
+   local lm, le, la, ln = label("_DM"), label("_DE"), label("_DA"), label("_DN")
+   local l0, l1, l2, l3, l4, lg =
+      label("_DV"), label("_DV"), label("_DV"), label("_DV"), label("_DV"), label("_DV")
    local ret =
       "# Comparison routine\n" ..
-      "\tcmpq\t$0, %rbx\n" ..
+      "\tcmpq\t$33, %rax\n" ..
+      "\tjnz\t" .. ln .. "\n" ..
+      "\tdec\t%r15\n" ..
+      "\tjmp\t" .. le .. "\n" ..
+      ln .. ":\tcmpq\t$0, %rbx\n" ..
       "\tjz\t" .. le .. "\n" ..
-      "\tmovq\t(%rbx), %rsi\n" ..
-      "\tjmp\t" .. la .. "\n" ..
       lm .. ":\tcmpq\t$33, (%rbx)\n" ..
       "\tjz\t" .. le .. "\n" ..
+      "\tcmpq\t$1, %r15\n" ..
+      "\tjz\t" .. l0 .. "\n" ..
       "\tcmpq\t$2, %r15\n" ..
       "\tjz\t" .. l1 .. "\n" ..
       "\tcmpq\t$3, %r15\n" ..
@@ -1187,6 +1227,8 @@ function develop()
       "\tcmpq\t$5, %r15\n" ..
       "\tjz\t" .. l4 .. "\n" ..
       "\tjmp\t" .. lg .. "\n" ..
+      l0 .. ":\tmovq\t(%rbx), %rsi\n" ..
+      "\tjmp\t" .. la .. "\n" ..
       l1 .. ":\tmovq\t(%rbx), %rdx\n" ..
       "\tjmp\t" .. la .. "\n" ..
       l2 .. ":\tmovq\t(%rbx), %rcx\n" ..
@@ -1425,17 +1467,7 @@ function set(text, i, p)
 	 asm = asm .. prep(true) ..
 	    "\tpushq\t$33\n"
       else
-	 local l1, l2 = label(), label()
-	 asm = asm .. prep(true) ..
-	    --"\taddq\t$16, %rsp\n" ..
-	    "\tcmp\t$0, %rbx\n" ..
-	    "\tjz\t" .. l1 .. "\n" ..
-	    l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
-	    "\tjz\t" .. l1 .. "\n" ..
-	    "\tpushq\t(%rbx)\n" ..
-	    "\tsubq\t$8, %rbx\n" ..
-	    "\tjmp\t" .. l2 .. "\n" ..
-	    l1 .. ":\tpushq\t$33\n"
+	 asm = asm .. flatten()
       end
    elseif fill then
       asm = asm .. prep(true) .. 
@@ -1460,15 +1492,7 @@ function ret(text, i, p)
    end
    if struct then
       local l1, l2 = label(), label()
-      asm = asm .. prep(true) ..
-	 "\tcmp\t$0, %rbx\n" ..
-	 "\tjz\t" .. l1 .. "\n" ..
-	 l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
-	 "\tjz\t" .. l1 .. "\n" ..
-	 "\tpushq\t(%rbx)\n" ..
-	 "\tsubq\t$8, %rbx\n" ..
-	 "\tjmp\t" .. l2 .. "\n" ..
-	 l1 .. ":\tpushq\t$33\n" ..
+      asm = asm .. flatten() ..
 	 "\tleaq\t" .. -8 * rs .. "(%rbp), %rbx\n"
       r_size = rs
    elseif p > 1 then
@@ -1626,10 +1650,11 @@ function _translate(text, i, sets, loop)
 	 asm = asm .. pow()
 
       elseif
-	 instr == "bsal" or
+	 instr == "bshr" or
 	 instr == "bsar" or
+	 instr == "bsal" or
 	 instr == "band" or
-	 instr == "bor" or
+	 instr == "bor"  or
 	 instr == "bxor"
       then
 	 asm = asm .. bits(instr:sub(2, #instr), false)
@@ -1638,7 +1663,9 @@ function _translate(text, i, sets, loop)
 	 asm = asm .. inv()
 
       elseif instr == "beq" then
-	 asm = asm .. eq()
+	 asm = asm .. eq(true)
+      elseif instr == "bneq" then
+	 asm = asm .. eq(false)
 
       elseif instr == "idiv" then
 	 asm = asm .. flt("div")
@@ -1764,7 +1791,7 @@ function _translate(text, i, sets, loop)
 
       elseif instr == "fend" then
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
-	    asm = asm .. "\tmovq\t$17, %rax\n"
+	    asm = asm .. "\tmovq\t$33, %rax\n"
 	    if rsp ~= 0 then
 	       asm = asm .. "\tleave\n\tret\n\n"
 	    else

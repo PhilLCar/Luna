@@ -56,5 +56,5 @@ int _print(long i) {
     printf("function: %p", (void*) val);
     break;
   }
-  return 0;
+  return 33;
 }

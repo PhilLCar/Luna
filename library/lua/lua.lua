@@ -40,7 +40,7 @@ end
 
 function ipairs(tab)
    local inext = function(tab, index)
-      _inext(tab, index)
+      return _inext(tab, index)
    end
    return inext, tab, 0
 end

@@ -39,12 +39,18 @@ _f_en:	ret
 	.global	_varargs
 	# %rax: final nargs, %r15: starting nargs
 _varargs:
+	movq	(%r12), %r15
 	pushq	%r12
 	pushq	%rax
 	pushq	%r14
 	subq	%r15, %rax
 	negq	%rax
-	leaq	8(%r12, %rax, 8), %r12
+	jge	_va_ps
+	movq	$33, (%r12)
+	addq	$8, %r12
+	movq	%r12, 16(%rsp)
+	jmp	_va_en
+_va_ps:	leaq	8(%r12, %rax, 8), %r12
 	movq	8(%rsp), %rax
 	movq	%r12, 16(%rsp)
 	leaq	-6(%rax), %rbx
@@ -410,7 +416,6 @@ _pow:
 	pushq	%rcx
 	pushq	%rdi
 	movq	$1, 40(%r12) #sign
-	movq	$1, 48(%r12) #numer/denom
 	movq	%xmm0, %rax
 	movq	%rax, %rbx
 	sarq	$52, %rbx
@@ -438,12 +443,7 @@ _pos:	andq	$0x7FF, %rbx
 	subq	$1023, %rbx # n = %rbx
 	jmp	_nrm
 _sb_n:	movq	$-1022, %rbx
-_nrm:	#movq	%xmm1, %r15
-	#sarq	$63, %r15
-	#jz	_pw_ct
-	#neg	%rbx
-	#movq	$0, 48(%r12)
-_pw_ct:	movq	%rax, %r15
+_nrm:	movq	%rax, %r15
 	movq	$0x3FF, %rcx
 	salq	$52, %rcx
 	movq	$0xFFF, %rax
@@ -602,6 +602,10 @@ _lg_fn:	leaq	(, %rbx, 8), %rax
 	.global	_index
 	# %rax: key, %rbx: table
 _index:
+	movq	%rbx, %r15
+	andq	$7, %r15
+	cmpq	$3, %r15
+	jnz	_special
 	sarq	$3, %rbx
 	movq	%rax, %r15
 	andq	$7, %r15
@@ -932,8 +936,6 @@ _next_s_ret:
 	.global _inext
 	# %rdi: table, %rsi: index
 _inext:	
-	cmpq	$17, %rsi
-	jz	_inext_nil
 	movq	%rsi, %rax
 	andq	$7, %rax
 	cmpq	$6, %rax
@@ -946,13 +948,66 @@ _inext:
 	movq	%xmm0, %rdx
 	cmpq	(%rax), %rdx
 	jnz	_inext_nil
-	leaq	(, %rbx, 8), %rax
+	leaq	8(, %rbx, 8), %rax
 	sarq	$3, %rdi
 	movq	%rdi, %rbx
-	jmp	_i_index
+	call	_i_index
+	cmpq	$17, (%rax)
+	jz	_inext_nil
+	movq	(%rax), %rbx
+	movq	%rbx, 16(%r12)
+	movq	$33, 8(%r12)
+	leaq	16(%r12), %rbx
+	addsd	_db1(%rip), %xmm0
+	movsd	%xmm0, (%r12)
+	leaq	6(, %r12, 8), %rax
+	addq	$8, %r12
+	ret
 _inext_nil:
 	xorq	%rbx, %rbx
 	movq	$17, %rax
+	ret
+
+# SPECIAL
+################################################################################
+_special:
+	pushq	%rdi
+	pushq	%rsi
+	cmpq	$2, %r15
+	jz	_special_string
+_special_index:
+	sarq	$3, %rax
+	leaq	8(%rax), %rdi
+	xorq	%r15, %r15
+_special_lp:	
+	movq	%rdi, %rax
+	movq	(%rsi), %rbx
+	call	_cp_lp
+	cmpq	$9, %rax
+	jz	_special_ret
+	movq	24(%rsi), %rsi
+	cmpq	$17, %rsi
+	jnz	_special_lp
+	movq	%rsi, %rax
+	xorq	%rbx, %rbx
+	popq	%rsi
+	popq	%rdi
+	ret
+_special_ret:
+	movq	8(%rsi), %rax
+	leaq	71(, %rsi, 8), %rax
+	movq	%rax, (%r12)
+	movq	%r12, %rax
+	xorq	%rbx, %rbx
+	popq	%rsi
+	popq	%rdi
+	ret
+_special_string:
+	leaq	_string_array(%rip), %rsi
+	jmp	_special_index
+
+_s_sub:	
+	call	_print
 	ret
 	
 # DATA
@@ -968,4 +1023,13 @@ _db1:
 _db0:
 	.double 0
 _ln2:
-	.double 0.69314718056
+	.double 0.69314718055994530941723212145817
+	
+	# String array names
+_sa_sub:
+	.asciz	"sub"
+_string_array:
+	.quad	_sa_sub
+	.quad	_s_sub
+	.quad	17
+	.quad	17

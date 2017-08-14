@@ -32,7 +32,9 @@ ops[">>"]     = "bsar"
 ops["|"]      = "bor"
 ops["&"]      = "band"
 ops["^^"]     = "bxor"
-ops["!="]     = "beq"
+ops["==="]    = "beq"
+ops["!="]     = "bneq"
+ops[">>>"]    = "bshr"
 ops["\\"]     = "idiv"
 ops["#"]      = "len"
 
@@ -322,10 +324,11 @@ function evaluate(str, i, fname, flvl, ...)
       -- This makes sure it can be accessed properly
       if tmp == "function" then
 	 if eq then
-	    if typ ~= 2 then
-	       register(typ == 1, expr[c - eq], c - eq - 1)
+	    local n, a = getfname(expr[c - eq])
+	    if a then
+	       register(typ == 1, n, c - eq - 1)
 	    end
-	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, expr[c - eq])
+	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, n)
 	 else
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i)
 	 end
@@ -643,6 +646,24 @@ function funscope(str, i, ...)
       tmp = tmp .. "open\t" .. tostring(t) .. "\n"
       end]]
    return ret, i, fnct, tmp
+end
+
+function getfname(name)
+   local n, t = nextexpr(name, 1)
+   local ret, auth = "", true
+   while n do
+      if isBracketed(n) then
+	 n = n:sub(2, #n - 1)
+	 auth = false
+      end
+      if isString(n) then
+	 n = n:sub(2, #n - 1)
+	 auth = false
+      end
+      ret = ret .. "_" .. n
+      n, t = nextexpr(name, t)
+   end
+   return ret:sub(2, #ret), auth
 end
 
 function test(t1, t2)
