@@ -25,18 +25,21 @@ int _print(long i) {
   int first = 0;
   switch(type) {
   case 0:
-    printf("%d\n", val);
+    printf("%d", val);
     break;
   case 1:
     if (!val)
-      printf("false\n");
+      printf("false");
     else if (val == 1) 
-      printf("true\n");
+      printf("true");
     else if (val == 2)
-      printf("nil\n");
+      printf("nil");
     break;
   case 2:
-    printf("%s\n", (char*)(val + 8));
+    printf("%s", (char*)(val + 8));
+    break;
+  case 3:
+    printf("table: %p", (void*) val);
     break;
   case 5:
     while (*(int*)val != 33) {
@@ -47,8 +50,11 @@ int _print(long i) {
     }
   break;
   case 6:
-    printf("%.13g\n", *(double *) val);
+    printf("%.13g", *(double *) val);
+    break;
+  case 7:
+    printf("function: %p", (void*) val);
     break;
   }
-  return 1;
+  return 0;
 }

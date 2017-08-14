@@ -611,7 +611,7 @@ _index:
 _ix_s:	movq	8(%rbx), %r15
 _ix_lp:	cmpq	$17, %r15
 	jz	_ix_nl
-	sarq	$3, %r15
+	#sarq	$3, %r15
 	movq	(%r15), %rbx
 	pushq	%rax
 	pushq	%r15
@@ -680,15 +680,15 @@ _nw_s:	pushq	%rax
 	call	_ix_s
 	cmpq	$17, (%rax)
 	jnz	_nw_rt
-	leaq	4(, %r12, 8), %rbx
-	movq	%rbx, (%rax)
+	#leaq	4(, %r12, 8), %rbx
+	movq	%r12, (%rax)
 	popq	(%r12)
 	leaq	8(%r12), %rax
 	movq	$17, 8(%r12)
 	movq	$17, 16(%r12)
 	addq	$24, %r12
 	ret
-_nw_rt:	add	$8, %rsp
+_nw_rt:	addq	$8, %rsp
 	ret
 _i_new:
 	push	%rbx
@@ -849,19 +849,23 @@ _type_end:
 
 	.global _next
 	# %rdi: table, %rsi: index
-_next:
+_next:	
 	cmpq	$17, %rsi
 	jz	_next_nil
+	movq	%rsi, %rax
+	andq	$7, %rax
+	cmpq	$2, %rax
+	jz	_next_str
 	movq	%rsi, %rax
 	sarq	$3, %rax
 	movq	(%rax), %xmm0
 	cvtsd2si %xmm0, %rbx
 	cvtsi2sd %rbx, %xmm0
 	movq	%xmm0, %rdx
-	cmpq	%rax, %rdx
+	cmpq	(%rax), %rdx
 	jnz	_next_str
 	movq	%rbx, %rsi
-_next_nil:	
+_next_nil:
 	sarq	$3, %rdi
 	movq	16(%rdi), %rax	
 	movq	(%rax), %rdx # MAX CAP
@@ -877,7 +881,7 @@ _next_gsi:
 _next_lp:
 	addq	$8, %r8
 	cmpq	%rdx, %r8
-	jge	_next_str
+	jge	_next_fstr
 	cmpq	$17, (%r8)
 	jz	_next_lp
 	movq	$33, 8(%r12)
@@ -896,26 +900,59 @@ _next_str:
 	cmpq	$17, %rsi
 	jnz	_next_gsd
 	sarq	$3, %rdi
+_next_fstr:	
 	movq	8(%rdi), %rax
-_next_s_ret:	
-	movq	$33, (%r12)
-	movq	8(%rax), %rbx
-	movq	%rbx, 8(%r12)
-	movq	(%rax), %rax
-	movq	%r12, %rbx
+	cmpq	$17, %rax
+	jnz	_next_s_ret
+_next_ret:	
+	xorq	%rbx, %rbx
 	ret
 _next_gsd:
 	movq	%rdi, %rbx
 	movq	%rsi, %rax
 	call	_index
+	cmpq	$17, %rax
+	jz	_next_ret
+_next_gsd_lp:	
 	movq	8(%rax), %rax
+	cmpq	$17, %rax
+	jz	_next_ret
+	addq	$8, %rax
+	cmpq	$17, (%rax)
+	jz	_next_gsd_lp
+	leaq	-8(%rax), %rax
+_next_s_ret:	
+	movq	$33, (%r12)
+	movq	8(%rax), %rbx
+	movq	%rbx, 8(%r12)
 	movq	(%rax), %rax
-	jmp	_next_s_ret
+	leaq	8(%r12), %rbx
+	ret
 
 	.global _inext
 	# %rdi: table, %rsi: index
-_inext:
-	nop
+_inext:	
+	cmpq	$17, %rsi
+	jz	_inext_nil
+	movq	%rsi, %rax
+	andq	$7, %rax
+	cmpq	$6, %rax
+	jnz	_inext_nil
+	movq	%rsi, %rax
+	sarq	$3, %rax
+	movq	(%rax), %xmm0
+	cvtsd2si %xmm0, %rbx
+	cvtsi2sd %rbx, %xmm0
+	movq	%xmm0, %rdx
+	cmpq	(%rax), %rdx
+	jnz	_inext_nil
+	leaq	(, %rbx, 8), %rax
+	sarq	$3, %rdi
+	movq	%rdi, %rbx
+	jmp	_i_index
+_inext_nil:
+	xorq	%rbx, %rbx
+	movq	$17, %rax
 	ret
 	
 # DATA

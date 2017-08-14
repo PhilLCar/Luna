@@ -26,9 +26,14 @@ ops["~="]     = "neq"
 ops["and"]    = "and"
 ops["or"]     = "or"
 ops["not"]    = "not"
-ops["~"]      = "inv"
-ops["<<"]     = "sal"
-ops[">>"]     = "sar"
+ops["~"]      = "binv"
+ops["<<"]     = "bsal"
+ops[">>"]     = "bsar"
+ops["|"]      = "bor"
+ops["&"]      = "band"
+ops["^^"]     = "bxor"
+ops["!="]     = "beq"
+ops["\\"]     = "idiv"
 ops["#"]      = "len"
 
 function isWhitespace(c)
@@ -45,6 +50,10 @@ end
 
 function isAccoladed(expr)
    return expr:sub(1, 1) == "{" and expr:sub(#expr, #expr) == "}"
+end
+
+function isString(expr)
+   return expr:sub(1, 1) == "\"" and expr:sub(#expr, #expr) == "\""
 end
 
 function nextexpr(str, i)
@@ -154,13 +163,20 @@ function poplevel()
    return "free\t" .. free .. "\n"
 end
 
-function register(loc, var)
+function register(loc, var, disp)
    local ret = ""
+   if not disp then
+      disp = 0
+   end
    if loc then
       if var then
-	 stack[level][var] = size
+	 if not stack[level][var] then
+	    stack[level][var] = size + disp
+	    size = size + 1
+	 end
+      else
+	 size = size + 1
       end
-      size = size + 1
    else
       globals[var] = true
    end
@@ -249,8 +265,11 @@ function translate(expr, fname, flvl, def)
 	 
 	 tmp, t = nextexpr(expr, t)
 	 
-	 while tmp and (isBracketed(tmp) or isParenthesized(tmp) or isAccoladed(tmp)) do
-	    if isParenthesized(tmp) or isAccoladed(tmp) then
+	 while tmp and
+	 (isBracketed(tmp) or isParenthesized(tmp) or isAccoladed(tmp) or isString(tmp)) do
+	    if isBracketed(tmp) then
+	       ret = ret .. translate(tmp, fname, flvl, false) .. "index\n"
+	    else
 	       if isParenthesized(tmp) then
 		  trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
 	       else
@@ -264,10 +283,8 @@ function translate(expr, fname, flvl, def)
 		  ret = ret .. "params\t" .. nval .. "\n" ..
 		     trans .. "call\n"
 	       end
-	    else
-	       ret = ret .. translate(tmp, fname, flvl, false) .. "index\n"
 	    end
-	       tmp, t = nextexpr(expr, t)
+	    tmp, t = nextexpr(expr, t)
 	 end
 	 fname = nil
       end
@@ -305,7 +322,9 @@ function evaluate(str, i, fname, flvl, ...)
       -- This makes sure it can be accessed properly
       if tmp == "function" then
 	 if eq then
-	    globals[expr[c - eq]] = true
+	    if typ ~= 2 then
+	       register(typ == 1, expr[c - eq], c - eq - 1)
+	    end
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, expr[c - eq])
 	 else
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i)
@@ -461,21 +480,51 @@ function forscope(str, i, fname, flvl)
    local fp, c = {}, 0
    local forin = false
    local frct = frct
-   while true do
-      tmp, i = nextexpr(str, i)
+   tmp, i = nextexpr(str, i)
+   while tmp do
       if tmp == "in" then
 	 forin = true
+	 c = #fp + 1
+	 
       elseif tmp == "," then
-	 t = t + 1
+	 if not forin then
+	    t = t + 1
+	 end
       end
+      
       if tmp == "do" then break end
-      c = c + 1
-      fp[c] = tmp
+      fp[#fp + 1] = tmp
+      tmp, i = nextexpr(str, i)
+      while tmp and
+	 (isBracketed(tmp) or isString(tmp) or isParenthesized(tmp) or isAccoladed(tmp))
+      do
+	 fp[#fp] = fp[#fp] .. " " .. tmp
+	 tmp, i = nextexpr(str, i)
+      end
    end
    newlevel()
    if forin then
-      ret = "fin\t" .. tostring(frct) .. "\n" ..
-	 "iter\t" .. tostring(t + 1) .. "\n"
+      local cc = c + 1
+      ret = "forin\t" .. tostring(frct) .. "\n"
+      c = c + 1
+      while c <= cc + 4 do
+	 tmp = translate(fp[c], fname, flvl, false)
+	 c = c + 1
+	 if fp[c] and fp[c] == "," then
+	    c = c + 1
+	 elseif c < cc + 4 then
+	    tmp = "struct\n" .. tmp
+	    while c <= cc + 4 do
+	       tmp = tmp .. "tac\nspec\tnil\n"
+	       c = c + 2
+	    end
+	 end
+	 ret = ret .. tmp .. "tac\n"
+      end
+      register(true, nil)
+      register(true, nil)
+      register(true, nil)
+      ret = ret .. "stack\niter\t" .. tostring(t + 1) .. "\nfido\t" .. tostring(frct) .. "\n"
       c = 1
       while fp[c] ~= "in" do
 	 if fp[c] ~= "," then
@@ -483,20 +532,12 @@ function forscope(str, i, fname, flvl)
 	 end
 	 c = c + 1
       end
-      tmp = ""
-      c = c + 1
-      while fp[c] do
-	 tmp = tmp .. fp[c] .. " "
-	 c = c + 1
-      end
-      ret = ret .. translate(tmp, fname, flvl, false) .. "fido\t" .. tostring(frct) .. "\n"
    else
       if t ~= 1 and t ~= 2 then
 	 print("ERR") --temporaire
 	 print(t)
       end
-      ret = "for\t" .. tostring(frct) .. "\n" ..
-	 "iter\t3\n"
+      ret = "for\t" .. tostring(frct) .. "\n"
       register(true, fp[1])
       register(true, nil)
       register(true, nil)

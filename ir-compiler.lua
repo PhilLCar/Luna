@@ -20,9 +20,9 @@ local c_name = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8" , "%r9"  }
 -- Double-precision registers (16)
 local d_size = 12
 local d_name = { "%xmm4" , "%xmm5" , "%xmm6" , "%xmm7" , "%xmm8" , "%xmm9" ,
-	   "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15" }
+	         "%xmm10", "%xmm11", "%xmm12", "%xmm13", "%xmm14", "%xmm15" }
 local d_cont = { false   , false   , false   , false   , false   , false   ,
-	   false   , false   , false   , false   , false   , false    }
+	         false   , false   , false   , false   , false   , false    }
 
 local str_tbl = {}
 
@@ -426,6 +426,33 @@ function flt(op)
    return ret
 end
 
+function eq()
+   local ret = ""
+   local v1 = pop()
+   local v2 = get()
+   local l1, l2 = label("_T"), label()
+   if isDouble(v1) then
+      ret = ret ..
+	 "\tmovq\t" .. v1 .. ", %rbx\n"
+      v1 = "%rbx"
+   end
+   if isDouble(v2) then
+      pop()
+      ret = ret ..
+	 "\tmovq\t" .. v2 .. ", %rax\n" ..
+	 push("%rax")
+      v2 = "%rax"
+   end
+   ret =
+      "\tcmpq\t" .. v1 .. ", " .. v2 .. "\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      "\tmovq\t$1, " .. v2 .. "\n" ..
+      "\tjmp\t" .. l2 .. "\n" ..
+      l1 .. ":\tmovq\t$9, " .. v2 .. "\n" ..
+      l2 .. ":"
+   return ret
+end
+
 function pow()
    local ret
    local v1, v2 = pop(), pop()
@@ -513,7 +540,7 @@ function inv(instr)
    return ret
 end
 
-function shifts(instr, value)
+function bits(instr, value)
    local ret = ""
    local v1, v2
    local pres = false
@@ -826,15 +853,52 @@ function build(nargs, varargs, fname)
    return ret
 end
 
+function protect(down)
+   local r, val = "", true
+   if down then
+      while r_size ~= down do
+	 r = r .. unlock()
+      end
+   else
+      if buf then
+	 r = r .. lock(pop())
+      end
+      while val do
+	 for i, v in ipairs(u_cont) do
+	    val = false
+	    if v then
+	       val = true
+	       break
+	    end
+	 end
+	 if val then
+	    r = r .. lock(pop())
+	 end
+      end
+      for i, v in ipairs(d_cont) do
+	 if v then
+	    r = r .. "\tmovsd\t" .. d_name[i] .. ", (%r12)\n" ..
+	       "\tleaq\t6(, %r12, 8), %rax\n" ..
+	       "\taddq\t$8, %r12\n" ..
+	       "\tmovsd\t%rax, " .. v .. "\n"
+	    d_cont[i] = false
+	    f_size = f_size - 1
+	    break
+	 end
+      end
+   end
+   return r
+end
+
 -- Environment functions
 --------------------------------------------------------------------------------
 function ifenv(text, i, p, loop)
-   local ret, tmp1, tmp2 = "_IF" .. p .. ":\n"
+   local rs = r_size
+   local ret, tmp1, tmp2 = protect(false) .. "_IF" .. p .. ":\n"
    local tag, jlab, v
-   local vs, rs
+   
    tmp1, i = _translate(text, i, false, false)
    v = pop()
-   --vs, rs = v_size, r_size
    tmp2, i, tag = _translate(text, i, false, loop)
    if tag == "else" then
       jlab = "_EL" .. p
@@ -852,23 +916,28 @@ function ifenv(text, i, p, loop)
       "\tjz\t" .. jlab .. "\n" ..
       tmp2
    if tag == "else" then
-      --v_size, r_size = vs, rs
       tmp1, i = _translate(text, i, false, loop)
       ret = ret ..
 	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
 	 tmp1 .. "_FI" .. p .. ":\n"
    else
-      ret = ret .. jlab .. ":\n"
+      ret = ret .. jlab .. ":\n" .. protect(rs) ..
+	 "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+      rsp = r_size - 1
    end
    return ret, i
 end
 
 function whenv(text, i, p)
-   local ret, tmp = "_WH" .. p .. ":\n"
+   local rs = r_size
+   local ret, tmp = protect(false)
    local tag, v
-   local vs, rs
-   ret = ret .. "\tmovq\t%rbp, %rsp\n"
-   rsp = 0
+
+   rsp = r_size - 1
+   ret = "_WH" .. p .. ":\n" ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+      
+   
    tmp, i = _translate(text, i, false, false)
    v = pop()
    if v:sub(1, 1) == "$" then
@@ -881,24 +950,25 @@ function whenv(text, i, p)
       "\tcmpq\t$17, " .. v .. "\n" ..
       "\tjz\t_WE" .. p .. "\n"
 
-   ret = ret .. "\tmovq\t%rbp, %rsp\n"
-   rsp = 0
    tmp, i, tag = _translate(text, i, false, "_WE" .. p)
    
    ret = ret .. tmp ..
       "\tjmp\t_WH" .. p .. "\n" ..
-      "_WE" .. p .. ":\n" ..
-      "\tmovq\t%rbp, %rsp\n"
-   rsp = 0
+      "_WE" .. p .. ":\n" .. protect(rs) ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   rsp = r_size - 1
    return ret, i
 end
 
 function rpenv(text, i, p)
-   local ret, tmp = "_RP" .. p .. ":\n"
+   local rs = r_size
+   local ret, tmp = protect(false)
    local tag, v
-   local vs, rs
-   ret = ret .. "\tmovq\t%rbp, %rsp\n"
-   rsp = 0
+
+   rsp = r_size - 1
+   ret = ret ..  "_RP" .. p .. ":\n" ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   
    tmp, i = _translate(text, i, false, false)
    ret = ret .. tmp .. "_UN" .. p .. ":\n"
    
@@ -914,15 +984,18 @@ function rpenv(text, i, p)
       "\tjz\t_RP" .. p .. "\n" ..
       "\tcmpq\t$17, " .. v .. "\n" ..
       "\tjz\t_RP" .. p .. "\n" ..
-      "_RE" .. p .. ":\n"
-      .. "\tmovq\t%rbp, %rsp\n"
-   rsp = 0
+      "_RE" .. p .. ":\n" ..
+      protect(rs) ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" 
+   rsp = r_size - 1
    return ret, i
 end
 
-function frenv(text, i, p, n)
+function frenv(text, i, p)
+   local rs = r_size
    local ret, tmp
    local tag, v
+   ret = protect(false)
    tmp, i = _translate(text, i, false, false)
    v = pop()
    if isMem(v) then
@@ -931,7 +1004,7 @@ function frenv(text, i, p, n)
 	 "\tmovq\t(%rax), %xmm0\n" ..
 	 lock("%xmm0")
    elseif isDouble(v) then
-      tmp = tmp .. "\tmovsd\t" .. v .. ", %xmm0" ..
+      tmp = tmp .. "\tmovsd\t" .. v .. ", %xmm0\n" ..
 	 lock("%xmm0")
    else
       tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n" ..
@@ -939,7 +1012,7 @@ function frenv(text, i, p, n)
 	 "\tmovq\t(%rax), %xmm0\n" ..
 	 lock("%xmm0")
    end
-   ret = tmp .. "\tmovq\t%xmm0, " .. -8 * r_size .. "(%rbp)\n"
+   ret = ret .. tmp .. "\tmovq\t%xmm0, " .. -8 * r_size .. "(%rbp)\n"
    r_size = r_size + 1
    for k = 1, 2 do
       tmp, i = _translate(text, i, false, false)
@@ -957,10 +1030,11 @@ function frenv(text, i, p, n)
       ret = ret .. tmp
    end
    
-   rsp = 0
+   rsp = r_size - 1
+   
    ret = ret .. 
       "_FRC" .. p .. ":\n" ..
-      "\tmovq\t%rbp, %rsp\n" ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
       "\txorpd\t%xmm1, %xmm1\n" ..
       "\tcmpsd\t$6, " .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
       "\tmovq\t%xmm1, %rax\n" ..
@@ -977,11 +1051,10 @@ function frenv(text, i, p, n)
       "\tmovq\t%xmm1, %rax\n" ..
       "\tcmpq\t$-1, %rax\n" ..
       "\tjz\t_FRE" .. p .. "\n" ..
-      "_FRS" .. p .. ":\n"
+      "_FRS" .. p .. ":\n" 
 
    tmp, i = _translate(text, i, false, "_FRE" .. p)
-
-   rsp = 0
+   
    ret = ret .. tmp ..
       "\tmovsd\t" .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
       "\tmovsd\t" .. -8 * (r_size - 3) .. "(%rbp), %xmm0\n" ..
@@ -993,8 +1066,70 @@ function frenv(text, i, p, n)
       "\tjmp\t_FRC" .. p .. "\n" ..
       "_FRE" .. p .. ":\n"
 
-   r_size = r_size - 4
+   --tmp, i = _translate(text, i, false, false)
    
+   r_size = r_size - 4
+   ret = ret .. protect(rs) ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   rsp = r_size - 1
+
+   return ret, i
+end
+
+function fienv(text, i, p)
+   local rs = r_size
+   local ret, tmp
+   local tag, v
+   local l1, l2, l3 = label(), label(), label()
+   ret = protect(false) 
+   ret, i = set(text, i, 3)
+
+   tmp, i = readline(text, i)
+   tag, v = separate(tmp)
+   tmp, i = readline(text, i) -- fido
+   v = tonumber(v)
+   
+   ret = ret ..
+      "_FIC" .. p .. ":\n" ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
+      "\tmovq\t" .. -8 * (r_size - 3) .. "(%rbp), %rax\n" ..
+      "\tsarq\t$3, %rax\n" ..
+      "\tpushq\t%r14\n" ..
+      "\tmovq\t" .. -8 * (r_size - 2) .. "(%rbp), %rdi\n" ..
+      "\tmovq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsi\n" ..
+      "\tmovq\t8(%rax), %r14\n" ..
+      "\tcall\t*(%rax)\n" ..
+      "\tpopq\t%r14\n" ..
+      "\tcmpq\t$17, %rax\n" ..
+      "\tjz\t_FIE" .. p .. "\n" ..
+      "\tmovq\t%rax, " .. -8 * (r_size - 1) .. "(%rbp)\n" ..
+      "\tpushq\t%rax\n" ..
+      "\tleaq\t" .. -8 * (v - 1) .. "(%rsp), %r15\n" ..
+      "\tcmp\t$0, %rbx\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      "\tpushq\t(%rbx)\n" ..
+      "\tsubq\t$8, %rbx\n" ..
+      "\tjmp\t" .. l2 .. "\n" ..
+      l1 .. ":\tcmpq\t%rsp, %r15\n" ..
+      "\tjge\t" .. l3 .. "\n" ..
+      "\tpushq\t$17\n" ..
+      "\tjmp\t" .. l1 .. "\n" ..
+      l3 .. ":\tmovq\t%r15, %rsp\n"
+   r_size = r_size + v
+   rsp = r_size - 1
+
+   tmp, i = _translate(text, i, false, "_FIE" .. p)
+
+   ret = ret .. tmp ..
+      "\tjmp\t_FIC" .. p .. "\n" ..
+      "_FIE" .. p .. ":\n"
+
+   r_size = r_size - v - 3
+   ret = ret .. protect(rs) ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" 
+   rsp = r_size - 1
    return ret, i
 end
 
@@ -1076,13 +1211,7 @@ function params(text, i, p, call)
    if pp < 0 then pp = 0 end
    -- Protect
    ------------------------------
-   if buf then
-      asm = asm .. lock(pop())
-   end
-   for j = v_size, v_size - u_size, -1 do
-      if j == 0 then break end
-      asm = asm .. lock(pop())
-   end
+   asm = asm .. protect(false)
    rs2 = r_size
    -- Set the stack pointer
    ------------------------------
@@ -1146,12 +1275,9 @@ function params(text, i, p, call)
       if func then asm = asm .. develop() end
       -- Restore
       ------------------------------
-      tmp = ""
       r_size = rs2
       r_index = alg
-      for j = r_size - 1, rs, -1 do
-	 tmp = tmp .. unlock()
-      end
+      tmp = protect(rs)
       if r_size > 1 then
 	 tmp = tmp .. "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
       else
@@ -1214,12 +1340,9 @@ function params(text, i, p, call)
       if func then asm = asm .. develop() end
       -- Restore
       ------------------------------
-      tmp = ""
       r_size = rs2
       r_index = alg
-      for j = r_size - 1, rs, -1 do
-	 tmp = tmp .. unlock()
-      end
+      tmp = protect(rs)
       rsp = r_size - 1
       -- Terminal call
       ------------------------------
@@ -1502,11 +1625,24 @@ function _translate(text, i, sets, loop)
       elseif instr == "pow" then
 	 asm = asm .. pow()
 
-      elseif instr == "sal" or instr == "sar" then
-	 asm = asm .. shifts(instr, false)
+      elseif
+	 instr == "bsal" or
+	 instr == "bsar" or
+	 instr == "band" or
+	 instr == "bor" or
+	 instr == "bxor"
+      then
+	 asm = asm .. bits(instr:sub(2, #instr), false)
 
-      elseif instr == "inv" then
+      elseif instr == "binv" then
 	 asm = asm .. inv()
+
+      elseif instr == "beq" then
+	 asm = asm .. eq()
+
+      elseif instr == "idiv" then
+	 asm = asm .. flt("div")
+	 asm = asm .. "\troundsd\t$3, " .. get() .. ", " .. get() .. "\n"
 
       elseif instr == "eq" then
 	 asm = asm .. opcall2("compare")
@@ -1583,10 +1719,11 @@ function _translate(text, i, sets, loop)
 	 asm = asm .. tmp
 
       elseif instr == "for" then
-	 local t
-	 tmp, i = nextexpr(text, i)
-	 tmp, t = separate(tmp)
-	 tmp, i = frenv(text, i, value, tonumber(t))
+	 tmp, i = frenv(text, i, value)
+	 asm = asm .. tmp
+
+      elseif instr == "forin" then
+	 tmp, i = fienv(text, i, value)
 	 asm = asm .. tmp
 
       elseif instr == "fct" then
@@ -1607,6 +1744,8 @@ function _translate(text, i, sets, loop)
 	 instr == "rend"   or
 	 instr == "frdo"   or
 	 instr == "frend"  or
+	 instr == "fido"   or
+	 instr == "fiend"  or
          instr == "then"   or
          instr == "else"   or
 	 instr == "iend"   or
@@ -1617,8 +1756,7 @@ function _translate(text, i, sets, loop)
 
       elseif instr == "brk" then
 	 asm = asm ..
-	    "\tjmp\t" .. loop .. "\n"..
-	    "\tmovq\t%rbp, %rsp\n"
+	    "\tjmp\t" .. loop .. "\n"
 	 rsp = 0
 
       elseif instr == "tac" then

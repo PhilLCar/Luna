@@ -32,19 +32,22 @@ end
 
 function isOperator(str)
    if -- Single char operators
-      str == "-" or
-      str == "+" or
-      str == "/" or
-      str == "*" or
-      str == "~" or
-      str == "^" or
-      str == "." or
-      str == ":" or
-      str == "<" or
-      str == ">" or
-      str == "#" or
-      str == "%" or
-      str == "~" or
+      str == "-"  or
+      str == "+"  or
+      str == "/"  or
+      str == "*"  or
+      str == "~"  or
+      str == "^"  or
+      str == "."  or
+      str == ":"  or
+      str == "<"  or
+      str == ">"  or
+      str == "#"  or
+      str == "%"  or
+      str == "~"  or
+      str == "\\" or
+      str == "|"  or
+      str == "&"  or
       -- 2 char operators
       str == "~=" or
       str == ">=" or
@@ -54,6 +57,8 @@ function isOperator(str)
       str == "or" or
       str == ">>" or
       str == "<<" or
+      str == "!=" or
+      str == "^^" or
       -- 3 char operators
       str == "and"  or
       str == "not"
@@ -314,9 +319,14 @@ function associate(arr, left, unary, indent, ...)
    if unary then
       local i = 1
       while i <= #arr do
-	 if mem and
-	    (arr[i] == "-" or arr[i] == "not" or arr[i] == "~" or arr[i] == "#")
-	 then
+	 local un = false
+	 for k, v in pairs(ops) do
+	    if arr[i] == v then
+	       un = true
+	       break
+	    end
+	 end
+	 if mem and un then
 	    j = 1
 	    while arr[i + j] == "\n" do
 	       arr[i] = arr[i] .. "\n" .. strgen(_SPACE, indent + 1)
@@ -506,23 +516,24 @@ function scan(array, start, stop, indent)
    end
    ret = ""
    -- PRIORITY LEVELS --
-   -- Level 0 - Bitwise       : 
-   newarr = associate(newarr, true, false, indent, "<<", ">>")
-   -- Level 1 - Power         : ^               [right-associative]
+   -- Level 0 - Bitwise       : << >> | & ^^ ~     [left-associative ]
+   newarr = associate(newarr, true , true , indent, "~")
+   newarr = associate(newarr, true, false, indent, "<<", ">>", "|", "&", "^^")
+   -- Level 1 - Power         : ^                  [right-associative]
    newarr = associate(newarr, false, false, indent, "^")
-   -- Level 2 - Unary         : ~ - not #       [left-associative ]
-   newarr = associate(newarr, true , true , indent)
-   -- Level 3 - Multiplicative: * / %           [left-associative ]
+   -- Level 2 - Unary         : - not #            [left-associative ]
+   newarr = associate(newarr, true , true , indent, "-", "not", "#")
+   -- Level 3 - Multiplicative: * / %              [left-associative ]
    newarr = associate(newarr, true , false, indent, "*", "/", "%")
-   -- Level 4 - Additive      : + -             [left-associative ]
+   -- Level 4 - Additive      : + -                [left-associative ]
    newarr = associate(newarr, true , false, indent, "+", "-")
-   -- Level 5 - Concatenation : ..              [right-associative]
+   -- Level 5 - Concatenation : ..                 [right-associative]
    newarr = associate(newarr, false, false, indent, "..")
-   -- Level 6 - Boolean       : == ~= <= >= < > [left-associative ]
-   newarr = associate(newarr, true , false, indent, "==", "~=", "<=", ">=", "<", ">")
-   -- Level 7 - Conjunction   : and             [left-associative ]
+   -- Level 6 - Boolean       : == ~= <= >= < > != [left-associative ]
+   newarr = associate(newarr, true , false, indent, "==", "~=", "<=", ">=", "<", ">", "!=")
+   -- Level 7 - Conjunction   : and                [left-associative ]
    newarr = associate(newarr, true , false, indent, "and")
-   -- Level 8 - Disjunction   : or              [left-associative ]
+   -- Level 8 - Disjunction   : or                 [left-associative ]
    newarr = associate(newarr, true , false, indent, "or")
 
    for i, v in ipairs(newarr) do

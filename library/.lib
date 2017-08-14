@@ -1,10 +1,9 @@
 io:
 	print
 lua:
-	tostring
-	inext
-	tonumber
 	ipairs
 	type
-	next
+	tonumber
 	pairs
+	next
+	tostring
