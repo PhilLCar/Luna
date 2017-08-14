@@ -1007,7 +1007,35 @@ _special_string:
 	jmp	_special_index
 
 _s_sub:	
-	call	_print
+	sarq	$3, %rdi
+	movq	(%rdi), %r15
+	addq	$8, %rdi
+	sarq	$3, %rsi
+	sarq	$3, %rdx
+	cvtsd2si (%rsi), %rax
+	decq	%rax
+	jns	_s_sub_1
+	xorq	%rax, %rax
+_s_sub_1:
+	xorq	%rsi, %rsi	
+	cvtsd2si (%rdx), %rdx
+	cmpq	%rdx, %r15
+	jge	_s_sub_copy
+	movq	%r15, %rdx
+_s_sub_copy:
+	cmpq	%rax, %rdx
+	jbe	_s_sub_ret
+	movb	(%rax, %rdi, ), %bl
+	movb	%bl, 8(%rsi, %r12)
+	incq	%rsi
+	incq	%rax
+	jmp	_s_sub_copy
+_s_sub_ret:
+	movq	%rsi, (%r12)
+	movb	$0, 8(%rsi, %r12, )
+	leaq	2(, %r12, 8), %rax
+	leaq	9(%rsi, %r12, ), %r12
+	xorq	%rbx, %rbx
 	ret
 	
 # DATA
