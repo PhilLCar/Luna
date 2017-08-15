@@ -1005,7 +1005,9 @@ _special_ret:
 _special_string:
 	leaq	_string_array(%rip), %rsi
 	jmp	_special_index
-
+	
+	.global	_s_sub
+	# %rdi: string, %rsi: start, %rdx: finish
 _s_sub:	
 	sarq	$3, %rdi
 	movq	(%rdi), %r15
@@ -1013,12 +1015,24 @@ _s_sub:
 	sarq	$3, %rsi
 	sarq	$3, %rdx
 	cvtsd2si (%rsi), %rax
+	cmpq	$0, %rax
+	jns	_s_sub_1_p ##
+	addq	%r15, %rax
+	jmp	_s_sub_1_n
+_s_sub_1_p:	
 	decq	%rax
+_s_sub_1_n:	
 	jns	_s_sub_1
 	xorq	%rax, %rax
 _s_sub_1:
 	xorq	%rsi, %rsi	
 	cvtsd2si (%rdx), %rdx
+	cmpq	$0, %rdx
+	jns	_s_sub_2
+	addq	%r15, %rdx
+	incq	%rdx
+	jmp	_s_sub_copy
+_s_sub_2:	
 	cmpq	%rdx, %r15
 	jge	_s_sub_copy
 	movq	%r15, %rdx

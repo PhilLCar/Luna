@@ -253,9 +253,9 @@ function readexpr(str, i, indent)
       
       if isReserved(token)    or
 	 isEnv(token)         or
-	 isPunctuation(token) or
-	 token == "{"         or
-	 token == "}"
+	 isPunctuation(token) --or
+	 --token == "{"         or
+	 --token == "}"
       then
 	 if c == 0 then
 	    if j == 1 then
@@ -273,8 +273,8 @@ function readexpr(str, i, indent)
 	    last = "op"
 	 end
       elseif isDelimiter(token) then
-	 if token == "(" then c = c + 1
-	 elseif token == ")" then c = c - 1
+	 if token == "(" or token == "[" or token == "{" then c = c + 1
+	 elseif token == ")" or token == "]" or token == "}" then c = c - 1
 	 end
 	 expr[j] = token
 	 last = "del"
@@ -551,7 +551,12 @@ function removeMacros(array, indent)
    local nex, pre
    local i = 1
    while i < #array do
-      if array[i] == "[" then
+      if array[i] == "{" then
+
+      elseif array[i] == "(" then
+      elseif type(array[i]) == "string" and array[i]:sub(1,2) == "\"" then
+	 
+      elseif array[i] == "[" then
 	 pre = array[i - 1]
 	 nex = {}
 	 do

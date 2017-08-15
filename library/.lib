@@ -1,10 +1,12 @@
+string:
+	string
 io:
-	io
 	print
+	io
 lua:
-	tonumber
 	next
+	ipairs
 	tostring
 	pairs
+	tonumber
 	type
-	ipairs

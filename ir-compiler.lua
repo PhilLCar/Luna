@@ -1181,6 +1181,7 @@ function fct(text, i, value)
    ret = ret .. build(val, ins == "nargs", name)
    
    tmp, i = _translate(text, i, false, false)
+   tmp = tmp .. "_FE" .. value .. ":\n\n"
    return ret .. tmp, i
 end
 
@@ -1793,9 +1794,9 @@ function _translate(text, i, sets, loop)
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
 	    asm = asm .. "\tmovq\t$33, %rax\n"
 	    if rsp ~= 0 then
-	       asm = asm .. "\tleave\n\tret\n\n"
+	       asm = asm .. "\tleave\n\tret\n"
 	    else
-	       asm = asm .. "\tpopq\t%rbp\n\tret\n\n"
+	       asm = asm .. "\tpopq\t%rbp\n\tret\n"
 	    end
 	 else
 	    asm = asm .. "\n"
