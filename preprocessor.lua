@@ -4,7 +4,6 @@ local _SPACE = "   "
 --------------------------------------------------------------------------------
 -- Error managment values
 --------------------------------------------------------------------------------
-local linum, chnum = 1, 1
 local typerr = "Unknown"
 
 --------------------------------------------------------------------------------
@@ -124,6 +123,20 @@ function isReserved(str)
    return false
 end
 
+function isVariable(str)
+   if tonumber(str)    or
+      isEnv(str)       or
+      isReserver(str)  or
+      isOperator(str)  or
+      isDelimiter(str) or
+      isPunctuation(str)
+   then
+      return false
+   else
+      return true
+   end
+end
+
 --------------------------------------------------------------------------------
 -- Parsing functions
 --------------------------------------------------------------------------------
@@ -141,7 +154,6 @@ function nexttoken(str, i)
    -- Removes whitespaces ahead of expression
    while isWhitespace(s) do
       i = i + 1
-      chnum = chnum + 1
       if i > #str then
 	 return false, i
       end
@@ -152,7 +164,6 @@ function nexttoken(str, i)
    s = str:sub(i, i + 2)
    
    if s == "..." or isOperator(s) then
-      chnum = chnum + 2
       return s, i + 3
    end
 
@@ -168,7 +179,6 @@ function nexttoken(str, i)
       return compar(str, i)
       
    elseif isOperator(s) then
-      chnum = chnum + 1
       return s, i + 2
    end
 
@@ -176,8 +186,6 @@ function nexttoken(str, i)
    s = s:sub(1, 1)
 
    if s == "\n" then
-      linum = linum + 1
-      chnum = 1
       return s, i + 1
 
    -- String parsing: "" ''
@@ -197,7 +205,6 @@ function nexttoken(str, i)
       do
 	 ret = ret .. s
 	 i = i + 1
-	 chnum = chnum + 1
 	 if i > #str then
 	    return ret, i
 	 end
@@ -216,7 +223,6 @@ function nexttoken(str, i)
    do
       ret = ret .. s
       i = i + 1
-      chnum = chnum + 1
       if i > #str then
 	 return ret, i
       end
@@ -243,38 +249,35 @@ function readexpr(str, i, indent)
    local ret, token = ""
    local expr, j, c = {}, 0, 0
    local last, k = "", i
-   local tl, tc  = linum, chnum
+   local ti = i
    
    while true do
-      tc, tl = chnum, linum
       token, k = nexttoken(str, i)
       if not token then return token, k end
       j = j + 1
       
       if isReserved(token)    or
 	 isEnv(token)         or
-	 isPunctuation(token) --or
-	 --token == "{"         or
-	 --token == "}"
+	 isPunctuation(token) or
+	 token == "{"         or
+	 token == "}"
       then
 	 if c == 0 then
 	    if j == 1 then
 	       return token, k
 	    elseif last ~= "op" then
-	       linum, chnum = tl, tc
 	       break
 	    else
-	       linum, chnum = tl, tc
 	       typerr = "Unexpected token \"" .. token .. "\""
-	       helperror()
+	       helperror(i)
 	    end
 	 else
 	    expr[j] = token
 	    last = "op"
 	 end
       elseif isDelimiter(token) then
-	 if token == "(" or token == "[" or token == "{" then c = c + 1
-	 elseif token == ")" or token == "]" or token == "}" then c = c - 1
+	 if token == "(" or token == "[" --[[or token == "{"]] then c = c + 1
+	 elseif token == ")" or token == "]" --[[or token == "}"]] then c = c - 1
 	 end
 	 expr[j] = token
 	 last = "del"
@@ -285,168 +288,172 @@ function readexpr(str, i, indent)
 	 if last == "" then
 	    return token, k
 	 elseif last ~= "op" then
-	    linum, chnum = tl, tc
 	    break
 	 else
 	    expr[j] = token
 	 end
+      elseif token:sub(1,1) == "\"" then
+	 expr[j] = token
+	 last = "str"
       else
 	 if last == "var" then
-	    linum, chnum = tl, tc
 	    typerr = "Syntax error, possibly missing an operator?"
-	    helperror()
+	    helperror(i)
 	 end
 	 expr[j] = token
 	 last = "var"
       end
-	 
       i = k
+      if c == 0 then
+	 ti = i
+      end
    end
 
    if c ~= 0 then
       typerr = "Parenthesis mismatch."
-      helperror()
+      helperror(ti)
    end
-   expr = removeMacros(expr, indent)
-   ret = scan(expr, 1, nil, indent)
+   ret = scan(rmDot(expr), 1, nil, indent)
    return ret, i
 end
 
--- Priority parenthesizing function.
-function associate(arr, left, unary, indent, ...)
-   local ops = {...}
-   local start, stop, inc
-   local mem, newarr, j = true, {}
-   -- Unary operators
+function associate(array, left, unary, indent, ...)
    if unary then
-      local i = 1
-      while i <= #arr do
-	 local un = false
-	 for k, v in pairs(ops) do
-	    if arr[i] == v then
-	       un = true
-	       break
-	    end
-	 end
-	 if mem and un then
-	    j = 1
-	    while arr[i + j] == "\n" do
-	       arr[i] = arr[i] .. "\n" .. strgen(_SPACE, indent + 1)
-	       j = j + 1
-	    end
-	    local ts = trysolve(arr[i], arr[j + 1])
-	    if j > 1 then
-	       if ts then
-		  arr[i + j] = ts
-	       else
-		  arr[i + j] = "(" .. arr[i] .. arr[i + j] .. ")"
-	       end
-	    else
-	       if ts then
-		  arr[i + j] = ts
-	       else
-		  arr[i + j] = "(" .. arr[i] .. " " .. arr[i + j] .. ")"
-	       end
-	    end
-	    for k = i, i + j - 1 do
-	       arr[k] = nil
-	    end
-	    i = i + j
-	    mem = false
-	 else
-	    mem = arr[i]
-	    mem = isOperator(mem) or isReserved(mem) or isPunctuation(mem) or mem == "\n"
-	 end
-	 i = i + 1
-      end
-   -- Binary operators
+      return comb1(array, indent, ...)
    else
-      -- Associativity
-      if left then
-	 start = 2
-	 stop = #arr
-	 inc = 1
+      return comb2(array, left, indent, ...)
+   end
+end
+
+-- Combing for unary operators
+function comb1(arr, indent, ...)
+   local i, j = 1
+   local prev = true
+   while i <= #arr do
+      if prev and mem(arr[i], ...) then
+	 j = i + 1
+	 while mem(arr[j], "#", "-", "~", "not", "\n") do
+	    j = j + 1
+	 end
+	 local ts
+	 for k = j - 1, i do
+	    if arr[k] == "\n" then
+	       arr[j] =
+		  "\n" .. strgen(_SPACE, indent + 1) .. array[j]
+	    else
+	       ts = trysolve(arr[k], arr[j])
+	       if ts then
+		  arr[j] = ts
+	       else
+		  arr[j] =
+		     "(" .. arr[k] .. " " .. arr[j] .. ")"
+	       end
+	    end
+	 end
+	 for k = i, j - 1 do
+	    arr[k] = nil
+	 end
+	 i = j
+      end
+      prev = arr[i]
+      if isOperator(prev) or
+	 isReserved(prev) or
+	 isPunctuation(prev) or
+	 isEnv(prev) or
+	 prev == "(" or
+	 prev == "{" or
+	 prev == "["
+      then
+	 prev = true
       else
-	 start = #arr - 1
-	 stop = 1
-	 inc = -1
+	 prev = false
       end
-      local i = start
-      while (inc == 1 and i < stop) or (inc == -1 and i > stop) do
-	 mem = false
-	 for k, v in ipairs(ops) do
-	    if v == arr[i] then
-	       mem = v
-	       break
-	    end
-	 end
-	 local w
-	 if mem then
-	    j = 1
-	    w = 0
-	    while
-	       arr[i + j + w] == "-" or
-	       arr[i + j + w] == "not" or
-	       arr[i + j + w] == "~" or
-	       arr[i + j + w] == "#" or
-	       arr[i + j + w] == "\n"
-	       do
-	       while arr[i + j + w] == "\n" do
-		  mem = mem .. "\n" .. strgen(_SPACE, indent + 1)
-		  j = j + 1
-	       end
-	       while
-		  arr[i + j + w] == "-" or
-		  arr[i + j + w] == "not" or
-		  arr[i + j + w] == "~" or
-		  arr[i + j + w] == "#"
-	       do
-		  mem = mem .. " (" .. arr[i + j + w] .. " "
-		  w = w + 1
-	       end
-	    end
-	    local ts = trysolve(mem, arr[i + j + w], arr[i - 1])
-	    if j + w > 1 and inc > 0 then
-	       if ts then
-		  arr[i + j + w] = ts
-	       else
-		  arr[i + j + w] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
-		  for k = 1, w do
-		     arr[i + j + w] = arr[i + j + w] .. ")"
-		  end
-	       end
-	    elseif j + w > 1 then
-	       if ts then
-		  arr[i - 1] = ts
-	       else
-		  arr[i - 1] = "(" .. arr[i - 1] .. " " .. mem .. arr[i + j + w] .. ")"
-		  for k = 1, w do
-		     arr[i - 1] = arr[i - 1] .. ")"
-		  end
-	       end
-	    else
-	       if ts then
-		  arr[i + inc] = ts
-	       else
-		  arr[i + inc] = "(" .. arr[i - 1] .. " " .. mem .. " " .. arr[i + 1] .. ")"
-	       end
-	    end
-	    if inc > 0 then
-	       for k = i - 1, i + j + w - 1, 1 do
-		  arr[k] = nil
-	       end
-	       i = i + j + w
-	    else
-	       for k = i, i + j + w, 1 do
-		  arr[k] = nil
-	       end
-	       i = i - 1
-	    end
-	 end
-	 i = i + inc
-      end
+      i = i + 1
    end
    j = 0
+   local newarr = {}
+   for i, v in pairs(arr) do
+      j = j + 1
+      newarr[j] = v
+   end
+   return newarr
+end
+
+-- Combing for binary operators
+function comb2(arr, left, indent, ...)
+   local i, j, e, t
+   if left then
+      i, e, t = 1, #arr + 1, 1
+   else
+      i, e, t = #arr, 0, -1
+   end
+   while i ~= e do
+      if mem(arr[i], ...) then
+	 j = i + 1
+	 while mem(arr[j], "#", "-", "~", "not", "\n") do
+	    j = j + 1
+	 end
+	 local ts
+	 for k = j - 1, i + 1, -1 do
+	    if arr[k] == "\n" then
+	       arr[j] =
+		  "\n" .. strgen(_SPACE, indent + 1) .. array[j]
+	    else
+	       ts = trysolve(arr[k], arr[j])
+	       if ts then
+		  arr[j] = ts
+	       else
+		  arr[j] =
+		     "(" .. arr[k] .. " " .. arr[j] .. ")"
+	       end
+	    end
+	 end
+	 ts = trysolve(arr[i], arr[j], arr[i - 1])
+	 if ts and left then
+	    arr[j] = ts
+	 elseif left then
+	    arr[j] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"
+	 elseif ts then
+	    arr[i - 1] = ts
+	 else
+	    arr[i - 1] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"
+	 end
+	 for k = i, j - 1 do
+	    arr[k] = nil
+	 end
+	 if left then
+	    arr[i - 1] = nil
+	    i = j
+	 else
+	    arr[j] = nil
+	    i = i - 1
+	 end
+      end
+      i = i + t
+   end
+   j = 0
+   local newarr = {}
+   for i, v in pairs(arr) do
+      j = j + 1
+      newarr[j] = v
+   end
+   return newarr
+end
+
+-- Removing macros '.' and ':'
+function rmDot(arr)
+   local i = 1
+   while i <= #arr do
+      if arr[i] == "." then
+	 arr[i + 1] = arr[i - 1] .. " [\"" ..  arr[i + 1] .. "\"]"
+	 arr[i - 1] = nil
+	 arr[i] = nil
+	 i = i + 1
+      end
+      i = i + 1
+   end
+   j = 0
+   local newarr = {}
    for i, v in pairs(arr) do
       j = j + 1
       newarr[j] = v
@@ -463,52 +470,50 @@ function scan(array, start, stop, indent)
       if array[i] ~= nil then
 	 if array[i] == stop then
 	    break
-	 elseif array[i] == "(" then
-	    ret, i = scan(array, i + 1, ")", indent)
-	    if ret:sub(1, 1) ~= "(" then
-	       ret = "(" .. ret .. ")"
-	    else
-	       for k = 1, #ret do
-		  if ret:sub(k, k) == "," then
-		     ret = "(" .. ret .. ")"
-		     break
+	 elseif mem(array[i], "(", "[", "{") then
+	    if array[i] == "(" then
+	       ret, i = scan(array, i + 1, ")", indent)
+	       if ret:sub(1, 1) ~= "(" then
+		  ret = "(" .. ret .. ")"
+	       else
+		  local n, c = 0
+		  for k = 1, #ret do
+		     c = ret:sub(k, k)
+		     if c == "(" or c == "{" then
+			n = n + 1
+		     elseif c == ")" or c == "}" then
+			n = n - 1
+		     elseif c == "," and n == 0 then
+			ret = "(" .. ret .. ")"
+			break
+		     end
 		  end
 	       end
+	       newarr[j] = ret
+	    elseif array[i] == "[" then
+	       ret, i = scan(array, i + 1, "]", indent)
+	       newarr[j] = "[" .. ret .. "]"
+	    elseif array[i] == "{" then
+	       ret, i = scan(array, i + 1, "}", indent)
+	       newarr[j] = "{" .. ret .. "}"
 	    end
-	    newarr[j] = ret
 	    if j > 1 and
 	       not isOperator(newarr[j - 1]) and
 	       newarr[j - 1] ~= "\n"
 	    then
-	       -- À SURVEILLER (autrefois entre parenthèse)
 	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
 	       newarr[j] = nil
 	       j = j - 1
 	    end
-	 elseif array[i] == "[" then
-	    ret, i = scan(array, i + 1, "]", indent)
-	    newarr[j] = "[" .. ret .. "]"
+	 elseif array[i] and array[i]:sub(1,1) == "\"" then
 	    if j > 1 and
 	       not isOperator(newarr[j - 1]) and
 	       newarr[j - 1] ~= "\n"
 	    then
-	       -- À SURVEILLER (autrefois entre parenthèse)
-	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
-	       newarr[j] = nil
+	       newarr[j - 1] = newarr[j - 1] .. " " .. array[i]
 	       j = j - 1
 	    end
-	 elseif array[i] == "{" then
-	    ret, i = scan(array, i + 1, "}", indent)
-	    newarr[j] = "{" .. ret .. "}"
-	    if j > 1 and
-	       not isOperator(newarr[j - 1]) and
-	       newarr[j - 1] ~= "\n"
-	    then
-	       -- À SURVEILLER (autrefois entre parenthèse)
-	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
-	       newarr[j] = nil
-	       j = j - 1
-	    end
+	    print(newarr[j])
 	 else
 	    newarr[j] = array[i]
 	 end
@@ -525,8 +530,8 @@ function scan(array, start, stop, indent)
    newarr = associate(newarr, false, false, indent, "^")
    -- Level 2 - Unary         : - not #                   [left-associative ]
    newarr = associate(newarr, true , true , indent, "-", "not", "#")
-   -- Level 3 - Multiplicative: * / %                     [left-associative ]
-   newarr = associate(newarr, true , false, indent, "*", "/", "%")
+   -- Level 3 - Multiplicative: * / % \                   [left-associative ]
+   newarr = associate(newarr, true , false, indent, "*", "/", "%", "\\")
    -- Level 4 - Additive      : + -                       [left-associative ]
    newarr = associate(newarr, true , false, indent, "+", "-")
    -- Level 5 - Concatenation : ..                        [right-associative]
@@ -537,138 +542,21 @@ function scan(array, start, stop, indent)
    newarr = associate(newarr, true , false, indent, "and")
    -- Level 8 - Disjunction   : or                        [left-associative ]
    newarr = associate(newarr, true , false, indent, "or")
+   
 
    for i, v in ipairs(newarr) do
       if v == "," then v = " , " end
+      if v == ":" then v = " : " end
       if v == "\n" then v = v .. strgen(_SPACE, indent + 1) end
       ret = ret .. v
    end
    return ret, i
 end
 
--- This function removes lua macros '.' and ':'
-function removeMacros(array, indent)
-   local nex, pre
-   local i = 1
-   while i < #array do
-      if array[i] == "{" then
-
-      elseif array[i] == "(" then
-      elseif type(array[i]) == "string" and array[i]:sub(1,2) == "\"" then
-	 
-      elseif array[i] == "[" then
-	 pre = array[i - 1]
-	 nex = {}
-	 do
-	    local j = i + 1
-	    while array[j] ~= "]" do
-	       nex[#nex + 1] = array[j]
-	       j = j + 1
-	    end
-	 end
-	 array[i - 1] = pre .. " [" .. scan(nex, 1, nil, indent) .. "]"
-	 -- Removal
-	 pre = #array
-	 for j = i, #array - #nex - 2 do
-	    array[j] = array[j + #nex + 2]
-	 end
-	 for j = pre - #nex - 1, pre do
-	    array[j] = nil
-	 end
-	 i = i - 1	 
-      elseif array[i] == "." then
-	 if i == 1 then
-	    typerr = "No table to be referenced by \".\"."
-	    helperror()
-	 end
-	 nex = array[i + 1]
-	 pre = array[i - 1]
-	 if 
-	    isDelimiter(pre) or
-	    isOperator(pre)  or
-	    isReserved(pre)  or
-	    isEnv(pre)       or
-	    pre == "true"    or
-	    pre == "false"
-	 then
-	    typerr = "\"" .. pre .. "\" is not a valid table name."
-	    helperror()
-	 end
-	 if isDelimiter(nex) or
-	    isOperator(nex)  or
-	    isReserved(nex)  or
-	    isEnv(nex)       or
-	    nex == "true"    or
-	    nex == "false"  
-	 then
-	    typerr = "\"" .. nex .. "\" is not a valid table reference."
-	    helperror()
-	 end
-	 -- À SURVEILLER
-	 array[i - 1] = pre .. " [\"" .. nex .. "\"]"
-	 for j = i, #array - 2 do
-	    array[j] = array[j + 2]
-	 end
-	 array[#array] = nil
-	 array[#array] = nil
-	 i = i - 1
-      elseif array[i] == ":" then
-	 if i == 1 then
-	    typerr = "No table to be referenced by \":\"."
-	    helperror()
-	 end
-	 nex = array[i + 1]
-	 pre = array[i - 1]
-	 if 
-	    isDelimiter(pre) or
-	    isOperator(pre)  or
-	    isReserved(pre)  or
-	    isEnv(pre)       or
-	    pre == "true"    or
-	    pre == "false"
-	 then
-	    typerr = "\"" .. pre .. "\" is not a valid table name."
-	    helperror()
-	 end
-	 if isDelimiter(nex) or
-	    isOperator(nex)  or
-	    isReserved(nex)  or
-	    isEnv(nex)       or
-	    nex == "true"    or
-	    nex == "false"  
-	 then
-	    typerr = "\"" .. nex .. "\" is not a valid table reference."
-	    helperror()
-	 end
-	 if array[i + 2] ~= "(" then
-	    typerr = "Expected a function call after \"" .. nex .. "\"."
-	    helperror()
-	 end
-	 -- À SURVEILLER
-	 array[i - 1] = pre .. " [\"" .. nex .. "\"]"
-	 array[i    ] = "("
-	 if array[i + 3] == ")" then
-	    array[i + 1] = pre
-	    for j = i + 2, #array - 1 do
-	       array[j] = array[j + 1]
-	    end
-	    array[#array] = nil
-	 else
-	    array[i + 1] = pre
-	    array[i + 2] = ","
-	    i = i + 1
-	 end
-      end
-      i = i + 1
-   end
-   return array
-end
-
 -- Comment parsing
 function compar(str, i)
    local s = str:sub(i + 2, i + 3)
-   local line = chnum == 1
-   chnum = chnum + 2
+   local line = str:sub(i - 1, i - 1) == "\n"
    if s == "[=" or s == "[[" then
       s, i = nexttoken(str, i + 2)
       s, i = nexttoken(str, i)
@@ -676,7 +564,6 @@ function compar(str, i)
       i = i + 3
       repeat
 	 i = i + 1
-	 chnum = chnum + 1
 	 s = str:sub(i, i)
       until i >= #str or s == "\n"
       s, i = nexttoken(str, i)
@@ -684,7 +571,7 @@ function compar(str, i)
    if line and s then
       if s ~= "\n" then
 	 typerr = "Unexpected symbol " .. s .. "."
-	 helperror()
+	 helperror(i)
       end
       s, i = nexttoken(str, i)
    end
@@ -693,10 +580,8 @@ end
 
 -- String parsing
 function strpar(str, i, t)
-      local n, ret = 1, "\""
-      local ti, tl = i, 0
-      chnum = chnum + 1
-
+   local n, ret = 1, "\""
+   
       if not t then
 	 repeat
 	    n = n + 1
@@ -713,13 +598,11 @@ function strpar(str, i, t)
 	    else
 	       typerr = "Reached end of file, expected closing brackets."
 	    end
-	    helperror()
+	    helperror(i)
 	    break
 	 end
 	 s = str:sub(i, i)
 	 if s == "\n" then
-	    tl = tl + 1
-	    ti = i
 	    if not t then ret = ret .. "\\n" end
 	    ret = ret .. "\n"
 	 elseif s == "\t" and not t then
@@ -752,9 +635,6 @@ function strpar(str, i, t)
 	    ret = ret .. s
 	 end
       end
-      
-      linum = linum + tl
-      chnum = i - ti
       return ret, i
 end
 
@@ -784,7 +664,7 @@ function ifenv(str, i, line, indent, elif)
    tmp, i = readexpr(str, i, indent)
    if tmp ~= "then" then
       typerr = "Syntax error, 'then' expected."
-      helperror()
+      helperror(i)
    end
    ret = ret .. tmp .. " "
    tmp, i, line = _preprocess(str, i, indent + 1, { "else", "end" })
@@ -794,7 +674,6 @@ function ifenv(str, i, line, indent, elif)
       ret = ret .. tmp .. line .. " "
    end
    if elif then
-      linum = linum - 1
       return ret .. "\n", i - 4
    else
       return ret, i
@@ -831,7 +710,7 @@ function wenv(str, i, line, indent, elif)
    tmp, i = readexpr(str, i, indent)
    if tmp ~= "do" then
       typerr = "Syntax error, 'do' expected."
-      helperror()
+      helperror(i)
    end
    ret = ret .. tmp
    tmp, i = doenv(str, i, "", indent, elif)
@@ -856,7 +735,7 @@ function funenv(str, i, line, indent, elif)
    tmp, i = readexpr(str, i, indent)
    if tmp:sub(1, 1) ~= "(" then
       typerr = "No parameter declaration"
-      helperror()
+      helperror(i)
    end
    ret = ret .. tmp .. " "
    tmp, i, line = _preprocess(str, i, indent + 1, { "end" })
@@ -872,7 +751,6 @@ end
 function _preprocess(str, i, indent, stops)
    local ret = "", 1
    local line, tmp = true
-   local tl, tc = linum, chnum
    local nl, rval = 0, false -- strgen("  ", indent)
    while true do
       line, i = readexpr(str, i, indent)
@@ -894,10 +772,10 @@ function _preprocess(str, i, indent, stops)
 	    end
 	    typerr = typerr .. "."
 	 end
-	 helperror()
+	 helperror(i)
       elseif line == "}" then
 	 typerr = "Closing non-existant table declaration."
-	 helperror()
+	 helperror(i)
       end
 
       ---------- NL ----------
@@ -953,7 +831,7 @@ function _preprocess(str, i, indent, stops)
 	       tmp:sub(1, 1) == "("
 	    then
 	       typerr = "Name expected."
-	       helperror()
+	       helperror(i)
 	    end
 	    line = strgen(_SPACE, nl) .. tmp .. " = function"
 	 end
@@ -980,8 +858,7 @@ function _preprocess(str, i, indent, stops)
 	 typerr = typerr .. ", or \"" .. stops[j] .. "\""
       end
       typerr = typerr .. ".\nReached end of file instead."
-      linum, chnum = tl, tc
-      helperror()
+      helperror(i)
    end
    return ret
 end
@@ -990,8 +867,7 @@ end
 -- Precompiling
 --------------------------------------------------------------------------------
 function mem(elem, ...)
-   elems = {...}
-   for i, e in elems do
+   for i, e in pairs{...} do
       if e == elem then
 	 return true
       end
@@ -1110,40 +986,34 @@ function trysolve(op, arg1, arg2)
 	    end
 	 end
       elseif op == "==" then
-	 t = arg1
-	 t = arg2
-	 if t == u then
-	       return "true"
+	 if arg1 == arg2 then
+	    return "true"
+	 elseif isConstant(arg1) and isConstant(arg2) then
+	    return "false"
 	 end
       elseif op == "~=" then
-	 t = arg1
-	 t = arg2
-	 if isConstant(t) and isConstant(u) and t ~= u then
-	    return "true"
+	 if isConstant(arg1) and isConstant(arg2) then
+	    if arg1 ~= arg2 then
+	       return "true"
+	    else
+	       return "false"
+	    end
 	 end
       elseif op == "<" then
-	 t = tonumber(arg1)
-	 u = tonumber(arg2)
-	 if t and u then
-	    return tostring(u < t)
+	 if isConstant(arg1) and isConstant(arg2) then
+	    return tostring(constant(arg1) > constant(arg2))
 	 end
       elseif op == ">" then
-	 t = tonumber(arg1)
-	 u = tonumber(arg2)
-	 if t and u then
-	    return tostring(u > t)
+	 if isConstant(arg1) and isConstant(arg2) then
+	    return tostring(constant(arg1) < constant(arg2))
 	 end
       elseif op == "<=" then
-	 t = tonumber(arg1)
-	 u = tonumber(arg2)
-	 if t and u then
-	    return tostring(u <= t)
+	 if isConstant(arg1) and isConstant(arg2) then
+	    return tostring(constant(arg1) >= constant(arg2))
 	 end
       elseif op == ">=" then
-	 t = tonumber(arg1)
-	 u = tonumber(arg2)
-	 if t and u then
-	    return tostring(u >= t)
+	 if isConstant(arg1) and isConstant(arg2) then
+	    return tostring(constant(arg1) <= constant(arg2))
 	 end
       elseif op == "<<" then
 	 t = tonumber(arg1)
@@ -1184,19 +1054,37 @@ end
 --------------------------------------------------------------------------------
 -- Error handling
 --------------------------------------------------------------------------------
-function helperror()
-   local file, text = io.open(comp_file .. ".lua", "r")
-   for i = 1, linum do
-      text = file:read("line")
+function helperror(i)
+   if not i or i <= 0 or i >= #comp_code - 1 then
+      print("FILE: " .. comp_file .. ".lua")
+      print("Line information not available : " .. typerr)
+      os.exit()
    end
+   local file, text = io.open(comp_file .. ".lua", "r")
+   local linum, chnum = 1, 0
+   local line, done = "", false
+   text = file:read("all")
    file:close()
+   
+   for j = 1, i do
+      if text:sub(j, j) == "\n" then
+	 linum = linum + 1
+	 chnum = 0
+	 line = ""
+      else
+	 chnum = chnum + 1
+	 line = line .. text:sub(j, j)
+      end
+   end
+   while text:sub(i, i) ~= "\n" do
+      i = i + 1
+      line = line .. text:sub(i, i)
+   end
+   
    print("FILE: " .. comp_file .. ".lua")
    print("Error at line " .. tostring(linum) .. ": " .. typerr)
-   print(text)
-   for i = 1, chnum do
-      io.write(" ")
-   end
-   print("^")
+   io.write(line)
+   print(strgen(" ", chnum - 1) .. "^")
    os.exit()
 end
 
@@ -1211,3 +1099,152 @@ if comp_flags.sub then
    file:write(comp_code)
    file:close()
 end
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------
+
+--[[
+-- This function removes lua macros '.' and ':'
+function removeMacros(array, indent)
+   local nex, pre
+   local i = 1
+   while i < #array do
+      if array[i] == "{" then
+	 pre = array[i - 1]
+	 nex = {}
+	 do
+	    local j = i + 1
+	    while array[j] ~= "]" do
+	       nex[#nex + 1] = array[j]
+	       j = j + 1
+	    end
+	 end
+	 array[i - 1] = pre .. " [" .. scan(nex, 1, nil, indent) .. "]"
+	 -- Removal
+	 pre = #array
+	 for j = i, #array - #nex - 2 do
+	    array[j] = array[j + #nex + 2]
+	 end
+	 for j = pre - #nex - 1, pre do
+	    array[j] = nil
+	 end
+	 i = i - 1
+      elseif array[i] == "(" then
+	 
+      elseif type(array[i]) == "string" and array[i]:sub(1,2) == "\"" then
+	 
+      elseif array[i] == "[" then
+	 pre = array[i - 1]
+	 nex = {}
+	 do
+	    local j = i + 1
+	    while array[j] ~= "]" do
+	       nex[#nex + 1] = array[j]
+	       j = j + 1
+	    end
+	 end
+	 array[i - 1] = pre .. " [" .. scan(nex, 1, nil, indent) .. "]"
+	 -- Removal
+	 pre = #array
+	 for j = i, #array - #nex - 2 do
+	    array[j] = array[j + #nex + 2]
+	 end
+	 for j = pre - #nex - 1, pre do
+	    array[j] = nil
+	 end
+	 i = i - 1	 
+      elseif array[i] == "." then
+	 if i == 1 then
+	    typerr = "No table to be referenced by \".\"."
+	    helperror()
+	 end
+	 nex = array[i + 1]
+	 pre = array[i - 1]
+	 if 
+	    isDelimiter(pre) or
+	    isOperator(pre)  or
+	    isReserved(pre)  or
+	    isEnv(pre)       or
+	    pre == "true"    or
+	    pre == "false"
+	 then
+	    typerr = "\"" .. pre .. "\" is not a valid table name."
+	    helperror()
+	 end
+	 if isDelimiter(nex) or
+	    isOperator(nex)  or
+	    isReserved(nex)  or
+	    isEnv(nex)       or
+	    nex == "true"    or
+	    nex == "false"  
+	 then
+	    typerr = "\"" .. nex .. "\" is not a valid table reference."
+	    helperror()
+	 end
+	 -- À SURVEILLER
+	 array[i - 1] = pre .. " [\"" .. nex .. "\"]"
+	 for j = i, #array - 2 do
+	    array[j] = array[j + 2]
+	 end
+	 array[#array] = nil
+	 array[#array] = nil
+	 i = i - 1
+      elseif array[i] == ":" then
+	 if i == 1 then
+	    typerr = "No table to be referenced by \":\"."
+	    helperror()
+	 end
+	 nex = array[i + 1]
+	 pre = array[i - 1]
+	 if 
+	    isDelimiter(pre) or
+	    isOperator(pre)  or
+	    isReserved(pre)  or
+	    isEnv(pre)       or
+	    pre == "true"    or
+	    pre == "false"
+	 then
+	    typerr = "\"" .. pre .. "\" is not a valid table name."
+	    helperror()
+	 end
+	 if isDelimiter(nex) or
+	    isOperator(nex)  or
+	    isReserved(nex)  or
+	    isEnv(nex)       or
+	    nex == "true"    or
+	    nex == "false"  
+	 then
+	    typerr = "\"" .. nex .. "\" is not a valid table reference."
+	    helperror()
+	 end
+	 if array[i + 2] ~= "(" then
+	    typerr = "Expected a function call after \"" .. nex .. "\"."
+	    helperror()
+	 end
+	 -- À SURVEILLER
+	 array[i - 1] = pre .. " [\"" .. nex .. "\"]"
+	 array[i    ] = "("
+	 if array[i + 3] == ")" then
+	    array[i + 1] = pre
+	    for j = i + 2, #array - 1 do
+	       array[j] = array[j + 1]
+	    end
+	    array[#array] = nil
+	 else
+	    array[i + 1] = pre
+	    array[i + 2] = ","
+	    i = i + 1
+	 end
+      end
+      i = i + 1
+   end
+   return array
+   end]]

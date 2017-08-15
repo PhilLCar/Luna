@@ -17,6 +17,5 @@ io.write(prob():sub(4, -1))
 print()
 io.write(prob"aPommeD":sub(2, 3))
 print()
-io.write(
 --Bonjour!
 
