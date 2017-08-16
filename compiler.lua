@@ -1,10 +1,11 @@
 --------------------------------------------------------------------------------
 -- Stack values and count
 --------------------------------------------------------------------------------
-local ifct, whct, frct, rpct, fnct, doct = 0, 0, 0, 0, 0, 0
+local ifct, whct, frct, rpct, fnct, doct, mrct = 0, 0, 0, 0, 0, 0, 0
 local stack, level, size = {}, 0, 0
 local functions = "\n"
-local _CLO = 1
+local _CLO = "__CLO__"
+local _SIZE = "__SIZE__"
 local globals = {}
 local prelibs = {}
 libs = {}
@@ -26,12 +27,12 @@ ops["~="]     = "neq"
 ops["and"]    = "and"
 ops["or"]     = "or"
 ops["not"]    = "not"
-ops["~"]      = "binv"
 ops["<<"]     = "bsal"
 ops[">>"]     = "bsar"
 ops["|"]      = "bor"
 ops["&"]      = "band"
 ops["^^"]     = "bxor"
+ops["~"]      = "bxor"
 ops["==="]    = "beq"
 ops["!="]     = "bneq"
 ops[">>>"]    = "bshr"
@@ -153,13 +154,13 @@ end
 function newlevel()
    level = level + 1
    stack[level] = {}
-   stack[level]["size"] = size
+   stack[level][_SIZE] = size
    stack[level][_CLO] = {}
 end
 
 function poplevel()
-   local free = tostring(size - stack[level]["size"])
-   size = stack[level]["size"]
+   local free = tostring(size - stack[level][_SIZE])
+   size = stack[level][_SIZE]
    stack[level] = nil
    level = level - 1
    return "free\t" .. free .. "\n"
@@ -188,7 +189,7 @@ function access(var, flvl, def)
       end
       if stk[var] then
 	 if i < flvl then
-	    local clo = stack[level][_CLO]
+	    local clo = stack[flvl][_CLO]
 	    clo[var] = true
 	    return "clo\t" .. var .. "\n"
 	 end
@@ -212,62 +213,67 @@ function access(var, flvl, def)
    return "var\t" .. var .. "\n"
 end
 
-function translate(expr, fname, flvl, def, trunc)
+function translate(expr, fname, flvl, def)
    local tmp, t = nextexpr(expr, 1)
-   local ret = ""
+   local steps, ret = {}, ""
    local op1, op2, op
-   local cnt = 1
-   local trans, nval
-   local last, func = true
-   local trunc, f = tmp and isParenthesized(tmp)
+   local func = true
+   local trunc, f
+
+   local function nextop(str, append)
+      if append then
+	 if op2 then op2 = op2 .. str
+	 else op1 = op1 .. str end
+      else
+	 if op1 then op2 = str
+	 else op1 = str end
+      end
+   end
    
    while tmp do
       if ops[tmp] then
-	 if last and tmp == "-" then
-	    operation = "neg"
+	 if tmp == "-" and not op1 then
+	    op = "neg\n"
+	 elseif tmp == "~" and not op1 then
+	    op = "binv\n"
 	 else
-	    operation = ops[tmp]
-	    if tmp == "and" or tmp == "or" then
-	       
-	    end
+	    op = ops[tmp] .. "\n"
 	 end
 	 tmp, t = nextexpr(expr, t)
       else
-	 last = false
 	 if tmp == "," then
-	    last = true
-	    cnt = cnt + 1
-	    ret = ret .. operation .. "tac\n"
-	    operation = ""
+	    if not op2 then op2 = "" end
+	    if not op then op = "" end
+	    steps[#steps + 1] = { op, op1, op2 }
+	    op1, op2, op = nil, nil, nil
+	    trunc = false
 	    tmp, t = nextexpr(expr, t)
 	 end
 	 if tmp == ":" then
 	    tmp, t = nextexpr(expr, t)
-	    print(expr)
-	    ret = ret ..
-	       "string\t\"" .. tmp .. "\"\n" ..
-	       "findex\n"
+	    nextop("string\t\"" .. tmp .. "\"\n" .. "findex\n", true)
 	    f = true
 	 elseif tonumber(tmp) then
-	    ret = ret .. "num\t" .. tmp .. "\n"
+	    nextop("num\t" .. tmp .. "\n")
 	 elseif tmp == "false" or tmp == "true" or tmp == "nil" then
-	    ret = ret .. "spec\t" .. tmp .. "\n"
+	    nextop("spec\t" .. tmp .. "\n")
 	 elseif tmp:sub(1, 1) == "\"" then
-	    ret = ret .. "str\t" .. tmp .. "\n"
+	    nextop("str\t" .. tmp .. "\n")
 	 elseif isParenthesized(tmp) or isBracketed(tmp) then
-	    ret = ret .. translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
+	    nextop((translate(tmp:sub(2, #tmp - 1), fname, flvl, false)))
+	    trunc = isParenthesized(tmp)
 	 elseif isAccoladed(tmp) then
+	    local trans, nval
 	    trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
 	    if trans ~= "" then
 	       trans = trans .. "tac\n"
 	    end
-	    ret = ret .. "init\t" .. nval .. "\n" ..
-	       trans .. "done\n"	 
+	    nextop("init\t" .. nval .. "\n" .. trans .. "done\n")	 
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
 	    else
-	       ret = ret .. access(tmp, flvl, def)
+	       nextop(access(tmp, flvl, def))
 	       func = tmp
 	    end
 	 end
@@ -277,8 +283,9 @@ function translate(expr, fname, flvl, def, trunc)
 	 while tmp and
 	 (isBracketed(tmp) or isParenthesized(tmp) or isAccoladed(tmp) or isString(tmp)) do
 	    if isBracketed(tmp) then
-	       ret = ret .. translate(tmp, fname, flvl, false) .. "index\n"
+	       nextop(translate(tmp, fname, flvl, false) .. "index\n", true)
 	    else
+	       local trans, nval
 	       if isParenthesized(tmp) then
 		  trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
 	       else
@@ -286,30 +293,45 @@ function translate(expr, fname, flvl, def, trunc)
 	       end
 	       if nval > 0 then trans = trans .. "tac\n" end
 	       if fname == func then
-		  ret = ret .. "params\t" .. nval .. "\n" ..
-		     trans .. "tcall\n"
+		  nextop("params\t" .. nval .. "\n" .. trans .. "tcall\n", true)
 	       elseif f then
-		  ret = ret .. "fparams\t" .. nval .. "\n" ..
-		     trans .. "call\n"
+		  nextop("fparams\t" .. nval .. "\n" .. trans .. "call\n", true)
 	       else
-		  ret = ret .. "params\t" .. nval .. "\n" ..
-		     trans .. "call\n"
+		  nextop("params\t" .. nval .. "\n" .. trans .. "call\n", true)
 	       end
 	    end
 	    tmp, t = nextexpr(expr, t)
 	 end
 	 fname = nil
 	 f = false
-	 if trunc then
-	    ret = ret .. "trunc\n"
-	 end
-	 trunc = false
       end
    end
-   ret = ret .. operation
-   if ret:sub(#ret, #ret) == "\n" then return ret, cnt
-   elseif ret == "" then return ret, 0
-   else return ret .. "\n", cnt
+   if op1 then
+      if not op2 then op2 = "" end
+      if not op then op = "" end
+      steps[#steps + 1] = { op, op1, op2 }
+   end
+
+   for i, v in ipairs(steps) do
+      op, op1, op2 = unpack(v)
+      if op == "and\n" or op == "or\n" then
+	 mrct = mrct + 1
+	 ret = ret .. op:sub(1, -2) .. "\t" .. mrct .. "\n" ..
+	    op1 .. "tac\n" .. op2 .. "done\n"
+      else
+	 ret = ret .. op1 .. op2 .. op
+      end
+      if i ~= #steps then
+	 ret = ret .. "tac\n"
+      end
+   end
+   
+   if trunc then
+      ret = ret .. "trunc\n"
+   end
+   if ret:sub(-1, -1) == "\n" then return ret, #steps
+   elseif ret == "" then return ret, #steps
+   else return ret .. "\n", #steps
    end
 end
 
@@ -318,6 +340,7 @@ function evaluate(str, i, fname, flvl, ...)
    local c, t = 1
    local eq,  tmp = false, expr[1]
    local ret, typ = "", 0
+   local encl = ""
    expr["code"] = {}
    -- Line parsing preparation
    if not tmp then
@@ -338,15 +361,17 @@ function evaluate(str, i, fname, flvl, ...)
       -- The function scope is most of the time within a assignment
       -- This makes sure it can be accessed properly
       if tmp == "function" then
+	 local en
 	 if eq then
 	    local n, a = getfname(expr[c - eq])
 	    if a and typ == 0 then
 	       register(false, n)
 	    end
-	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, n)
+	    tmp, i, expr[c], expr["code"][c], en = funscope(str, i, n)
 	 else
-	    tmp, i, expr[c], expr["code"][c] = funscope(str, i)
+	    tmp, i, expr[c], expr["code"][c], en = funscope(str, i)
 	 end
+	 encl = encl .. en
 	 functions = functions .. tmp .. "\n"
 	 tmp, t = nextexpr(str, i)
       else
@@ -424,7 +449,7 @@ function evaluate(str, i, fname, flvl, ...)
       end
    end
    if typ == 0 then ret = ret .. "place\n" end
-   return ret .. tmp .. "stack\n", i
+   return encl .. ret .. tmp .. "stack\n", i
 end
 
 function trim(code)
@@ -651,6 +676,9 @@ function funscope(str, i, ...)
       ret = ret .. "narg\t" .. tostring(narg) .. "\n"
    end
    tmp, i, t, clo = compile(str, i, fname, level)
+   for name in pairs(clo) do
+      print(name, clo[name])
+   end
    test("end", t)
    ret = ret .. tmp .. "fend\t" .. tostring(fnct) .. "\n"
    size = sz
@@ -664,14 +692,11 @@ function funscope(str, i, ...)
 	 stk = stack[i]
 	 if stk[name] then
 	    stk[_CLO][name] = 0
+	    break
 	 end
       end
    end
-   tmp = tmp .. "rfct\t" .. fnct .. "\n"
-   --[[if t > 0 then
-      tmp = tmp .. "open\t" .. tostring(t) .. "\n"
-      end]]
-   return ret, i, fnct, tmp
+   return ret, i, fnct, "rfct\t" .. fnct .. "\n", tmp
 end
 
 function getfname(name)

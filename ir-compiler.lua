@@ -609,34 +609,57 @@ function str(value)
       "\tleaq\t2(, %rax, 8), " .. current() .. "\n"
 end
 
-function bool(instr)
-   local l1, l2, ret = label(), label(), ""
-   local v1, v2 = pop(), pop()
-   if v1:sub(1, 1) == "$" or isDouble(v1) then
-      ret = "\tmovq\t" .. v1 .. ", %rax\n"
-      v1 = "%rax"
+function bool(instr, value, text, i)
+   local rs = r_size
+   local tag = "_CH" .. value
+   local ret, tmp = protect(false)
+   local v, jmp
+
+   if instr == "and" then
+      jmp = "jz"
+   else
+      jmp = "jnz"
    end
-   if isDouble(v2) then
-      ret = "\tmovq\t" .. v2 .. ", %rbx\n"
-      v1 = "%rbx"
-   end
-   if instr == "or" then
+   
+   tmp, i = _translate(text, i, false)
+   ret = ret .. tmp .. push(nil)
+   v = get()
+   if isDouble(v) then
       ret = ret ..
-	 "\torq\t" .. v1 .. ", " .. v2 .. "\n" ..
-	 "\torq\t$17, " .. v2 .. "\n" ..
-	 "\tcmpq\t$17, " .. v2 .. "\n"
+	 "\tmovsd\t" .. pop() .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
+	 "\taddq\t$8, %r12\n"
+      if instr == "or" then
+	 ret = ret .. "\tjmp\t" .. tag .. "\n"
+      end
    else
       ret = ret ..
-	 "\tandq\t$-18, " .. v1 .. "\n" ..
-	 "\tandq\t" .. v1 .. ", " .. v2 .. "\n"
+	 "\tmovq\t" .. get() .. ", %rax\n" ..
+	 "\torq\t$17, " .. get() .. "\n" ..
+	 "\tcmpq\t$17, " .. pop() .. "\n" ..
+	 "\t" .. jmp .. "\t" .. tag .. "\n"
+   end
+   
+   tmp, i = _translate(text, i, false)
+   ret = ret .. tmp .. push(nil)
+   v = get()
+   if isDouble(v) then
+      ret = ret ..
+	 "\tmovsd\t" .. pop() .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
+	 "\taddq\t$8, %r12\n"
+      if instr == "or" then
+	 ret = ret .. "\tjmp\t" .. tag .. "\n"
+      end
+   else
+      ret = ret .. "\tmovq\t" .. pop() .. ", %rax\n"
    end
    ret = ret ..
-      "\tjz\t" .. l1 .. "\n" ..
-      "\tmovq\t$9, %rax\n" ..
-      "\tjmp\t" .. l2 .. "\n" ..
-      l1 .. ":\tmovq\t$1, %rax\n" ..
-      l2 .. ":" .. push("%rax")
-   return ret
+      tag .. ":" ..
+      protect(rs) .. push("%rax") ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   rsp = r_size - 1
+   return ret, i
 end
 
 function nt()
@@ -1691,7 +1714,8 @@ function _translate(text, i, sets, loop)
 	 asm = asm .. opcall2(instr)
 
       elseif instr == "and" or instr == "or" then
-	 asm = asm .. bool(instr)
+	 tmp, i = bool(instr, value, text, i)
+	 asm = asm .. tmp
 
       elseif instr == "con" then
 	 asm = asm .. opcall2("concat")

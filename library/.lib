@@ -1,12 +1,15 @@
+io.pp:
+	io
+	print
 string:
 	string
 io:
 	print
 	io
 lua:
-	next
 	type
-	tonumber
-	tostring
 	pairs
+	tonumber
+	next
+	tostring
 	ipairs

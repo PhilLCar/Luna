@@ -523,7 +523,7 @@ function scan(array, start, stop, indent)
    -- PRIORITY LEVELS --
    -- Level 0 - Bitwise       : << >> >>> | & ^^ ~ === != [left-associative ]
    newarr = associate(newarr, true , true , indent, "~")
-   newarr = associate(newarr, true, false, indent, "<<", ">>", ">>>", "|", "&", "^^", "===", "!=")
+   newarr = associate(newarr, true, false, indent, "<<", ">>", ">>>", "|", "&", "^^", "===", "!=", "~")
    -- Level 1 - Power         : ^                         [right-associative]
    newarr = associate(newarr, false, false, indent, "^")
    -- Level 2 - Unary         : - not #                   [left-associative ]
@@ -834,6 +834,18 @@ function _preprocess(str, i, indent, stops)
 	       typerr = "Name expected."
 	       helperror(i)
 	    end
+	    local n, t = nexttoken(str, i)
+	    while n:sub(1, 1) ~= "(" do
+	       if n == "." then
+		  n, t = nexttoken(str, t)
+		  tmp = tmp .. " [\"" .. n .. "\"]"
+		  i = t
+		  n, t = nexttoken(str, i)
+	       else
+		  typeerr = "Bad function name."
+		  helperror(i)
+	       end
+	    end
 	    if loc then
 	       line = strgen(_SPACE, nl) .. tmp .. " ; " .. tmp .. " = function"
 	    else
@@ -968,28 +980,24 @@ function trysolve(op, arg1, arg2)
 	    return tostring("\"" .. arg2:sub(2, -2) .. arg1:sub(2, -2) .. "\"")
 	 end
       elseif op == "and" then
-	 t = arg1
-	 u = arg2
-	 if isConstant(t) and isConstant(u) then
-	    if t == "false" or t == "nil" or u == "false" or u == "nil" then
-	       return "false"
-	    elseif t == "true" then
-	       return u
-	    elseif u == "true" then
-	       return t
+	 t = isConstant(arg1)
+	 u = isConstant(arg2)
+	 if t and u then
+	    return tostring(constant(arg1) and constant(arg2))
+	 elseif u then
+	    if constant(arg2) then
+	       return arg1
+	    else
+	       return arg2
 	    end
 	 end
       elseif op == "or" then
-	 t = arg1
-	 u = arg2
-	 if isConstant(t) and isConstant(u) then
-	    if t == "true" or u == "true" then
-	       return "true"
-	    elseif t == "false" or t == "nil" then
-	       return u
-	    elseif u == "false" or u == "nil" then
-	       return t
-	    end
+	 t = isConstant(arg1)
+	 u = isConstant(arg2)
+	 if t and u then
+	    return tostring(constant(arg1) or constant(arg2))
+	 elseif u then
+	    return arg2
 	 end
       elseif op == "==" then
 	 if arg1 == arg2 then
