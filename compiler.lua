@@ -260,15 +260,10 @@ function translate(expr, fname, flvl, def)
 	 elseif tmp:sub(1, 1) == "\"" then
 	    nextop("str\t" .. tmp .. "\n")
 	 elseif isParenthesized(tmp) or isBracketed(tmp) then
-	    nextop((translate(tmp:sub(2, #tmp - 1), fname, flvl, false)))
+	    nextop((translate(tmp:sub(2, -2), fname, flvl, false)))
 	    trunc = isParenthesized(tmp)
 	 elseif isAccoladed(tmp) then
-	    local trans, nval
-	    trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
-	    if trans ~= "" then
-	       trans = trans .. "tac\n"
-	    end
-	    nextop("init\t" .. nval .. "\n" .. trans .. "done\n")	 
+	    nextop(arrscope(tmp:sub(2, -2), flvl))	 
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
@@ -287,7 +282,7 @@ function translate(expr, fname, flvl, def)
 	    else
 	       local trans, nval
 	       if isParenthesized(tmp) then
-		  trans, nval = translate(tmp:sub(2, #tmp - 1), fname, flvl, false)
+		  trans, nval = translate(tmp:sub(2, -2), fname, flvl, false)
 	       else
 		  trans, nval = translate(tmp, fname, flvl, false)
 	       end
@@ -639,6 +634,36 @@ function repscope(str, i, fname, flvl)
    return ret, i
 end
 
+function arrscope(array, flvl)
+   local tmp, i = nextexpr(array, 1)
+   local ret, cnt = "", 0
+   local elem
+   while tmp do
+      elem = tmp
+      while tmp ~= "," and tmp ~= ";" do
+	 tmp, i = nextexpr(array, i)
+	 if not tmp then break
+	 elseif tmp == "=" then
+	 end
+	 elem = elem .. " " .. tmp
+      end
+      ret = ret .. translate(elem, false, flvl, false) .. "tac\n"
+      cnt = cnt + 1
+      if tmp then
+	 if tmp == ";" then
+	    ret = ret .. "part\n"
+	 else
+	    test(",", tmp)
+	 end
+	 tmp, i = nextexpr(array, i)
+      else
+	 break
+      end
+   end
+   ret = "init\t" .. cnt .. "\n" .. ret .. "done\n"
+   return ret
+end
+
 function funscope(str, i, ...)
    fnct = fnct + 1
    
@@ -706,15 +731,16 @@ function getfname(name)
       if isBracketed(n) then
 	 n = n:sub(2, #n - 1)
 	 auth = false
+	 ret = ret .. "_"
       end
       if isString(n) then
 	 n = n:sub(2, #n - 1)
 	 auth = false
       end
-      ret = ret .. "_" .. n
+      ret = ret .. n
       n, t = nextexpr(name, t)
    end
-   return ret:sub(2, #ret), auth
+   return ret, auth
 end
 
 function test(t1, t2)

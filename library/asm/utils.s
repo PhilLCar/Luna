@@ -54,6 +54,9 @@ _va_ps:	leaq	8(%r12, %rax, 8), %r12
 	movq	8(%rsp), %rax
 	movq	%r12, 16(%rsp)
 	leaq	-6(%rax), %rbx
+	cmpq	$0, %rbx
+	jg	_va_lp
+	movq	$1, %rbx
 _va_lp:	cmpq	%rax, %r15
 	jb	_va_en
 	cmpq	$1, %rax

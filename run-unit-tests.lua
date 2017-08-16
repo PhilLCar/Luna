@@ -31,24 +31,34 @@ function gettime()
    return ret
 end
 
-function progress()
+function getwidth()
+   local file = io.popen("tput cols")
+   local ret = tonumber(file:read("all"))
+   file:close()
+   return ret
+end
+
+function progress() --88, 22 --> 66
    local completed, prop = pass + fail + unkn
-   io.write("  Pass   Fail   Unkn     Progress                       " ..
+   local width, spc = getwidth() - 66, ""
+   if width < 0 then width = 0 end
+   for i = 1, width do spc = spc .. " " end
+   io.write("  Pass   Fail   Unkn     Progress " .. spc ..
 	       string.format("%3d", completed) .. " / " ..
 	       string.format("%3d", total) .. "     Prct       Time\n")
    io.write("[ \27[1;38;5;47m" .. string.format("%4d", pass) ..
 	       "\27[0m | \27[1;38;5;203m" .. string.format("%4d", fail) ..
 	       "\27[0m | \27[1;38;5;98m" .. string.format("%4d", unkn) ..
 	       "\27[0m ]  [")
-   prop = completed / total * 40
-   for i = 1, 40 do
+   prop = completed / total * (18 + width)
+   for i = 1, 18 + width do
       if (i <= prop) then
 	 io.write("#")
       else
 	 io.write("-")
       end
    end
-   io.write("]  [ " .. string.format("%3.0f", prop / 40 * 100) .. "% ]  [ " ..
+   io.write("]  [ " .. string.format("%3.0f", prop / (18 + width) * 100) .. "% ]  [ " ..
 	       string.format("%5.1fs ]\n", (gettime() - time) / 1000000000))
    io.write("\27[2A\27[90D\r")
 end
