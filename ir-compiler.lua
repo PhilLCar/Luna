@@ -1579,6 +1579,10 @@ function _translate(text, i, sets, loop)
       if instr ~= "tac" then
 	 struct = nil
       end
+      if vname and instr ~= "params" then
+	 push("$17")
+	 vname = false
+      end
       --------------------
       if instr == "num" then
 	 asm = asm .. newdouble(tostring(tonumber(value)))
@@ -1638,7 +1642,9 @@ function _translate(text, i, sets, loop)
 	 
       elseif instr == "var" then
 	 vname = value
-	 --asm = asm .. var(value)
+
+      elseif instr == "trunc" then
+	 asm = asm .. "\txorq\t%rbx, %rbx\n"
 
       elseif instr == "add" or
 	 instr == "sub" or

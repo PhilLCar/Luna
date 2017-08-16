@@ -165,17 +165,12 @@ function poplevel()
    return "free\t" .. free .. "\n"
 end
 
-function register(loc, var, disp)
+function register(loc, var)
    local ret = ""
-   if not disp then
-      disp = 0
-   end
    if loc then
       if var then
-	 if not stack[level][var] then
-	    stack[level][var] = size + disp
-	    size = size + 1
-	 end
+	 stack[level][var] = size 
+	 size = size + 1
       else
 	 size = size + 1
       end
@@ -217,12 +212,14 @@ function access(var, flvl, def)
    return "var\t" .. var .. "\n"
 end
 
-function translate(expr, fname, flvl, def)
+function translate(expr, fname, flvl, def, trunc)
    local tmp, t = nextexpr(expr, 1)
-   local ret, operation = "", ""
+   local ret = ""
+   local op1, op2, op
    local cnt = 1
    local trans, nval
    local last, func = true
+   local trunc, f = tmp and isParenthesized(tmp)
    
    while tmp do
       if ops[tmp] then
@@ -230,6 +227,9 @@ function translate(expr, fname, flvl, def)
 	    operation = "neg"
 	 else
 	    operation = ops[tmp]
+	    if tmp == "and" or tmp == "or" then
+	       
+	    end
 	 end
 	 tmp, t = nextexpr(expr, t)
       else
@@ -241,7 +241,14 @@ function translate(expr, fname, flvl, def)
 	    operation = ""
 	    tmp, t = nextexpr(expr, t)
 	 end
-	 if tonumber(tmp) then
+	 if tmp == ":" then
+	    tmp, t = nextexpr(expr, t)
+	    print(expr)
+	    ret = ret ..
+	       "string\t\"" .. tmp .. "\"\n" ..
+	       "findex\n"
+	    f = true
+	 elseif tonumber(tmp) then
 	    ret = ret .. "num\t" .. tmp .. "\n"
 	 elseif tmp == "false" or tmp == "true" or tmp == "nil" then
 	    ret = ret .. "spec\t" .. tmp .. "\n"
@@ -281,6 +288,9 @@ function translate(expr, fname, flvl, def)
 	       if fname == func then
 		  ret = ret .. "params\t" .. nval .. "\n" ..
 		     trans .. "tcall\n"
+	       elseif f then
+		  ret = ret .. "fparams\t" .. nval .. "\n" ..
+		     trans .. "call\n"
 	       else
 		  ret = ret .. "params\t" .. nval .. "\n" ..
 		     trans .. "call\n"
@@ -289,6 +299,11 @@ function translate(expr, fname, flvl, def)
 	    tmp, t = nextexpr(expr, t)
 	 end
 	 fname = nil
+	 f = false
+	 if trunc then
+	    ret = ret .. "trunc\n"
+	 end
+	 trunc = false
       end
    end
    ret = ret .. operation
@@ -325,8 +340,8 @@ function evaluate(str, i, fname, flvl, ...)
       if tmp == "function" then
 	 if eq then
 	    local n, a = getfname(expr[c - eq])
-	    if a then
-	       register(typ == 1, n, c - eq - 1)
+	    if a and typ == 0 then
+	       register(false, n)
 	    end
 	    tmp, i, expr[c], expr["code"][c] = funscope(str, i, n)
 	 else
@@ -337,10 +352,21 @@ function evaluate(str, i, fname, flvl, ...)
       else
 	 expr[c] = tmp
 	 tmp, t = nextexpr(str, i)
-	 while tmp and (isBracketed(tmp) or isParenthesized(tmp)) do
-	    expr[c] = expr[c] .. " " .. tmp
-	    i = t
+	 while tmp and
+	    (isBracketed(tmp) or isParenthesized(tmp) or isAccoladed(tmp) or isString(tmp)) or
+	    tmp == ":"
+	 do
+	    if tmp == ":" then
+	       tmp, t = nextexpr(str, t)
+	       expr[c] = expr[c] .. " : " .. tmp
+	    else
+	       expr[c] = expr[c] .. " " .. tmp
+	       i = t
+	    end
 	    tmp, t = nextexpr(str, t)
+	 end
+	 if tmp == ";" then
+	    i = t
 	 end
       end
       -- Should be an equal or comma

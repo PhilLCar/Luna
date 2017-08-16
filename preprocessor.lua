@@ -470,7 +470,8 @@ function scan(array, start, stop, indent)
       if array[i] ~= nil then
 	 if array[i] == stop then
 	    break
-	 elseif mem(array[i], "(", "[", "{") then
+	    -- Calling
+	 elseif mem(array[i], "(", "[", "{") or array[i]:sub(1, 1) == "\"" then
 	    if array[i] == "(" then
 	       ret, i = scan(array, i + 1, ")", indent)
 	       if ret:sub(1, 1) ~= "(" then
@@ -496,24 +497,21 @@ function scan(array, start, stop, indent)
 	    elseif array[i] == "{" then
 	       ret, i = scan(array, i + 1, "}", indent)
 	       newarr[j] = "{" .. ret .. "}"
+	    else
+	       newarr[j] = array[i]
 	    end
+	    local t = newarr[j - 1]
 	    if j > 1 and
-	       not isOperator(newarr[j - 1]) and
-	       newarr[j - 1] ~= "\n"
+	       not isOperator(t)    and
+	       not isReserved(t)    and
+	       not isEnv(t)         and
+	       not isPunctuation(t) and
+	       not mem(t, "(", "[", "{", "\n")
 	    then
 	       newarr[j - 1] = newarr[j - 1] .. " " .. newarr[j]
 	       newarr[j] = nil
 	       j = j - 1
 	    end
-	 elseif array[i] and array[i]:sub(1,1) == "\"" then
-	    if j > 1 and
-	       not isOperator(newarr[j - 1]) and
-	       newarr[j - 1] ~= "\n"
-	    then
-	       newarr[j - 1] = newarr[j - 1] .. " " .. array[i]
-	       j = j - 1
-	    end
-	    print(newarr[j])
 	 else
 	    newarr[j] = array[i]
 	 end
@@ -545,9 +543,10 @@ function scan(array, start, stop, indent)
    
 
    for i, v in ipairs(newarr) do
-      if v == "," then v = " , " end
-      if v == ":" then v = " : " end
-      if v == "\n" then v = v .. strgen(_SPACE, indent + 1) end
+      if v == "," then v = " , "
+      elseif v == ":" then v = " : " 
+      elseif v == ";" then v = " ; "
+      elseif v == "\n" then v = v .. strgen(_SPACE, indent + 1) end
       ret = ret .. v
    end
    return ret, i
@@ -691,7 +690,7 @@ function forenv(str, i, line, indent, elif)
    local ret, tmp = line
    tmp, i, line = _preprocess(str, i, indent + 1, { "in", "do" })
    ret = ret .. tmp .. line .. " "
-   if line:sub(#line - 1, #line) == "in" then
+   if line:sub(-2, -1) == "in" then
       tmp, i, line = _preprocess(str, i, indent + 1, { "do" })
       ret = ret .. tmp .. line .. " "
    end
@@ -752,6 +751,8 @@ function _preprocess(str, i, indent, stops)
    local ret = "", 1
    local line, tmp = true
    local nl, rval = 0, false -- strgen("  ", indent)
+   local loc = false
+   
    while true do
       line, i = readexpr(str, i, indent)
       if not line then break end
@@ -833,7 +834,11 @@ function _preprocess(str, i, indent, stops)
 	       typerr = "Name expected."
 	       helperror(i)
 	    end
-	    line = strgen(_SPACE, nl) .. tmp .. " = function"
+	    if loc then
+	       line = strgen(_SPACE, nl) .. tmp .. " ; " .. tmp .. " = function"
+	    else
+	       line = strgen(_SPACE, nl) .. tmp .. " = function"
+	    end
 	 end
 	 tmp, i = funenv(str, i, line, indent, false)
 	 ret = ret .. tmp
@@ -847,6 +852,7 @@ function _preprocess(str, i, indent, stops)
       ---------- GEN ----------
       else
 	 if line == "=" or line == "return" then rval = true end
+	 loc = line == "local"
 	 ret = ret .. strgen(_SPACE, nl) .. line .. " "
 	 nl = 0
       end
@@ -879,7 +885,7 @@ function constant(val)
    if tonumber(val) then
       return tonumber(val)
    elseif val:sub(1, 1) == "\"" then
-      return val:sub(2, #val - 1)
+      return val:sub(2, -2)
    elseif val == "nil" then
       return nil
    elseif val == "true" then
@@ -907,10 +913,10 @@ end
 function trysolve(op, arg1, arg2)
    local t, u
    if arg1:sub(1, 1) == "(" then
-      arg1 = arg1:sub(2, #arg1 - 1)
+      arg1 = arg1:sub(2, -2)
    end
    if arg2 and arg2:sub(1, 1) == "(" then
-      arg2 = arg2:sub(2, #arg2 - 1)
+      arg2 = arg2:sub(2, -2)
    end
    if arg2 then
       if op == "*" then
@@ -959,7 +965,7 @@ function trysolve(op, arg1, arg2)
 	 t = isConstant(arg1)
 	 u = isConstant(arg2)
 	 if t and u and t == "string" and u == "string" then
-	    return tostring("\"" .. arg2:sub(2, #arg2 - 1) .. arg1:sub(2, #arg1 - 1) .. "\"")
+	    return tostring("\"" .. arg2:sub(2, -2) .. arg1:sub(2, -2) .. "\"")
 	 end
       elseif op == "and" then
 	 t = arg1

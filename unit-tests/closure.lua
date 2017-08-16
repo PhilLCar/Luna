@@ -1,5 +1,5 @@
 function test(a)
-   local x = function (b)
+   local function x (b)
       return a + b
    end
    a = a + 2
