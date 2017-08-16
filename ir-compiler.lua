@@ -791,7 +791,7 @@ function index(address, global)
    else
       local vd = pop()
       if isDouble(vd) then
-	 ret = "\tmovq\t" .. vd .. ", (%r12)\n" ..
+	 ret = "\tmovsd\t" .. vd .. ", (%r12)\n" .. -- changed
 	    "\tleaq\t6(, %r12, 8), %rax\n" ..
 	    "\taddq\t$8, %r12\n"
       else
@@ -815,6 +815,97 @@ function index(address, global)
    else
       ret = ret .. push("(%rax)")
    end
+   return ret
+end
+
+function new()
+   local ret, v = "", pop()
+   if isDouble(v) then
+      ret = "\tmovsd\t" .. v .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
+	 "\taddq\t$8, %r12\n"
+      v = "%rax"
+   else
+      ret = "\tmovq\t" .. v .. ", %rax\n"
+   end
+   ret = ret .. 
+      "\tmovq\t" .. get() .. ", %rbx\n" ..
+      prep(true) .. "\tcall\t_new\t\n"
+      ret = ret .. push("%rax")
+   return ret
+end
+
+function findex()
+   local ret, v1, v2 = "", pop(), pop()
+   if isDouble(v1) then
+      ret = "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
+	 "\taddq\t$8, %r12\n"
+      v1 = "%rax"
+   else
+      ret = "\tmovq\t" .. v1 .. ", %rax\n"
+   end
+   ret = ret .. 
+      "\tmovq\t" .. v2 .. ", %rbx\n" ..
+      prep(true) ..
+      "\tpushq\t%rbx\n" ..
+      "\tcall\t_index\t\n" ..
+      "\tpopq\t%r15\n"..
+      push("%r15") .. push("(%rax)")
+   return ret
+end
+
+function put()
+   local ret = ""
+   local v1, v2 = pop(), pop()
+   if isMem(v2) then
+      ret = "\tmovq\t" .. v2 .. ", %rax\n"
+      v2 = "%rax"
+   end
+   if isDouble(v1) then
+      ret = ret .. "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rbx\n" ..
+	 "\taddq\t$8, %r12\n"
+      v1 = "%rbx"
+   end
+   ret = ret .. "\tmovq\t" .. v1 .. ", (" .. v2 .. ")\n"
+   return ret
+end
+
+function setsize()
+   local asm, tmp
+   tmp = pop()
+   asm = prep(true)
+   if not isDouble(tmp) then
+      if isMem(tmp) then
+	 asm = asm .. "\tmovq\t" .. tmp .. ", %rax\n"
+	 tmp = "%rax"
+      end
+      asm = asm .. "sarq\t$3, " .. tmp .. "\n" ..
+	 "\tmovq\t(" .. tmp .. "), %xmm0\n"
+      tmp = "%xmm0"
+   else
+      asm = asm ..
+	 "\tmovq\t" .. get() .. ", %rbx\n" ..
+	 "\tcvtsd2si " .. tmp .. ", %rax\n" ..
+	 "\tcall\t_set_size\n"
+   end
+   return asm
+end
+
+function append()
+   local ret, v = "", pop()
+   if isDouble(v) then
+      ret = "\tmovsd\t" .. v .. ", (%r12)\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
+	 "\taddq\t$8, %r12\n"
+      v = "%rax"
+   else
+      ret = "\tmovq\t" .. v .. ", %rax\n"
+   end
+   ret = ret .. 
+      "\tmovq\t" .. get() .. ", %rbx\n" ..
+      prep(true) .. "\tcall\t_append\n"
    return ret
 end
 
@@ -1301,136 +1392,179 @@ function params(text, i, p, call)
       asm = asm .. tmp
    end
    typ, i = readline(text, i)
-   ------------------------------ CALL
+   
    if typ == "call" then
-      if rsp ~= rs2 - 1 then
-	 asm = asm .. adjust
-	 rsp = rs2 - 1
-      end
-      if not call then
-	 asm = asm .. "\tpushq\t%r14\n"
-      end
-      local t
-      for j = 1, pp do
-	 t = pop()
-	 if isDouble(t) then
-	    asm = asm ..
-	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
-	       "\tleaq\t6(, %r12, 8), %r15\n" ..
-	       "\taddq\t$8, %r12\n"
-	    t = "%r15"
-	 end
-	 asm = asm .. "\tpushq\t" .. t .. "\n"
-      end
-      for j = 1, p do
-	 if j > 6 then break end
-	 t = pop()
-	 if t:sub(1, 1) ~= "%" or t == "%rax" then
-	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
-	 end
-	 if isDouble(t) then
-	    asm = asm ..
-	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
-	       "\tleaq\t6(, %r12, 8), " .. future() .. "\n" ..
-	       "\taddq\t$8, %r12\n"
-	 end
-      end
-      if not call then
-	 asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
-      end
-      if func then asm = asm .. develop() end
-      -- Restore
-      ------------------------------
-      r_size = rs2
-      r_index = alg
-      tmp = protect(rs)
-      if r_size > 1 then
-	 tmp = tmp .. "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
-      else
-	 tmp = tmp .. "\tleaq\t(%rbp), %rsp\n"
-      end
-      rsp = r_size - 1
-      -- Call
-      ------------------------------
-      if call then
-	 asm = asm ..
-	    "\tsubq\t$16, %rsp\n" ..
-	    "\tandq\t$-16, %rsp\n" .. 
-	    "\tcall\t" .. call .. "\n"
-      else
-	 local r = pop()
-	 if isMem(r) then
-	    asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
-	    r = "%rax"
-	 end
-	 asm = asm ..
-	    "\tsarq\t$3, %rax\n" ..
-	    "\tmovq\t8(%rax), %r14\n" ..
-	    "\tcallq\t*(" .. r .. ")\n" ..
-	    "\tpopq\t%r14\n"
-      end
-      return asm .. tmp.. push("%rax"), i
-      ------------------------------ TCALL
+      asm = asm .. performcall(func, adjust, rs, rs2, p, pp, alg, call)
    elseif typ == "tcall" then
-      local t
-      for j = pp, 1, -1 do
-	 t = pop()
-	 if isMem(t) then
-	    asm = asm .. "\tmovq\t" .. t.. ", %rax\n"
-	    t = "%rax"
-	 elseif isDouble(t) then
-	    asm = asm ..
-	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
-	       "\tleaq\t6(, %r12, 8), %rax\n" ..
-	       "\taddq\t$8, %r12\n"
-	    t = "%rax"
-	 end
-	 asm = asm .. "\tmovq\t" .. t .. ", " .. j * 8 + 8 ..  "(%rbp)\n"
-      end
-      for j = 1, p do
-	 if j > 6 then break end
-	 t = pop()
-	 if t:sub(1, 1) ~= "%" or t == "%rax" then
-	    asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
-	 end
-	 if isDouble(t) then
-	    asm = asm ..
-	       "\tmovsd\t" .. t .. ", (%r12)\n" ..
-	       "\tleaq\t6(, %r12, 8), " .. future() .. "\n" ..
-	       "\taddq\t$8, %r12\n"
-	 end
-      end
-      if not call then
-	 asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
-      end
-      if func then asm = asm .. develop() end
-      -- Restore
-      ------------------------------
-      r_size = rs2
-      r_index = alg
-      tmp = protect(rs)
-      rsp = r_size - 1
-      -- Terminal call
-      ------------------------------
+      asm = asm .. terminalcall(func, adjust, rs, rs2, p, pp, alg)
+   end
+   return asm, i
+end
+
+function fparams(text, i, p)
+   local rs, rs2
+   local asm, tmp, typ = ""
+   local pp = p - 6
+   local func, alg
+   local adjust
+   local v1, v2 = pop(), pop()
+   push(v1)
+   rs = r_size
+   if pp < 0 then pp = 0 end
+   -- Protect
+   ------------------------------
+   asm = asm .. protect(false)
+   rs2 = r_size
+   -- Set the stack pointer
+   ------------------------------
+   if r_size > 1 then
+      adjust = "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   else
+      adjust = "\tleaq\t(%rbp), %rsp\n"
+   end
+   if pp > 1 then
+      r_size = r_size + pp
       if call then
-	 asm = asm ..
-	    "\tleave\n" ..
-	    "\tjmp\t" .. call .. "\n"
-      else
-	 local r = pop()
-	 if isMem(r) then
-	    asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
-	    r = "%rax"
-	 end
-	 asm = asm ..
-	    "\tsarq\t$3, %rax\n" ..
-	    "\tmovq\t8(%rax), %r14\n" ..
-	    "\tleave\n" ..
-	    "\tjmpq\t*(" .. r .. ")\n"
 	 r_size = r_size - 1
       end
-      return asm .. tmp.. push("%rax"), i
    end
+   alg = r_index
+   align("%rdi")
+   -- Get the parameters
+   ------------------------------
+   asm = asm .. use()
+   for j = 1, p do
+      tmp, i, func = _translate(text, i, false, false)
+      asm = asm .. tmp
+   end
+   typ, i = readline(text, i)
+   -- call
+   asm = asm .. performcall(func, adjust, rs, rs2, p + 1, pp, alg, call)
+   return asm, i
+end
+
+function terminalcall(func, adjust, rs, rs2, p, pp, alg)
+   local asm, t = ""
+   for j = pp, 1, -1 do
+      t = pop()
+      if isMem(t) then
+	 asm = asm .. "\tmovq\t" .. t.. ", %rax\n"
+	 t = "%rax"
+      elseif isDouble(t) then
+	 asm = asm ..
+	    "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	    "\tleaq\t6(, %r12, 8), %rax\n" ..
+	    "\taddq\t$8, %r12\n"
+	 t = "%rax"
+      end
+      asm = asm .. "\tmovq\t" .. t .. ", " .. j * 8 + 8 ..  "(%rbp)\n"
+   end
+   for j = 1, p do
+      if j > 6 then break end
+      t = pop()
+      if t:sub(1, 1) ~= "%" or t == "%rax" then
+	 asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
+      end
+      if isDouble(t) then
+	 asm = asm ..
+	    "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	    "\tleaq\t6(, %r12, 8), " .. future() .. "\n" ..
+	    "\taddq\t$8, %r12\n"
+      end
+   end
+   asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
+   if func then asm = asm .. develop() end
+   -- Restore
+   ------------------------------
+   r_size = rs2
+   r_index = alg
+   tmp = protect(rs)
+   rsp = r_size - 1
+   -- Terminal call
+   ------------------------------
+   local r = pop()
+   if isMem(r) then
+      asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
+      r = "%rax"
+   end
+   asm = asm ..
+      "\tsarq\t$3, %rax\n" ..
+      "\tmovq\t8(%rax), %r14\n" ..
+      "\tleave\n" ..
+      "\tjmpq\t*(" .. r .. ")\n"
+   r_size = r_size - 1
+   return asm .. tmp.. push("%rax")
+end
+
+function performcall(func, adjust, rs, rs2, p, pp, alg, call)
+   local asm, t = ""
+   ------------------------------ CALL
+   if rsp ~= rs2 - 1 then
+      asm = asm .. adjust
+      rsp = rs2 - 1
+   end
+   if not call then
+      asm = asm .. "\tpushq\t%r14\n"
+   end
+   for j = 1, pp do
+      t = pop()
+      if isDouble(t) then
+	 asm = asm ..
+	    "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	    "\tleaq\t6(, %r12, 8), %r15\n" ..
+	    "\taddq\t$8, %r12\n"
+	 t = "%r15"
+      end
+      asm = asm .. "\tpushq\t" .. t .. "\n"
+   end
+   for j = 1, p do
+      if j > 6 then break end
+      t = pop()
+      if t:sub(1, 1) ~= "%" or t == "%rax" then
+	 asm = asm .. "\tmovq\t" .. t .. ", " .. future() .. "\n"
+      end
+      if isDouble(t) then
+	 asm = asm ..
+	    "\tmovsd\t" .. t .. ", (%r12)\n" ..
+	    "\tleaq\t6(, %r12, 8), " .. future() .. "\n" ..
+	    "\taddq\t$8, %r12\n"
+      end
+   end
+   if not call then
+      asm = asm .. "\tmovq\t$" .. p .. ", %r15\n"
+   end
+   if func then asm = asm .. develop() end
+   -- Restore
+   ------------------------------
+   r_size = rs2
+   r_index = alg
+   tmp = protect(rs)
+   if r_size > 1 then
+      tmp = tmp .. "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   else
+      tmp = tmp .. "\tleaq\t(%rbp), %rsp\n"
+   end
+   rsp = r_size - 1
+   -- Call
+   ------------------------------
+   if call then
+      asm = asm ..
+	 "\tsubq\t$16, %rsp\n" ..
+	 "\tandq\t$-16, %rsp\n" .. 
+	 "\tcall\t" .. call .. "\n"
+   else
+      local r = pop()
+      if isMem(r) then
+	 asm = asm .. "\tmovq\t" .. r .. ", %rax\n"
+	 r = "%rax"
+      end
+      asm = asm ..
+	 "\tsarq\t$3, %rax\n" ..
+	 "\tmovq\t8(%rax), %r14\n" ..
+	 "\tcallq\t*(" .. r .. ")\n" ..
+	 "\tpopq\t%r14\n"
+   end
+   return asm .. tmp.. push("%rax")
 end
 
 function chg(text, i, p)
@@ -1736,8 +1870,27 @@ function _translate(text, i, sets, loop)
 
       elseif instr == "index" then
 	 asm = asm .. index(sets, false)
-	 
 
+      elseif instr == "findex" then
+	 asm = asm .. findex()
+	 
+      elseif instr == "new" then
+	 asm = asm .. new()
+
+      elseif instr == "append" then
+	 asm = asm .. append()
+
+      elseif instr == "setsize" then
+	 asm = asm .. setsize()
+
+      elseif instr == "put" then
+	 asm = asm .. put()
+
+      elseif instr == "fparams" then
+	 tmp, i = fparams(text, i, tonumber(value))
+	 struct = true
+	 asm = asm .. tmp
+	 
       elseif instr == "params" then
 	 tmp, i = params(text, i, tonumber(value), vname)
 	 vname = false

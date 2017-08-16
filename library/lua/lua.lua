@@ -1,5 +1,5 @@
 function type(var)
-   local x = 1--_type(var)
+   local x = _type(var)
    if x == 0 then
       -- integer
       return "number"
@@ -22,12 +22,13 @@ function tostring(var)
 end
 
 function tonumber(var)
-   local t = 1--_type(var)
+   local t = _type(var)
    if t == 2 then
       -- do to number
    elseif t == 0 or t == 6 then
       return var
    end
+   return nil
 end
 
 function next(tab, index)

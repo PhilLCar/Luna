@@ -251,7 +251,7 @@ function translate(expr, fname, flvl, def)
 	 end
 	 if tmp == ":" then
 	    tmp, t = nextexpr(expr, t)
-	    nextop("string\t\"" .. tmp .. "\"\n" .. "findex\n", true)
+	    nextop("str\t\"" .. tmp .. "\"\n" .. "findex\n", true)
 	    f = true
 	 elseif tonumber(tmp) then
 	    nextop("num\t" .. tmp .. "\n")
@@ -637,21 +637,71 @@ end
 function arrscope(array, flvl)
    local tmp, i = nextexpr(array, 1)
    local ret, cnt = "", 0
-   local elem
+   local elem, setsize
+   local done = false
+   local case = 0
    while tmp do
+      case = 0
       elem = tmp
-      while tmp ~= "," and tmp ~= ";" do
-	 tmp, i = nextexpr(array, i)
-	 if not tmp then break
-	 elseif tmp == "=" then
+      while true do
+	 if elem == "function" then
+	    tmp, i = funscope(array, i)
+	    ret = ret .. tmp
+	    case = case + 2
+	    break
 	 end
-	 elem = elem .. " " .. tmp
+	 while tmp ~= "," and tmp ~= ";" do
+	    tmp, i = nextexpr(array, i)
+	    if not tmp or tmp == "," or tmp == ";" then break
+	    elseif tmp == "=" then
+	       if not done then
+		  ret = ret .. "done\n"
+		  done = true
+	       end
+	       case = 1
+	       if isBracketed(elem) then
+		  ret = ret .. translate(elem:sub(2, -2), false, flvl, false) ..
+		     "new\n"
+	       elseif comp_flags.sas and elem == "n" then
+		  setsize = true
+	       else
+		  ret = ret .. "str\t\"" .. elem .. "\"\nnew\n"
+	       end
+	       tmp, i = nextexpr(array, i)
+	       elem = tmp
+	       break
+	    end
+	    elem = elem .. " " .. tmp
+	 end
+	 if not tmp or tmp == "," or tmp == ";" then break end
       end
-      ret = ret .. translate(elem, false, flvl, false) .. "tac\n"
-      cnt = cnt + 1
+      if case == 0 then
+	 ret = ret .. translate(elem, false, flvl, false)
+	 if done then ret = ret .. "append\n"
+	 else ret = ret .. "tac\n" end
+      elseif case == 1 then
+	 ret = ret .. translate(elem, false, flvl, false)
+	 if setsize then
+	    setsize = false
+	    ret = ret .. "setsize\n"
+	 else
+	    ret = ret .. "put\n"
+	 end
+      elseif case == 2 then
+	 if done then ret = ret .. "append\n"
+	 else ret = ret .. "tac\n" end
+      elseif case == 3 then
+	 ret = ret .. "put\n"
+      end
+      if not done then
+	 cnt = cnt + 1
+      end
       if tmp then
 	 if tmp == ";" then
-	    ret = ret .. "part\n"
+	    if not done then
+	       ret = ret .. "done\n"
+	       done = true
+	    end
 	 else
 	    test(",", tmp)
 	 end
@@ -660,7 +710,10 @@ function arrscope(array, flvl)
 	 break
       end
    end
-   ret = "init\t" .. cnt .. "\n" .. ret .. "done\n"
+   ret = "init\t" .. cnt .. "\n" .. ret
+   if not done then
+      ret = ret  .. "done\n"
+   end
    return ret
 end
 

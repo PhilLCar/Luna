@@ -642,9 +642,9 @@ _i_index:
 	movq	8(%rbx), %rsi 
 	leaq	-8(%rax, %rsi, ), %r15
 	cmpq	$8, %r15
-	jb	_i_miss
+	jl	_i_miss
 	cmpq	%r15, %rdi
-	jb	_i_miss
+	jl	_i_miss
 _i_rt:	leaq	8(%r15, %rbx, ), %rax
 	popq	%rsi
 	popq	%rdi
@@ -707,9 +707,9 @@ _i_new:
 	movq	8(%rbx), %rsi	
 	leaq	-8(%rax, %rsi, ), %r15
 	cmpq	$8, %r15
-	jb	_n_underflow
+	jl	_n_underflow
 	cmpq	%r15, %rdi
-	jb	_n_overflow
+	jl	_n_overflow
 _n_rt:	leaq	8(%r15, %rbx, ), %rax
 	popq	%rsi
 	popq	%rdi
@@ -723,34 +723,57 @@ _n_underflow:
 _os_lp:	salq	$1, %rcx
 	leaq	-8(%rax, %rcx, ), %r15
 	cmpq	$8, %r15
-	jb	_os_lp
-	leaq	(%rcx, %rdi, ), %r15
+	jl	_os_lp
+	leaq	-8(%rcx, %rdi, ), %r15
 	jmp	_ca_lp
 _n_overflow:
 	pushq	%rdx
 	pushq	%rcx
-	movq	%rdi, %rdx
-	movq	%rsi, %rcx
-	leaq	(%rcx, %rdi, ), %r15
+	movq	%rdi, %rdx # CAPACITY
+	movq	%rsi, %rcx # OFFSET
 _ca_lp:	salq	$1, %rdx
 	cmpq	%r15, %rdx
 	jb	_ca_lp
+	# nil fil up start
+	pushq	%rax
+	movq	%rcx, %r15
+	subq	%rsi, %r15
+	leaq	8(%rdx), %rax         # Upper limit of new area
+	leaq	8(%rdi, %r15, ), %r15 # Position of last copied element
+_over_nil_fil:
+	movq	$17, (%r12, %rax, )
+	subq	$8, %rax
+	cmpq	%rax, %r15
+	jnz	_over_nil_fil
+	# nil fil down start
+	movq	%rcx, %r15
+	subq	%rsi, %r15
+	movq	$8, %rax       # Lower limit of new area (- 1)
+	leaq	8(%r15), %r15  # Position of first copied element (- 1)
+_under_nil_fil:
+	cmpq	%rax, %r15
+	jz	_mem_copy
+	movq	$17, (%r12, %r15, )
+	subq	$8, %r15
+	jmp	_under_nil_fil
 _mem_copy:
+	popq	%rax
 	pushq	%r8
 	movq	%rdx, (%r12)
 	movq	%rcx, 8(%r12)
-	leaq	16(%r12, %rcx, ), %r8
+	leaq	8(%r12, %rcx, ), %r8
 	subq	%rsi, %r8
 _mm_lp:	cmpq	$0, %rdi
 	jz	_mm_en
-	movq	8(%rdi, %rbx, ), %r15
+	movq	8(%rdi, %rbx, ), %r15 # LAST OF OLD
 	movq	%r15, (%rdi, %r8)
 	subq	$8, %rdi
 	jmp	_mm_lp
-_mm_en:	movq	48(%rsp), %r8
+_mm_en:	movq	40(%rsp), %r8
 	movq	%r12, 16(%r8)
 	movq	%r12, %rbx
 	leaq	16(%rdx, %r12, ), %r12
+	leaq	-8(%rax, %rcx, ), %r15
 	popq	%r8
 	popq	%rcx
 	popq	%rdx
@@ -790,6 +813,43 @@ _ch_lp:	cmpq	$17, (%rax)
 	inc	%rbx
 	jmp	_ch_lp
 _ch_en:	popq	%rax
+	movq	%rbx, (%rax)
+	ret
+
+	.global _set_size
+	# %rax: size (int), %rbx: table
+_set_size: 
+	sarq	$3, %rbx
+	pushq	%rbx
+	pushq	%rax
+	salq	$3, %rax
+	call	_i_new
+	popq	%rax
+	popq	%rbx
+	movq	%rax, (%rbx)
+	ret
+
+	.global _append
+	# %rax: value, %rbx:table
+_append:
+	pushq	%rax
+	sarq	$3, %rbx
+	cmpq	$65, (%rbx)
+	jnz	_append_elem
+	movq	%rbx, %rax
+	call	_check
+	movq	%rax, %rbx
+_append_elem:	
+	movq	(%rbx), %rax
+	incq	%rax
+	pushq	%rax
+	pushq	%rbx
+	salq	$3, %rax
+	call	_i_new
+	popq	%rbx
+	popq	%r15
+	movq	%r15, (%rbx)
+	popq	%rbx
 	movq	%rbx, (%rax)
 	ret
 	
@@ -852,6 +912,10 @@ _type:
 	movq	%xmm0, %rax
 	andq	$6, %rax
 _type_end:
+	cvtsi2sd %rax, %xmm0
+	movq	%xmm0, (%r12)
+	leaq	6(, %r12, 8), %rax
+	addq	$8, %r12
 	ret
 
 	.global _next

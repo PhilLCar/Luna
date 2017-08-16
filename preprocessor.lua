@@ -341,7 +341,9 @@ function comb1(arr, indent, ...)
 	       arr[j] =
 		  "\n" .. strgen(_SPACE, indent + 1) .. array[j]
 	    else
-	       ts = trysolve(arr[k], arr[j])
+	       if not comp_flags.npc then
+		  ts = trysolve(arr[k], arr[j])
+	       end
 	       if ts then
 		  arr[j] = ts
 	       else
@@ -399,7 +401,9 @@ function comb2(arr, left, indent, ...)
 	       arr[j] =
 		  "\n" .. strgen(_SPACE, indent + 1) .. array[j]
 	    else
-	       ts = trysolve(arr[k], arr[j])
+	       if not comp_flags.npc then
+		  ts = trysolve(arr[k], arr[j])
+	       end
 	       if ts then
 		  arr[j] = ts
 	       else
@@ -408,7 +412,9 @@ function comb2(arr, left, indent, ...)
 	       end
 	    end
 	 end
-	 ts = trysolve(arr[i], arr[j], arr[i - 1])
+	 if not comp_flags.npc then
+	    ts = trysolve(arr[i], arr[j], arr[i - 1])
+	 end
 	 if ts and left then
 	    arr[j] = ts
 	 elseif left then

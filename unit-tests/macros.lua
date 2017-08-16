@@ -1,4 +1,4 @@
-local test = {"ABonjour!A"; el1 = "allo"; el2 = "au revoir"; n = 100}
+local test = {"ABonjour!A"}
 function prob(a)
    local c = type(a)
    if c == "string" then
@@ -13,9 +13,11 @@ function prob(a)
 end
 io.write(test[1]:sub(2, #test[1] - 1))
 print()
-io.write(prob():sub(4, -1))
+io.write(prob():sub(5, -1))
 print()
 io.write(prob"aPommeD":sub(2, 3))
 print()
 --Bonjour!
+--venue
+--om
 

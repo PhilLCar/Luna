@@ -15,6 +15,9 @@ function help()
 	    "\t-f\tCompiles the program as a collection of C functions\n" ..
 	    "\t\tIn this mode there is no variable number of arguments or closure support.\n\n" ..
 	    "\t-s\tKeeps the subfiles created during the compiling process.\n\n" ..
+	    "\t-npc\tDisables the precompilation function\n\n" ..
+	    "\t-sas\tEnables the option to set the size of an array during its declararion.\n" ..
+	    "\t\tThe size should be set like so: «{» [elem] {, elem} ; n = size «}»\n\n" ..
 	    "\t-h\tHelp command\n")
    os.exit()
 end
@@ -42,8 +45,15 @@ while arg[i] and arg[i]:sub(1, 1) == "-" do
       comp_flags.fnc = true
    elseif a == "-s" then -- Saves the subfiles
       comp_flags.sub = true
+   elseif a == "-npc" then -- No pre-comp
+      comp_flags.npc = true
+   elseif a == "-sas" then
+      comp_flags.sas = true
    elseif a == "-h" then -- help
       help()
+   else
+      print("There is no such option: " .. arg[i] .. ", consider -h for help")
+      os.exit()
    end
    i = i + 1
 end
@@ -57,7 +67,10 @@ if not comp_flags.inf then
 end
 
 if comp_flags.inf then
-   print("LUNA [Lua Compiler] V1.0 (2017)\n\tAuthor: Philippe Caron\n")
+   print("LUNA [Lua Compiler for Intel x86-64] (2017)")
+   print("\tAuthor      : Philippe Caron")
+   print("\tLua version : 5.3")
+   print("\tAssembler   : gcc\n")
 end
 
 if comp_file then
