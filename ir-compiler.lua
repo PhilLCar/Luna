@@ -58,7 +58,7 @@ if not comp_flags.lib then
       "\tcall\tmmap\n" ..
       "\tmovq\t%rax, %r12\n" ..
       "\tmovq\t%rax, _mem_max(%rip)\n" ..
-      "\taddq\t$" .. memsize / 2 .. ", _mem_max(%rip)\n" ..
+      "\taddq\t$" .. tostring((memsize / 2) | 0) .. ", _mem_max(%rip)\n" ..
       -- INIT
       "\tmovq\t$0, (%r12)\n" ..
       "\tmovq\t$17, 8(%r12)\n" ..
@@ -66,6 +66,15 @@ if not comp_flags.lib then
       "\tlea\t3(, %r12, 8), %r13\n" ..
       "\taddq\t$24, %r12\n" ..
       "\tmovq\t$17, %r14\n" ..
+      -- CLEAR untagged registers (for GC)
+      "\txorl\t%edx, %edx\n" ..
+      "\txorl\t%ecx, %ecx\n" ..
+      "\txorl\t%edi, %edi\n" ..
+      "\txorl\t%esi, %esi\n" ..
+      "\txorq\t%r8, %r8\n" ..
+      "\txorq\t%r9, %r9\n" ..
+      "\txorq\t%r10, %r10\n" ..
+      "\txorq\t%r11, %r11\n" ..
       "\tcall\t_prep_gc\n"
    for i in pairs(libs) do
       intro = intro .. "\tcall\t_load_" .. i .. "\n"
@@ -938,16 +947,18 @@ function init(text, i, p)
    ret = ret .. tmp
    
    ret = ret .. "\tmovq\t" .. get() .. ", %rax\n" .. 
-      "\tcall\t_array_copy\n" ..
-      "\tmovq\t%rbp, %rsp\n"
-
-   rsp = 0
+      "\tcall\t_array_copy\n"
    
    r_size = rs
    for j = vs + 1, v_size do
       v_stack[j] = nil
    end
    v_size = vs
+
+   ret = ret ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
+      "\tcall\t_prep_gc\n"
+   rsp = r_size - 1
    
    return ret, i
 end
@@ -972,6 +983,7 @@ function build(nargs, varargs, fname)
 	 ret = ret .. "\tmovq\t%r15, " .. 8 * (nargs - 6) .. "(%rsp)\n"
       end
    end
+   ret = ret .. "\tcall\t_prep_gc\n"
    if fname then
       ret = ret .. fname .. ":\n"
    end
@@ -1280,7 +1292,6 @@ function fct(text, i, value)
    local ins, val
    local name
    local ret, tmp = "\t.align\t8\n" ..
-      "\t.fill\t1, 1, 0x90\n" ..
       "_FN" .. value .. ":\n"
 
    tmp, i = readline(text, i)
@@ -1513,6 +1524,9 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
       asm = asm .. adjust
       rsp = rs2 - 1
    end
+   --[[asm = asm .. 
+      "\tpushq\t$33\n" ..
+      "\tandq\t$-16, %rsp\n"]]
    if not call then
       asm = asm .. "\tpushq\t%r14\n"
    end
@@ -1560,8 +1574,10 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
    if call then
       asm = asm ..
 	 "\tpushq\t$33\n" ..
-	 "\tandq\t$-16, %rsp\n" .. 
-	 "\tcall\t" .. call .. "\n"
+	 "\tandq\t$-16, %rsp\n" ..
+	 "\t.align\t8\n" ..
+	 "\t.fill\t6, 1, 0x90\n" ..
+	 "\tcallq\t" .. call .. "\n"
    else
       local r = pop()
       if isMem(r) then
@@ -1571,6 +1587,8 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
       asm = asm ..
 	 "\tsarq\t$3, %rax\n" ..
 	 "\tmovq\t8(%rax), %r14\n" ..
+	 "\t.align\t8\n" ..
+	 "\t.fill\t6, 1, 0x90\n" ..
 	 "\tcallq\t*(" .. r .. ")\n" ..
 	 "\tpopq\t%r14\n"
    end
@@ -1579,7 +1597,8 @@ end
 
 function chg(text, i, p)
    local asm, tmp = ""
-   local rs, done = r_size
+   local done
+   local rs = r_size
    for j = 1, p do
       tmp, i, done = _translate(text, i, true, false)
       if buf and isMem(buf) then

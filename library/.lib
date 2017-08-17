@@ -6,7 +6,7 @@ io:
 lua:
 	next
 	type
-	pairs
 	tonumber
+	pairs
 	ipairs
 	tostring

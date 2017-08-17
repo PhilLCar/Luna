@@ -26,7 +26,7 @@ int print(quad i) {
     printf("%s", (char*)(val + 8));
     break;
   case 3:
-    printf("table: %p", (void*) val);
+    printf("table: %p", (quad*) val);
     break;
   case 5:
     while (*(int*)val != 33) {
@@ -40,7 +40,7 @@ int print(quad i) {
     printf("%.13g", *(double *) val);
     break;
   case 7:
-    printf("function: %p", (void*) val);
+    printf("function: 0x%x", *(quad*) val);
     break;
   }
   return 33;
