@@ -162,6 +162,47 @@ _nf_cm:	inc	%r15
 	jmp	_nf_lp
 _nf_en:	ret
 
+	.global _prep_gc:
+_prep_gc:
+	#cmpq	%r12, _mem_max(%rip)
+	#ja	_prep
+	#ret
+_prep:	pushq	%rdx
+	pushq	%rcx
+	pushq	%r8
+	pushq	%r9
+	pushq	%r10
+	pushq	%r11
+	pushq	%rdi
+	pushq	%rsi
+	pushq	%r14
+	pushq	$33
+	andq	$-16, %rsp
+	movq	-24(%rsp), %rdi # Struct address
+	movq	%rsp, %rsi      # Stack pointer
+	movq	%r12, %rdx      # Memory pointer
+	movq	%r13, %rcx      # Memory base
+	sarq	$3, %rcx
+	call	_gc
+	movq	(%rax), %r12
+	movq	8(%rax), %r13
+	leaq	3(, %r13, 8), %r13
+	cmpq	$33, (%rsp)
+	jnz	_prep_pop
+	popq	%rax
+_prep_pop:
+	popq	%r14
+	popq	%rsi
+	popq	%rdi
+	popq	%r11
+	popq	%r10
+	popq	%r9
+	popq	%r8
+	popq	%rcx
+	popq	%rdx
+	ret
+	
+
 # OPERATOR ROUTINES
 ################################################################################
 	

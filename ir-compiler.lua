@@ -28,6 +28,12 @@ local str_tbl = {}
 
 -- Miscellaneous global variables
 --------------------------------------------------------------------------------
+local memsize = 0x8000000
+
+if comp_flags.mem then
+   mem_size = comp_flags.mem
+end
+
 local intro
 if not comp_flags.lib then
    intro =
@@ -45,18 +51,22 @@ if not comp_flags.lib then
       "\tmovq\t%rsp, %rbp\n" ..
       "\txor\t%rbx, %rbx\n" .. 
       -- MEMORY
-      "\tmovq\t$134217728, %rax\n" ..
-      --"\tmovq\t%rax, _mem_size(%rip)\n" ..
+      "\tmovq\t%rbp, _stack_base(%rip)\n" ..
+      "\tmovq\t$" .. memsize .. ", %rax\n" ..
+      "\tmovq\t%rax, _mem_size(%rip)\n" ..
       "\tpushq\t%rax\n" ..
       "\tcall\tmmap\n" ..
       "\tmovq\t%rax, %r12\n" ..
+      "\tmovq\t%rax, _mem_max(%rip)\n" ..
+      "\taddq\t$" .. memsize / 2 .. ", _mem_max(%rip)\n" ..
       -- INIT
       "\tmovq\t$0, (%r12)\n" ..
       "\tmovq\t$17, 8(%r12)\n" ..
       "\tmovq\t$17, 16(%r12)\n" ..
       "\tlea\t3(, %r12, 8), %r13\n" ..
       "\taddq\t$24, %r12\n" ..
-      "\tmovq\t$17, %r14\n"
+      "\tmovq\t$17, %r14\n" ..
+      "\tcall\t_prep_gc\n"
    for i in pairs(libs) do
       intro = intro .. "\tcall\t_load_" .. i .. "\n"
    end
@@ -1549,7 +1559,7 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
    ------------------------------
    if call then
       asm = asm ..
-	 "\tsubq\t$16, %rsp\n" ..
+	 "\tpushq\t$33\n" ..
 	 "\tandq\t$-16, %rsp\n" .. 
 	 "\tcall\t" .. call .. "\n"
    else

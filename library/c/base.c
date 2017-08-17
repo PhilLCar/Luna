@@ -1,27 +1,14 @@
 #include <stdio.h>
 
-long _lint(long i) {
-  return i >> 3;
-}
+#ifdef __linux__
+#define print _print
+#endif
 
-long _cint(long i) {
-  return i << 3;
-}
+typedef long long quad;
 
-char* _lstr(long s) {
-  s >>= 3;
-  return (char*)(s + 8);
-}
-
-long _cstr(char* s) {
-  long r = (long)s;
-  r <<= 3;
-  return r + 2;
-}
-
-int _print(long i) {
+int print(quad i) {
   int type = i & 7;
-  long val = i >> 3;
+  quad val = i >> 3;
   int first = 0;
   switch(type) {
   case 0:
