@@ -47,7 +47,6 @@ quad trf_mask = 0x4000000000000000;
 static quad *copy;
 
 static quad heartbreaker = 0x8000000000000000;
-//static quad constant     = 0x2000000000000000;
 
 static quad copydata(quad);
 static void copyll(quad*, quad*);
@@ -60,15 +59,14 @@ quad copydata(quad data)
   int i, size, max, min;
 
   if (trf_mask & data) return (*P(trf_mask ^ data) ^ heartbreaker) | trf_mask;
-  //else if (constant & data) return data;
   else if (type == ADDRESS || type == SPECIAL || type == EMPTY) return data;
   else if (*point & heartbreaker) return (*point << 3) | type;
   
   switch(type) {
 
   case STRING:
-    *copy = *point;
-    *(point++) = heartbreaker | Q(copy);
+    *copy = *(point++);
+    //*(point++) = heartbreaker | Q(copy);
     base = copy++;
     //printmem(base, 8);
     max = *base;
@@ -123,7 +121,7 @@ quad copydata(quad data)
     
   case DOUBLE:
     *copy = *point;
-    *point = heartbreaker | Q(copy);
+    //*point = heartbreaker | Q(copy);
     return (Q(copy++) << 3) | DOUBLE;
     
   case FUNCTION:
@@ -190,8 +188,8 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 		     MAP_PRIVATE | MAP_ANON, -1, 0);
   new.mem_base = copy;
 
-  printf("STEP: %p\n", copy);
-  printmem(mem_base, 48);
+  //printf("STEP: %p\n", copy);
+  //printmem(mem_base, 48);
   
   if (copy == MAP_FAILED) {
     fprintf(stderr, "Memory allocation failed (Process aborted)\n");
@@ -200,11 +198,11 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   
   // Globals
   copydata((Q(mem_base) << 3) | TABLE);
-  printmem(new.mem_base, 48);
+  //printmem(new.mem_base, 48);
   //printf("Étape 2\n");
   // Stack
   for (i = stack_base - 1; i > stack_ptr; i--) {
-    printf("%p:\t0x%016llX\n", i, *i);
+    //printf("%p:\t0x%016llX\n", i, *i);
     *i = copydata(*i);
     //printmem(new.mem_base, 48);
     //printf("%p:\t0x%016llX\n", i, *i);
@@ -234,6 +232,10 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     mem_size <<= 1;
   }
   mem_max = Q(new.mem_base) + (mem_size / 4 * 3);
+  //printmem(new.mem_base, 48);
+  //for (i = stack_base - 1; i > stack_ptr; i--) {
+  //printf("%p:\t0x%016llX\n", i, *i);
+  //}
   //printf("Étape 6: %llx, %p\n", mem_max, new.mem_ptr);
     
   return new;

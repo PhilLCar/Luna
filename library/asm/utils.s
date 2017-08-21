@@ -180,7 +180,8 @@ _prep_gc:
 	#cmpq	%r12, _mem_max(%rip)
 	#ja	_prep
 	#ret
-_prep:	popq	%r15 # return address
+_prep:	#ret
+	popq	%r15 # return address
 	pushq	%rdx
 	pushq	%rcx 
 	pushq	%r8

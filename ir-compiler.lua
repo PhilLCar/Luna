@@ -89,11 +89,7 @@ local func = "\n# FUNCTIONS" ..
 local need_data = false
 local data = "\n# DATA" ..	    
    "\n################################################################################\n\n" ..
-   "\t.data\n\n" --..
-   --"\t.type\t_cons_tag, @object\n" ..
-   --"\t.size\t_cons_tag, 8\n" ..
-   --"_cons_tag:\n" ..
-   --"\t.quad\t" .. comp_cons .. "\n"
+   "\t.data\n\n"
 
 local outro = ""
 
@@ -237,7 +233,7 @@ function newdouble(value)
    local ret = push(nil)
    if tonumber(value) then
       need_data = true
-      if true then -- Makes new labels for every same data (replace "true" by: "not l")
+      if not l then
 	 l = label("_DB")
 	 str_tbl[tonumber(value)] = l
 	 data = data .. l .. ":\n" ..
@@ -612,7 +608,7 @@ end
 function str(value)
    local r, l = use(), str_tbl[value]
    need_data = true
-   if true then -- Makes new labels for every same data (replace "true" by: "not l")
+   if not l then -- Makes new labels for every same data (replace "true" by: "not l")
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
@@ -745,7 +741,7 @@ end
 function encl(value)
    local r, l = prep(true), str_tbl[value]
    need_data = true
-   if true then -- Makes new labels for every same data (replace "true" by: "not l")
+   if not l then
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
@@ -763,7 +759,7 @@ function clo(sets, value)
    value = "\"" .. value .. "\""
    local r, l = prep(true), str_tbl[value]
    need_data = true
-   if true then -- Makes new labels for every same data (replace "true" by: "not l")
+   if not l then
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
@@ -790,7 +786,7 @@ function index(address, global)
       end
       global = "\"" .. global .. "\""
       local l = str_tbl[global]
-      if true then -- Makes new labels for every same data (replace "true" by: "not l")
+      if not l then
 	 l = label("_ST")
 	 str_tbl[global] = l
 	 need_data = true
@@ -864,9 +860,9 @@ function findex()
       prep(true) ..
       "\tpushq\t%rbx\n" ..
       "\tcall\t_index\t\n" ..
-      "\tpopq\t%r15\n"..
-      push("%r15") .. push("(%rax)")
-   return ret
+      use() ..
+      "\tpopq\t" .. current() .. "\n"
+   return ret.. push("(%rax)")
 end
 
 function put()
@@ -1448,7 +1444,7 @@ function fparams(text, i, p)
    align("%rdi")
    -- Get the parameters
    ------------------------------
-   asm = asm .. use()
+   asm = asm .. push(v2)
    for j = 1, p do
       tmp, i, func = _translate(text, i, false, false)
       asm = asm .. tmp
