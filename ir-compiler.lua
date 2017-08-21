@@ -54,11 +54,10 @@ if not comp_flags.lib then
       "\tmovq\t%rbp, _stack_base(%rip)\n" ..
       "\tmovq\t$" .. memsize .. ", %rax\n" ..
       "\tmovq\t%rax, _mem_size(%rip)\n" ..
-      "\tpushq\t%rax\n" ..
-      "\tcall\tmmap\n" ..
+      "\tcall\t_minit\n" ..
       "\tmovq\t%rax, %r12\n" ..
+      "\taddq\t$" .. tostring((memsize / 4 * 3) | 0) .. ", %rax\n" ..
       "\tmovq\t%rax, _mem_max(%rip)\n" ..
-      "\taddq\t$" .. tostring((memsize / 2) | 0) .. ", _mem_max(%rip)\n" ..
       -- INIT
       "\tmovq\t$0, (%r12)\n" ..
       "\tmovq\t$17, 8(%r12)\n" ..
@@ -67,15 +66,7 @@ if not comp_flags.lib then
       "\taddq\t$24, %r12\n" ..
       "\tmovq\t$17, %r14\n" ..
       -- CLEAR untagged registers (for GC)
-      "\txorl\t%edx, %edx\n" ..
-      "\txorl\t%ecx, %ecx\n" ..
-      "\txorl\t%edi, %edi\n" ..
-      "\txorl\t%esi, %esi\n" ..
-      "\txorq\t%r8, %r8\n" ..
-      "\txorq\t%r9, %r9\n" ..
-      "\txorq\t%r10, %r10\n" ..
-      "\txorq\t%r11, %r11\n" ..
-      "\tcall\t_prep_gc\n"
+      "\tcall\t_clear_regs\n"
    for i in pairs(libs) do
       intro = intro .. "\tcall\t_load_" .. i .. "\n"
    end
@@ -98,7 +89,11 @@ local func = "\n# FUNCTIONS" ..
 local need_data = false
 local data = "\n# DATA" ..	    
    "\n################################################################################\n\n" ..
-   "\t.data\n\n"
+   "\t.data\n\n" --..
+   --"\t.type\t_cons_tag, @object\n" ..
+   --"\t.size\t_cons_tag, 8\n" ..
+   --"_cons_tag:\n" ..
+   --"\t.quad\t" .. comp_cons .. "\n"
 
 local outro = ""
 
@@ -242,7 +237,7 @@ function newdouble(value)
    local ret = push(nil)
    if tonumber(value) then
       need_data = true
-      if not l then
+      if true then -- Makes new labels for every same data (replace "true" by: "not l")
 	 l = label("_DB")
 	 str_tbl[tonumber(value)] = l
 	 data = data .. l .. ":\n" ..
@@ -617,7 +612,7 @@ end
 function str(value)
    local r, l = use(), str_tbl[value]
    need_data = true
-   if not l then
+   if true then -- Makes new labels for every same data (replace "true" by: "not l")
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
@@ -750,7 +745,7 @@ end
 function encl(value)
    local r, l = prep(true), str_tbl[value]
    need_data = true
-   if not l then
+   if true then -- Makes new labels for every same data (replace "true" by: "not l")
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
@@ -768,7 +763,7 @@ function clo(sets, value)
    value = "\"" .. value .. "\""
    local r, l = prep(true), str_tbl[value]
    need_data = true
-   if not l then
+   if true then -- Makes new labels for every same data (replace "true" by: "not l")
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
@@ -795,7 +790,7 @@ function index(address, global)
       end
       global = "\"" .. global .. "\""
       local l = str_tbl[global]
-      if not l then
+      if true then -- Makes new labels for every same data (replace "true" by: "not l")
 	 l = label("_ST")
 	 str_tbl[global] = l
 	 need_data = true
@@ -1577,7 +1572,8 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
 	 "\tandq\t$-16, %rsp\n" ..
 	 "\t.align\t8\n" ..
 	 "\t.fill\t6, 1, 0x90\n" ..
-	 "\tcallq\t" .. call .. "\n"
+	 "\tcallq\t" .. call .. "\n" ..
+	 "\tcall\t_clear_regs\n"
    else
       local r = pop()
       if isMem(r) then
@@ -1590,7 +1586,8 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
 	 "\t.align\t8\n" ..
 	 "\t.fill\t6, 1, 0x90\n" ..
 	 "\tcallq\t*(" .. r .. ")\n" ..
-	 "\tpopq\t%r14\n"
+	 "\tpopq\t%r14\n" .. 
+	 "\tcall\t_clear_regs\n"
    end
    return asm .. tmp.. push("%rax")
 end
@@ -1604,7 +1601,9 @@ function chg(text, i, p)
       if buf and isMem(buf) then
 	 tmp = tmp .. lea(pop())
       end
-      asm = asm .. tmp .. lock(pop())
+      asm = asm .. tmp .. lock(pop()) ..
+	 "\tmovq\t_trf_mask(%rip), %rax\n" ..
+	 "\txorq\t%rax, " .. -8 * (r_size - 1) .. "(%rbp)\n"
    end
    tmp, i, done = _translate(text, i, true, false)
    if p == 0 then
@@ -1658,7 +1657,8 @@ function set(text, i, p)
       end
    elseif fill then
       asm = asm .. prep(true) .. 
-	 "\tcall\t_fill\n"
+	 "\tcall\t_fill\n" ..
+	 "\tcall\t_prep_gc\n"
    end
    return asm, i
 end

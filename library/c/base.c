@@ -12,7 +12,7 @@ int print(quad i) {
   int first = 0;
   switch(type) {
   case 0:
-    printf("%d", val);
+    printf("%lld", val);
     break;
   case 1:
     if (!val)
@@ -40,7 +40,7 @@ int print(quad i) {
     printf("%.13g", *(double *) val);
     break;
   case 7:
-    printf("function: 0x%x", *(quad*) val);
+    printf("function: 0x%llx", *(quad*) val);
     break;
   }
   return 33;

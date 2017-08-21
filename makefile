@@ -29,7 +29,7 @@ all: lib
 lib: rmlib $(OBJL) $(OBJC) $(OBJS)
 
 $(OBJ)/%.o: $(CSRC)/%.c
-	@$(CC) -c $< -o $@
+	@$(CC) -Wall -Wstrict-prototypes -Wextra -c $< -o $@
 
 $(OBJ)/%.o: $(SSRC)/%.s
 	@$(CC) -c $< -o $@

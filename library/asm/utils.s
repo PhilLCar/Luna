@@ -9,6 +9,7 @@
 _transfer:
 	movq	%rdi, -8(%rsp)
 _tf_lp:	movq	(%rbp, %rax, 8), %rdi
+	xorq	_trf_mask(%rip), %rdi
 	leaq	(%rax, %rbx, ), %r15
 	leaq	(%rbp, %r15, 8), %r15
 	cmpq	%r15, %rsp
@@ -162,26 +163,39 @@ _nf_cm:	inc	%r15
 	jmp	_nf_lp
 _nf_en:	ret
 
+	.global _clear_regs
+_clear_regs:
+	xorl	%edi, %edi
+	xorl	%esi, %esi
+	xorl	%edx, %edx
+	xorl	%ecx, %ecx
+	xorq	%r8, %r8
+	xorq	%r9, %r9
+	xorq	%r10, %r10
+	xorq	%r11, %r11
+	ret
+
 	.global _prep_gc
 _prep_gc:
 	#cmpq	%r12, _mem_max(%rip)
 	#ja	_prep
 	#ret
 _prep:	popq	%r15 # return address
-	pushq	%rdx # unsafe
+	pushq	%rdx
 	pushq	%rcx 
-	pushq	%r8  # unsafe
-	pushq	%r9  # unsafe
+	pushq	%r8
+	pushq	%r9 
 	pushq	%r10
 	pushq	%r11
 	pushq	%rdi
-	pushq	%rsi # unsafe
+	pushq	%rsi
 	pushq	%r14
 	movq	%rsp, %rdi      # Stack pointer
 	movq	%r12, %rsi      # Memory pointer
 	movq	%r13, %rdx      # Memory base
+	#movq	%r14, %rcx      # Closure env pointer
+	#xorq	%rbx, %rbx
 	sarq	$3, %rdx
-	pushq	%r15
 	pushq	$33
 	andq	$-16, %rsp
 	call	_gc
@@ -192,7 +206,6 @@ _prep:	popq	%r15 # return address
 	popq	%rbx
 _prep_pop:
 	popq	%rbx
-	popq	%r15
 	popq	%r14
 	popq	%rsi
 	popq	%rdi
@@ -203,7 +216,38 @@ _prep_pop:
 	popq	%rcx
 	popq	%rdx
 	jmp	*%r15
+
 	
+	//https://studium.umontreal.ca/mod/resource/view.php?id=1166919
+	.globl _minit
+_minit:
+        # determine if OS is linux or OS X
+
+        movq	$-1, %rdi            	# parameter of system call is -1
+        movq	$13, %rax            	# system call number 13 is "time" on linux and a noop on OS X
+        syscall                      	# perform system call to OS
+
+        cmpq	$0, %rax             	# negative means error which means linux
+        js	mmap_syscall_linux
+
+mmap_syscall_osx:
+        movq	$0x20000c5, %rax     	# "mmap" system call is 0x20000c5
+        movq	$0x1002, %rcx        	# rcx = MAP_PRIVATE | MAP_ANON
+        jmp     mmap_syscall
+
+mmap_syscall_linux:
+        movq	$9, %rax             	# "mmap" system call is 9
+        movq	$0x22, %rcx          	# rcx = MAP_PRIVATE | MAP_ANON
+
+mmap_syscall:
+        movq	$0, %rdi             	# rdi = address
+        movq	_mem_size(%rip), %rsi	# rsi = block length
+        movq	$7, %rdx            	# rdx = PROT_READ | PROT_WRITE | PROT_EXEC
+        movq	$-1, %r8           	# r8 = file descriptor (-1 = none)
+        movq	$0, %r9              	# r9 = offset
+        movq	%rcx, %r10         	# r10 = rcx (unclear why this is needed)
+        syscall
+        ret
 
 # OPERATOR ROUTINES
 ################################################################################
@@ -931,6 +975,7 @@ _cr_en:	leaq	8(%r14), %rax
 
 	.global _open
 	# %rax: size
+	# NB: Open will not be used in the code, freeing will be done by the GC
 _open:
 	cmpq	$0, %rax
 	jz	_op_en
