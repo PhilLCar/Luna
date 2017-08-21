@@ -587,6 +587,7 @@ function forscope(str, i, fname, flvl)
 	 print(t)
       end
       ret = "for\t" .. tostring(frct) .. "\n"
+      register(true, nil)
       register(true, fp[1])
       register(true, nil)
       register(true, nil)
@@ -754,9 +755,6 @@ function funscope(str, i, ...)
       ret = ret .. "narg\t" .. tostring(narg) .. "\n"
    end
    tmp, i, t, clo = compile(str, i, fname, level)
-   for name in pairs(clo) do
-      print(name, clo[name])
-   end
    test("end", t)
    ret = ret .. tmp .. "fend\t" .. tostring(fnct) .. "\n"
    size = sz

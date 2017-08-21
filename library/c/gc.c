@@ -32,6 +32,7 @@ typedef struct Vals {
    #define NIL   17
    #define VOID  33
    #define UNKN  65
+   #define FRAH  129
 #define STRING   2
 #define TABLE    3
 #define EMPTY    4
@@ -65,10 +66,10 @@ quad copydata(quad data)
   switch(type) {
 
   case STRING:
+    //fprintf(stderr, "%p\n", point);
     *copy = *(point++);
     //*(point++) = heartbreaker | Q(copy);
     base = copy++;
-    //printmem(base, 8);
     max = *base;
     for (i = 0; i <= max; i++)
       C(copy)[i] = C(point)[i];
@@ -80,7 +81,15 @@ quad copydata(quad data)
     *(point++) = heartbreaker | Q(copy);
     base = copy;
     copy += 3;
+    //fprintf(stderr, "Y:%lld\n", *base);
+    if (*base == VOID) {
+      //fprintf(stderr, "DEFLECTED\n");
+      base[1] = point[0];
+      base[2] = point[1];
+      return (Q(base) << 3) | TABLE;
+    }
     // Copy linked list sequence
+    //fprintf(stderr, "%lld\n", base[2]);
     copyll(point++, base + 1);
     //printmem(base, 20);
     //printmem(point - 2, 20);
@@ -110,11 +119,13 @@ quad copydata(quad data)
   case STACK:
     ////printmem(point, 20);
     // Seek end
-    for (size = 0; point[-size] != VOID; size++);
+    for (size = 0; point[-size] != VOID; size++) printf("%llx\n", point[-size]);
     base = copy + size;
     copy = base + 1;
+    printf("%d\n", size);
     for (i = 0; i <= size; i++)
       base[-i] = copydata(point[-i]);
+    printf("ww\n");
     ////printmem(base, 20);
     point[0] = heartbreaker | Q(base);
     return (Q(base) << 3) | STACK;
@@ -189,7 +200,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   new.mem_base = copy;
 
   //printf("STEP: %p\n", copy);
-  //printmem(mem_base, 48);
+  printmem(mem_base, 48);
   
   if (copy == MAP_FAILED) {
     fprintf(stderr, "Memory allocation failed (Process aborted)\n");
@@ -198,11 +209,12 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   
   // Globals
   copydata((Q(mem_base) << 3) | TABLE);
-  //printmem(new.mem_base, 48);
+  printmem(new.mem_base, 48);
   //printf("Étape 2\n");
   // Stack
   for (i = stack_base - 1; i > stack_ptr; i--) {
-    //printf("%p:\t0x%016llX\n", i, *i);
+    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+    if (*i == FRAH) { i += 4; continue; }
     *i = copydata(*i);
     //printmem(new.mem_base, 48);
     //printf("%p:\t0x%016llX\n", i, *i);
@@ -217,7 +229,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 
   new.mem_ptr  = copy;
 
-  // Resizing -- if compacted data is over the max, the GC would perpetually be called
+  /*/ Resizing -- if compacted data is over the max, the GC would perpetually be called
   if ((copy - new.mem_base) > (mem_size / 4 * 3)) {
     copy = mmap(NULL,
 		(size_t)(mem_size << 1),
@@ -230,7 +242,22 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     memcpy(copy, new.mem_ptr, mem_size);
     munmap(new.mem_ptr, mem_size);
     mem_size <<= 1;
-  }
+    new.mem_ptr = copy;
+  } else if ((copy - new.mem_base) > (mem_size / 4)) {
+    copy = mmap(NULL,
+		(size_t)(mem_size >> 1),
+		PROT_READ | PROT_WRITE | PROT_EXEC,
+		MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (copy == MAP_FAILED) {
+      fprintf(stderr, "Memory reallocation failed (Process aborted)\n");
+      exit(1);
+    }
+    memcpy(copy, new.mem_ptr, mem_size / 4);
+    munmap(new.mem_ptr, mem_size);
+    mem_size >>= 1;
+    new.mem_ptr = copy;
+    }*/
+  
   mem_max = Q(new.mem_base) + (mem_size / 4 * 3);
   //printmem(new.mem_base, 48);
   //for (i = stack_base - 1; i > stack_ptr; i--) {

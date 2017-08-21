@@ -93,7 +93,7 @@ local data = "\n# DATA" ..
 
 local outro = ""
 
-if  not comp_flags.lib then
+if not comp_flags.lib then
    outro = 
       "\tpopq\t%r15\n" ..
       "\tpopq\t%r14\n" ..
@@ -103,7 +103,8 @@ if  not comp_flags.lib then
       "\tmovq\t$0, %rax\n" ..
       "\tret\n"
 else
-   outro = 
+   outro =
+      "\tcall\t_clear_regs\n" ..
       "\tmovq\t$0, %rax\n" ..
       "\tret\n"
 end
@@ -600,6 +601,8 @@ function bits(instr, value)
    if instr == "sal" or instr == "sar" or instr == "shr" then
       if u_cont[2] and pres then
 	 ret = ret .. "\tmovq\t%r15, %rcx\n"
+      else
+	 ret = ret .. "\txorl\t%ecx, %ecx\n"
       end
    end
    return ret
@@ -925,7 +928,7 @@ function init(text, i, p)
    local tmp
    
    ret = ret ..
-      "\tmovq\t$0, (%r12)\n" ..
+      "\tmovq\t$33, (%r12)\n" ..
       "\tmovq\t$17, 8(%r12)\n" ..
       "\tleaq\t" .. -8 * r_size .. "(%rbp), %rax\n" ..
       "\tmovq\t%rax, 16(%r12)\n" ..
@@ -1139,6 +1142,7 @@ function frenv(text, i, p)
    ret = protect(false)
    tmp, i = _translate(text, i, false, false)
    v = pop()
+   tmp = tmp .. lock("$129")
    if isMem(v) then
       tmp = tmp .. "\tmovq\t" .. v .. ", %rax\n" ..
 	 "\tsarq\t$3, %rax\n" ..
