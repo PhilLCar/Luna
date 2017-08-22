@@ -182,6 +182,7 @@ _prep_gc:
 	#ret
 _prep:	ret
 	popq	%r15 # return address
+	leaq	4(, %r14, 8), %r14
 	pushq	%rdx
 	pushq	%rcx 
 	pushq	%r8
@@ -216,6 +217,7 @@ _prep_pop:
 	popq	%r8
 	popq	%rcx
 	popq	%rdx
+	sarq	%r14
 	jmp	*%r15
 
 	
@@ -943,7 +945,7 @@ _append_elem:
 	
 # CLOSURE ROUTINES
 ################################################################################
-# Potentially useless because of GC, will have to use full array-form
+
 	.global _encl
 	# %rax: key, %rbx: value0
 _encl:

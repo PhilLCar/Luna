@@ -48,7 +48,7 @@ quad mem_max;
 quad trf_mask = 0x4000000000000000;
 
 static quad *copy;
-
+static quad *clo_root;
 static quad heartbreaker = 0x8000000000000000;
 
 static quad copydata(quad);
@@ -117,6 +117,29 @@ quad copydata(quad data)
       //}
     } else base[2] = NIL;
     return (Q(base) << 3) | TABLE;
+
+  case OBJECT:
+    switch (point[0]) {
+    case CLO:
+      if (point == NIL) return NIL;
+      quad ret = Q(copy) << 3 | OBJECT;
+      p = copy;
+      while (point != NIL) {
+	point = P(*point);
+	base = copy;
+	copy += 4;
+	*p = Q(base);
+	base[0] = point[0]; //tag
+	base[1] = copydata(point[1]); //key
+	base[2] = copydata(point[2]); //value
+	p = base + 3;
+	point[2] = heartbreaker | Q(base + 2);
+	point += 3;
+      }
+      *p = Q(clo_root);
+      return ret;
+    }
+    break;
     
   case STACK:
     ////printmem(point, 20);
@@ -208,6 +231,8 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 		     PROT_READ | PROT_WRITE | PROT_EXEC,
 		     MAP_PRIVATE | MAP_ANON, -1, 0);
   new.mem_base = copy;
+  clo_root = copy++;
+  *clo_root = NIL;
 
   printf("STEP: %p\n", copy);
   printmem(mem_base, 48);
@@ -222,13 +247,8 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   printmem(new.mem_base, 48);
   //printf("Étape 2\n");
   
-  // Closure environmnet
-  fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
-  copyll(stack_ptr, stack_ptr);
-  fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
-  
   // Stack
-  for (i = stack_base - 1; i > stack_ptr; i--) {
+  for (i = stack_base - 1; i >= stack_ptr; i--) {
     fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
     if (*i == FRAH) { i -= 4; continue; } // for ahead
     *i = copydata(*i);
