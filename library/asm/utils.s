@@ -180,7 +180,7 @@ _prep_gc:
 	#cmpq	%r12, _mem_max(%rip)
 	#ja	_prep
 	#ret
-_prep:	#ret
+_prep:	ret
 	popq	%r15 # return address
 	pushq	%rdx
 	pushq	%rcx 
@@ -943,15 +943,16 @@ _append_elem:
 	
 # CLOSURE ROUTINES
 ################################################################################
-
+# Potentially useless because of GC, will have to use full array-form
 	.global _encl
-	# %rax: key, %rbx: value
-_encl:	
-	movq	%rax, (%r12)
-	movq	%rbx, 8(%r12)
-	movq	%r14, 16(%r12)
+	# %rax: key, %rbx: value0
+_encl:
+	movq	$0, (%r12)
+	movq	%rax, 8(%r12)
+	movq	%rbx, 16(%r12)
+	movq	%r14, 24(%r12)
 	movq	%r12, %r14
-	addq	$24, %r12
+	addq	$32, %r12
 	ret
 
 	.global _clo_ref
@@ -961,15 +962,15 @@ _clo_ref:
 	pushq	%rdi
 	movq	%rax, %rdi
 _cr_lp:	movq	%rdi, %rax
-	movq	(%r14), %rbx
+	movq	8(%r14), %rbx
 	call	_compare
 	cmpq	$9, %rax
 	jz	_cr_en
-	movq	16(%r14), %r14
+	movq	24(%r14), %r14
 	cmpq	$17, %r14
 	jz	_cr_en
 	jmp	_cr_lp
-_cr_en:	leaq	8(%r14), %rax
+_cr_en:	leaq	16(%r14), %rax
 	popq	%rdi
 	popq	%r14
 	ret
@@ -981,7 +982,7 @@ _open:
 	cmpq	$0, %rax
 	jz	_op_en
 	dec	%rax
-	movq	16(%r14), %r14
+	movq	24(%r14), %r14
 	jmp	_open
 _op_en:	ret
 

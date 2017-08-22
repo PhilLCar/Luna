@@ -35,7 +35,9 @@ typedef struct Vals {
    #define FRAH  129
 #define STRING   2
 #define TABLE    3
-#define EMPTY    4
+#define OBJECT   4
+// Object values
+   #define CLO   0
 #define STACK    5
 #define DOUBLE   6
 #define FUNCTION 7
@@ -58,10 +60,10 @@ quad copydata(quad data)
   quad *point = P(data >> 3);
   quad *base, *p;
   int i, size, max, min;
-
+  
   if (trf_mask & data) return (*P(trf_mask ^ data) ^ heartbreaker) | trf_mask;
-  else if (type == ADDRESS || type == SPECIAL || type == EMPTY) return data;
-  else if (*point & heartbreaker) return (*point << 3) | type;
+  else if (type == ADDRESS || type == SPECIAL) return data;
+  else if (type != DOUBLE && *point & heartbreaker) return (*point << 3) | type;
   
   switch(type) {
 
@@ -73,7 +75,7 @@ quad copydata(quad data)
     max = *base;
     for (i = 0; i <= max; i++)
       C(copy)[i] = C(point)[i];
-    copy = P(C(copy) + max + 1);
+    copy = P((Q(copy) + max + 8) & Q(-8));
     return (Q(base) << 3) | STRING;
 
   case TABLE:
@@ -120,18 +122,26 @@ quad copydata(quad data)
     ////printmem(point, 20);
     // Seek end
     for (size = 0; point[-size] != VOID; size++) printf("%llx\n", point[-size]);
-    base = copy + size;
+    fprintf(stderr, "copy old : %p\n", copy);
+    base = (copy + size);
+    fprintf(stderr, "base old : %p\n", base);
     copy = base + 1;
+    fprintf(stderr, "copy new : %p\n", copy);
     printf("%d\n", size);
-    for (i = 0; i <= size; i++)
+    for (i = 0; i <= size; i++) {
+      fprintf(stderr, "point : %016llx\n", point[-i]);
+      fprintf(stderr, "base  : %016llx\n", base[-i]);
       base[-i] = copydata(point[-i]);
-    printf("ww\n");
+    }
+    printf("%016llx\n", copydata(point[0]));
     ////printmem(base, 20);
     point[0] = heartbreaker | Q(base);
     return (Q(base) << 3) | STACK;
     
   case DOUBLE:
     *copy = *point;
+    printf("P: %016llx\n", *point);
+    printf("P: %016llx\n", *copy);
     //*point = heartbreaker | Q(copy);
     return (Q(copy++) << 3) | DOUBLE;
     
@@ -199,7 +209,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 		     MAP_PRIVATE | MAP_ANON, -1, 0);
   new.mem_base = copy;
 
-  //printf("STEP: %p\n", copy);
+  printf("STEP: %p\n", copy);
   printmem(mem_base, 48);
   
   if (copy == MAP_FAILED) {
@@ -211,17 +221,21 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   copydata((Q(mem_base) << 3) | TABLE);
   printmem(new.mem_base, 48);
   //printf("Étape 2\n");
+  
+  // Closure environmnet
+  fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+  copyll(stack_ptr, stack_ptr);
+  fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+  
   // Stack
   for (i = stack_base - 1; i > stack_ptr; i--) {
     fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
-    if (*i == FRAH) { i += 4; continue; }
+    if (*i == FRAH) { i -= 4; continue; } // for ahead
     *i = copydata(*i);
     //printmem(new.mem_base, 48);
     //printf("%p:\t0x%016llX\n", i, *i);
   }
   //printf("Étape 3\n");
-  // Closure environmnet
-  copyll(i, i);
   //printf("Étape 4\n");
 
   munmap(mem_ptr, mem_size);
@@ -259,7 +273,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     }*/
   
   mem_max = Q(new.mem_base) + (mem_size / 4 * 3);
-  //printmem(new.mem_base, 48);
+  printmem(new.mem_base, 48);
   //for (i = stack_base - 1; i > stack_ptr; i--) {
   //printf("%p:\t0x%016llX\n", i, *i);
   //}

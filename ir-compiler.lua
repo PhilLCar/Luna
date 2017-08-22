@@ -1523,7 +1523,9 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
       "\tpushq\t$33\n" ..
       "\tandq\t$-16, %rsp\n"]]
    if not call then
-      asm = asm .. "\tpushq\t%r14\n"
+      asm = asm ..
+	 "\tleaq\t4(, %r14, 8), %r14\n" ..
+	 "\tpushq\t%r14\n"
    end
    for j = 1, pp do
       t = pop()
@@ -1586,7 +1588,8 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
 	 "\t.align\t8\n" ..
 	 "\t.fill\t6, 1, 0x90\n" ..
 	 "\tcallq\t*(" .. r .. ")\n" ..
-	 "\tpopq\t%r14\n" .. 
+	 "\tpopq\t%r14\n" ..
+	 "\tsarq\t$3, %r14\n" ..
 	 "\tcall\t_clear_regs\n"
    end
    return asm .. tmp.. push("%rax")
