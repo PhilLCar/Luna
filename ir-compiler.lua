@@ -1186,7 +1186,6 @@ function frenv(text, i, p)
       "\tmovsd\t" .. -8 * (r_size - 3) .. "(%rbp), %xmm0\n" ..
       "_FRC" .. p .. ":\n" ..
       "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
-      "\tcall\t_prep_gc\n" ..
       "\txorpd\t%xmm1, %xmm1\n" ..
       "\tcmpsd\t$6, " .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
       "\tmovq\t%xmm1, %rax\n" ..
@@ -1203,7 +1202,8 @@ function frenv(text, i, p)
       "\tmovq\t%xmm1, %rax\n" ..
       "\tcmpq\t$-1, %rax\n" ..
       "\tjz\t_FRE" .. p .. "\n" ..
-      "_FRS" .. p .. ":\n" 
+      "_FRS" .. p .. ":\n" ..
+      "\tcall\t_prep_gc\n"
 
    tmp, i = _translate(text, i, false, "_FRE" .. p)
    

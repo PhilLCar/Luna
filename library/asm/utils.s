@@ -199,6 +199,30 @@ _prep_ex: ret
 	movq	%r12, %rsi      # Memory pointer
 	movq	%r13, %rdx      # Memory base
 	sarq	$3, %rdx
+	movq	%xmm4, %rax
+	pushq	%rax
+	movq	%xmm5, %rax
+	pushq	%rax
+	movq	%xmm6, %rax
+	pushq	%rax
+	movq	%xmm7, %rax
+	pushq	%rax
+	movq	%xmm8, %rax
+	pushq	%rax
+	movq	%xmm9, %rax
+	pushq	%rax
+	movq	%xmm10, %rax
+	pushq	%rax
+	movq	%xmm11, %rax
+	pushq	%rax
+	movq	%xmm12, %rax
+	pushq	%rax
+	movq	%xmm13, %rax
+	pushq	%rax
+	movq	%xmm14, %rax
+	pushq	%rax
+	movq	%xmm15, %rax
+	pushq	%rax
 	#pushq	$33
 	#andq	$-16, %rsp
 	call	_gc
@@ -209,6 +233,30 @@ _prep_ex: ret
 	#addq	$8, %rsp
 _prep_pop_ex:
 	#addq	$8, %rsp
+	popq	%rax
+	movq	%rax, %xmm15
+	popq	%rax
+	movq	%rax, %xmm14
+	popq	%rax
+	movq	%rax, %xmm13
+	popq	%rax
+	movq	%rax, %xmm12
+	popq	%rax
+	movq	%rax, %xmm11
+	popq	%rax
+	movq	%rax, %xmm10
+	popq	%rax
+	movq	%rax, %xmm9
+	popq	%rax
+	movq	%rax, %xmm8
+	popq	%rax
+	movq	%rax, %xmm7
+	popq	%rax
+	movq	%rax, %xmm6
+	popq	%rax
+	movq	%rax, %xmm5
+	popq	%rax
+	movq	%rax, %xmm4
 	popq	%rsi
 	popq	%rdi
 	popq	%r11
@@ -246,16 +294,64 @@ _prep:
 	movq	%r13, %rdx      # Memory base
 	sarq	$3, %rdx
 	pushq	%rax
-	#pushq	$33
-	#andq	$-16, %rsp
+	movq	%xmm4, %rax
+	pushq	%rax
+	movq	%xmm5, %rax
+	pushq	%rax
+	movq	%xmm6, %rax
+	pushq	%rax
+	movq	%xmm7, %rax
+	pushq	%rax
+	movq	%xmm8, %rax
+	pushq	%rax
+	movq	%xmm9, %rax
+	pushq	%rax
+	movq	%xmm10, %rax
+	pushq	%rax
+	movq	%xmm11, %rax
+	pushq	%rax
+	movq	%xmm12, %rax
+	pushq	%rax
+	movq	%xmm13, %rax
+	pushq	%rax
+	movq	%xmm14, %rax
+	pushq	%rax
+	movq	%xmm15, %rax
+	pushq	%rax
+	pushq	$33
+	andq	$-16, %rsp
 	call	_gc
 	movq	%rdx, %r12
 	leaq	3(, %rax, 8), %r13
-	#cmpq	$33, 8(%rsp)
-	#jnz	_prep_pop
-	#addq	$8, %rsp
+	cmpq	$33, 8(%rsp)
+	jnz	_prep_pop
+	addq	$8, %rsp
 _prep_pop:
-	#addq	$8, %rsp
+	addq	$8, %rsp
+	popq	%rax
+	movq	%rax, %xmm15
+	popq	%rax
+	movq	%rax, %xmm14
+	popq	%rax
+	movq	%rax, %xmm13
+	popq	%rax
+	movq	%rax, %xmm12
+	popq	%rax
+	movq	%rax, %xmm11
+	popq	%rax
+	movq	%rax, %xmm10
+	popq	%rax
+	movq	%rax, %xmm9
+	popq	%rax
+	movq	%rax, %xmm8
+	popq	%rax
+	movq	%rax, %xmm7
+	popq	%rax
+	movq	%rax, %xmm6
+	popq	%rax
+	movq	%rax, %xmm5
+	popq	%rax
+	movq	%rax, %xmm4
 	popq	%rax
 	popq	%rsi
 	popq	%rdi
