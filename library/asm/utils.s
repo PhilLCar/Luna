@@ -756,7 +756,6 @@ _index:
 _ix_s:	movq	8(%rbx), %r15
 _ix_lp:	cmpq	$17, %r15
 	jz	_ix_nl
-	#sarq	$3, %r15
 	movq	(%r15), %rbx
 	pushq	%rax
 	pushq	%r15
@@ -768,7 +767,8 @@ _ix_lp:	cmpq	$17, %r15
 	popq	%rax
 	jz	_ix_ad
 	jmp	_ix_lp
-_ix_nl:	addq	$8, %rbx
+_ix_nl:	leaq	8(%rbx), %rax
+	ret
 _ix_ad:	leaq	(%rbx), %rax
 	ret
 _i_index:
@@ -825,7 +825,8 @@ _nw_s:	pushq	%rax
 	call	_ix_s
 	cmpq	$17, (%rax)
 	jnz	_nw_rt
-	#leaq	4(, %r12, 8), %rbx
+	cmpq	%rax, %rbx
+	jz	_nw_rt
 	movq	%r12, (%rax)
 	popq	(%r12)
 	leaq	8(%r12), %rax

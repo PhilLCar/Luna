@@ -544,11 +544,13 @@ function forscope(str, i, fname, flvl)
       if tmp == "do" then break end
       fp[#fp + 1] = tmp
       tmp, i = nextexpr(str, i)
-      while tmp and
-	 (isBracketed(tmp) or isString(tmp) or isParenthesized(tmp) or isAccoladed(tmp))
-      do
-	 fp[#fp] = fp[#fp] .. " " .. tmp
-	 tmp, i = nextexpr(str, i)
+      if fp[#fp] ~= "=" then
+	 while tmp and
+	    (isBracketed(tmp) or isString(tmp) or isParenthesized(tmp) or isAccoladed(tmp))
+	 do
+	    fp[#fp] = fp[#fp] .. " " .. tmp
+	    tmp, i = nextexpr(str, i)
+	 end
       end
    end
    newlevel()
