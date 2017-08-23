@@ -255,7 +255,7 @@ function readexpr(str, i, indent)
       token, k = nexttoken(str, i)
       if not token then return token, k end
       j = j + 1
-      
+
       if isReserved(token)    or
 	 isEnv(token)         or
 	 isPunctuation(token) or
@@ -399,7 +399,7 @@ function comb2(arr, left, indent, ...)
 	 for k = j - 1, i + 1, -1 do
 	    if arr[k] == "\n" then
 	       arr[j] =
-		  "\n" .. strgen(_SPACE, indent + 1) .. array[j]
+		  "\n" .. strgen(_SPACE, indent + 1) .. arr[j]
 	    else
 	       if not comp_flags.npc then
 		  ts = trysolve(arr[k], arr[j])
@@ -502,7 +502,7 @@ function scan(array, start, stop, indent)
 	       newarr[j] = "[" .. ret .. "]"
 	    elseif array[i] == "{" then
 	       ret, i = scan(array, i + 1, "}", indent)
-	       newarr[j] = "{" .. ret .. "}"
+	       newarr[j] = preprocess("{ " .. ret .. " }")
 	    else
 	       newarr[j] = array[i]
 	    end

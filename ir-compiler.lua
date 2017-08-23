@@ -846,8 +846,8 @@ function new()
    end
    ret = ret .. 
       "\tmovq\t" .. get() .. ", %rbx\n" ..
-      prep(true) .. "\tcall\t_new\t\n"
-      ret = ret .. push("%rax")
+      prep(true) .. "\tcall\t_new\t\n" ..
+      push("%rax")
    return ret
 end
 
@@ -875,14 +875,17 @@ function put()
    local ret = ""
    local v1, v2 = pop(), pop()
    if isMem(v2) then
-      ret = "\tmovq\t" .. v2 .. ", %rax\n"
-      v2 = "%rax"
+      ret = ret .. "\tmovq\t" .. v2 .. ", %rbx\n"
+      v2 = "%rbx"
    end
    if isDouble(v1) then
       ret = ret .. "\tmovsd\t" .. v1 .. ", (%r12)\n" ..
-	 "\tleaq\t6(, %r12, 8), %rbx\n" ..
+	 "\tleaq\t6(, %r12, 8), %rax\n" ..
 	 "\taddq\t$8, %r12\n"
-      v1 = "%rbx"
+      v1 = "%rax"
+   elseif isMem(v1) then
+      ret = ret .. "\tmovq\t" .. v1 .. ", %rax\n"
+      v1 = "%rax"
    end
    ret = ret .. "\tmovq\t" .. v1 .. ", (" .. v2 .. ")\n"
    return ret

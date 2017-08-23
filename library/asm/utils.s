@@ -176,9 +176,9 @@ _clear_regs:
 	ret
 
 	.global _prep_gc
-_prep_gc:
+_prep_gc:#ret --Détecteur de max fonctionne pas
 	cmpq	%r12, _mem_max(%rip)
-	ja	_prep
+	jb	_prep
 	ret
 _prep:
 	popq	%r15 # return address
