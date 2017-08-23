@@ -1380,7 +1380,7 @@ function develop()
       lg .. ":\tpushq\t(%rbx)\n" ..
       la .. ":\tsubq\t$8, %rbx\n" ..
       "\tinc\t%r15\n" ..
-      "\tjmp\t" .. lm .. "\n" .. le .. ":"
+      "\tjmp\t" .. lm .. "\n" .. le .. ":" 
    return ret
 end
 
@@ -1710,9 +1710,9 @@ function ret(text, i, p)
    end
    tmp, i = _translate(text, i, false, false)
    if rsp ~= 0 then
-      asm = asm .. "\tcall\t_prep_ex_gc\n\tleave\n\tret\n"
+      asm = asm .. "\tleave\n\tret\n"
    else
-      asm = asm .. "\tcall\t_prep_ex_gc\n\tpopq\t%rbp\n\tret\n"
+      asm = asm .. "\tpopq\t%rbp\n\tret\n"
    end
    r_size, v_size = rs, vs
    return asm, i
@@ -2016,9 +2016,9 @@ function _translate(text, i, sets, loop)
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
 	    asm = asm .. "\tmovq\t$33, %rax\n"
 	    if rsp ~= 0 then
-	       asm = asm .. "\tcall\t_prep_ex_gc\n\tleave\n\tret\n"
+	       asm = asm .. "\tleave\n\tret\n"
 	    else
-	       asm = asm .. "\tcall\t_prep_ex_gc\n\tpopq\t%rbp\n\tret\n"
+	       asm = asm .. "\tpopq\t%rbp\n\tret\n"
 	    end
 	 else
 	    asm = asm .. "\n"

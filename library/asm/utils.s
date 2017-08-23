@@ -175,108 +175,11 @@ _clear_regs:
 	xorq	%r11, %r11
 	ret
 
-	.global _prep_ex_gc
-_prep_ex_gc:
-	#cmpq	%r12, _mem_max(%rip)
-	#ja	_prep_ex
-	#ret	
-_prep_ex: ret
-	popq	%r15 # return address
-	leaq	4(, %r14, 8), %r14
-	leaq	5(, %rbx, 8), %rbx
-	pushq	%r14
-	pushq	%rbx
-	pushq	%rax
-	pushq	%rdx
-	pushq	%rcx 
-	pushq	%r8
-	pushq	%r9 
-	pushq	%r10
-	pushq	%r11
-	pushq	%rdi
-	pushq	%rsi
-	movq	%rsp, %rdi      # Stack pointer
-	movq	%r12, %rsi      # Memory pointer
-	movq	%r13, %rdx      # Memory base
-	sarq	$3, %rdx
-	movq	%xmm4, %rax
-	pushq	%rax
-	movq	%xmm5, %rax
-	pushq	%rax
-	movq	%xmm6, %rax
-	pushq	%rax
-	movq	%xmm7, %rax
-	pushq	%rax
-	movq	%xmm8, %rax
-	pushq	%rax
-	movq	%xmm9, %rax
-	pushq	%rax
-	movq	%xmm10, %rax
-	pushq	%rax
-	movq	%xmm11, %rax
-	pushq	%rax
-	movq	%xmm12, %rax
-	pushq	%rax
-	movq	%xmm13, %rax
-	pushq	%rax
-	movq	%xmm14, %rax
-	pushq	%rax
-	movq	%xmm15, %rax
-	pushq	%rax
-	#pushq	$33
-	#andq	$-16, %rsp
-	call	_gc
-	movq	%rdx, %r12
-	leaq	3(, %rax, 8), %r13
-	#cmpq	$33, 8(%rsp)
-	#jnz	_prep_pop_ex
-	#addq	$8, %rsp
-_prep_pop_ex:
-	#addq	$8, %rsp
-	popq	%rax
-	movq	%rax, %xmm15
-	popq	%rax
-	movq	%rax, %xmm14
-	popq	%rax
-	movq	%rax, %xmm13
-	popq	%rax
-	movq	%rax, %xmm12
-	popq	%rax
-	movq	%rax, %xmm11
-	popq	%rax
-	movq	%rax, %xmm10
-	popq	%rax
-	movq	%rax, %xmm9
-	popq	%rax
-	movq	%rax, %xmm8
-	popq	%rax
-	movq	%rax, %xmm7
-	popq	%rax
-	movq	%rax, %xmm6
-	popq	%rax
-	movq	%rax, %xmm5
-	popq	%rax
-	movq	%rax, %xmm4
-	popq	%rsi
-	popq	%rdi
-	popq	%r11
-	popq	%r10
-	popq	%r9
-	popq	%r8
-	popq	%rcx
-	popq	%rdx
-	popq	%rax
-	popq	%rbx
-	popq	%r14
-	sarq	$3, %rbx
-	sarq	$3, %r14
-	jmp	*%r15
-	
 	.global _prep_gc
 _prep_gc:
-	#cmpq	%r12, _mem_max(%rip)
-	#ja	_prep
-	#ret
+	cmpq	%r12, _mem_max(%rip)
+	ja	_prep
+	ret
 _prep:
 	popq	%r15 # return address
 	leaq	4(, %r14, 8), %r14

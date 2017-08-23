@@ -160,6 +160,7 @@ quad copydata(quad data)
       //fprintf(stderr, "base  : %016llx\n", base[-i]);
       base[-i] = copydata(point[-i]);
     }
+    
     //printf("%016llx\n", copydata(point[0]));
     ////printmem(base, 20);
     point[0] = heartbreaker | Q(base);
@@ -259,7 +260,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   //printmem(new.mem_base, 48);
   //printf("Étape 2\n");
   //for (i = stack_base - 1; i >= stack_ptr; i--)
-  //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+  // fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
   // Stack
   for (i = stack_base - 1; i >= stack_ptr; i--) {
     //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
