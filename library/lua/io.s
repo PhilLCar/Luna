@@ -224,7 +224,7 @@ _FI1:
 _FRE1:
 	leaq	-16(%rbp), %rsp
 	movq	$33, %rax
-	call	_prep_gc
+	call	_prep_ex_gc
 	leave
 	ret
 _FE1:
@@ -317,7 +317,7 @@ _DE12:	movq	-16(%rbp), %rax
 	call	_clear_regs
 	leaq	-8(%rbp), %rsp
 	movq	$33, %rax
-	call	_prep_gc
+	call	_prep_ex_gc
 	leave
 	ret
 _FE2:

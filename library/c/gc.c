@@ -256,18 +256,25 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   
   // Globals
   copydata((Q(mem_base) << 3) | TABLE);
-  //printmem(new.mem_base, 48);
+  printmem(new.mem_base, 48);
   //printf("Étape 2\n");
   for (i = stack_base - 1; i >= stack_ptr; i--)
-    //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
   // Stack
   for (i = stack_base - 1; i >= stack_ptr; i--) {
     //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
-    if (*i == FRAH) { i -= 4; continue; } // for ahead
+    if (*i == FRAH) {
+      printf("B:%llx\n", i[1]);
+      printf("A:%llx\n", copydata(i[1]));
+      i[-1] = copydata(i[-1]);
+      i -= 4;
+      continue;
+    } // for ahead
     *i = copydata(*i);
-    //printmem(new.mem_base, 48);
+    //printmem(new.mem_base, 64);
     //printf("%p:\t0x%016llX\n", i, *i);
   }
+  getchar();
   for (i = stack_base - 1; i >= stack_ptr; i--) {
     if (*i == FRAH) { i -= 4; continue; } // for ahead
     if (*i & trf_mask)
