@@ -180,9 +180,10 @@ _prep_gc:
 	#cmpq	%r12, _mem_max(%rip)
 	#ja	_prep
 	#ret
-_prep:	ret
+_prep:	#ret
 	popq	%r15 # return address
 	leaq	4(, %r14, 8), %r14
+	pushq	%r14
 	pushq	%rdx
 	pushq	%rcx 
 	pushq	%r8
@@ -191,7 +192,6 @@ _prep:	ret
 	pushq	%r11
 	pushq	%rdi
 	pushq	%rsi
-	pushq	%r14
 	movq	%rsp, %rdi      # Stack pointer
 	movq	%r12, %rsi      # Memory pointer
 	movq	%r13, %rdx      # Memory base
@@ -208,7 +208,6 @@ _prep:	ret
 	popq	%rbx
 _prep_pop:
 	popq	%rbx
-	popq	%r14
 	popq	%rsi
 	popq	%rdi
 	popq	%r11
@@ -217,7 +216,8 @@ _prep_pop:
 	popq	%r8
 	popq	%rcx
 	popq	%rdx
-	sarq	%r14
+	popq	%r14
+	sarq	$3, %r14
 	jmp	*%r15
 
 	

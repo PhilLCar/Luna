@@ -66,9 +66,12 @@ if not comp_flags.lib then
       "\taddq\t$24, %r12\n" ..
       "\tmovq\t$17, %r14\n" ..
       -- CLEAR untagged registers (for GC)
-      "\tcall\t_clear_regs\n"
+      "\tcall\t_clear_regs\n" ..
+      "\t.align\t8\n"
    for i in pairs(libs) do
-      intro = intro .. "\tcall\t_load_" .. i .. "\n"
+      intro = intro ..
+	 "\t.fill\t3, 1, 0x90\n" ..
+	 "\tcallq\t_load_" .. i .. "\n"
    end
 else
    intro =
@@ -1214,7 +1217,7 @@ function frenv(text, i, p)
 
    --tmp, i = _translate(text, i, false, false)
    
-   r_size = r_size - 4
+   r_size = r_size - 5
    ret = ret .. protect(rs) ..
       "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
    rsp = r_size - 1
@@ -1573,7 +1576,7 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
 	 "\tpushq\t$33\n" ..
 	 "\tandq\t$-16, %rsp\n" ..
 	 "\t.align\t8\n" ..
-	 "\t.fill\t6, 1, 0x90\n" ..
+	 "\t.fill\t3, 1, 0x90\n" ..
 	 "\tcallq\t" .. call .. "\n" ..
 	 "\tcall\t_clear_regs\n"
    else

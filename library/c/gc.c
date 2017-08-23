@@ -48,7 +48,6 @@ quad mem_max;
 quad trf_mask = 0x4000000000000000;
 
 static quad *copy;
-static quad *clo_root;
 static quad heartbreaker = 0x8000000000000000;
 
 static quad copydata(quad);
@@ -60,10 +59,11 @@ quad copydata(quad data)
   quad *point = P(data >> 3);
   quad *base, *p;
   int i, size, max, min;
-  
-  if (trf_mask & data) return (*P(trf_mask ^ data) ^ heartbreaker) | trf_mask;
+
+  //printf("%llx:%d\n", Q(point), type);
+  if (trf_mask & data) return data;
   else if (type == ADDRESS || type == SPECIAL) return data;
-  else if (type != DOUBLE && *point & heartbreaker) return (*point << 3) | type;
+  else if (type != DOUBLE && Q(point) != NIL && *point & heartbreaker) return (*point << 3) | type;
   
   switch(type) {
 
@@ -119,24 +119,28 @@ quad copydata(quad data)
     return (Q(base) << 3) | TABLE;
 
   case OBJECT:
-    switch (point[0]) {
+    if (Q(point) == NIL) return (NIL << 3) | OBJECT;
+    switch (*point) {
+      quad ret;
     case CLO:
-      if (point == NIL) return NIL;
-      quad ret = Q(copy) << 3 | OBJECT;
+      ret = (Q(copy) << 3) | OBJECT;
       p = copy;
-      while (point != NIL) {
-	point = P(*point);
+      while (Q(point) != NIL) {
+	//printf("loop: %p\n", point);
+	if (*point & heartbreaker) return (*point << 3) | OBJECT;
 	base = copy;
 	copy += 4;
 	*p = Q(base);
 	base[0] = point[0]; //tag
 	base[1] = copydata(point[1]); //key
 	base[2] = copydata(point[2]); //value
-	p = base + 3;
+	point[0] = heartbreaker | Q(base);
 	point[2] = heartbreaker | Q(base + 2);
+	p = base + 3;
 	point += 3;
+	point = P(*point);
       }
-      *p = Q(clo_root);
+      *p = NIL;
       return ret;
     }
     break;
@@ -144,27 +148,27 @@ quad copydata(quad data)
   case STACK:
     ////printmem(point, 20);
     // Seek end
-    for (size = 0; point[-size] != VOID; size++) printf("%llx\n", point[-size]);
-    fprintf(stderr, "copy old : %p\n", copy);
+    for (size = 0; point[-size] != VOID; size++);
+    //fprintf(stderr, "copy old : %p\n", copy);
     base = (copy + size);
-    fprintf(stderr, "base old : %p\n", base);
+    //fprintf(stderr, "base old : %p\n", base);
     copy = base + 1;
-    fprintf(stderr, "copy new : %p\n", copy);
-    printf("%d\n", size);
+    //fprintf(stderr, "copy new : %p\n", copy);
+    //printf("%d\n", size);
     for (i = 0; i <= size; i++) {
-      fprintf(stderr, "point : %016llx\n", point[-i]);
-      fprintf(stderr, "base  : %016llx\n", base[-i]);
+      //fprintf(stderr, "point : %016llx\n", point[-i]);
+      //fprintf(stderr, "base  : %016llx\n", base[-i]);
       base[-i] = copydata(point[-i]);
     }
-    printf("%016llx\n", copydata(point[0]));
+    //printf("%016llx\n", copydata(point[0]));
     ////printmem(base, 20);
     point[0] = heartbreaker | Q(base);
     return (Q(base) << 3) | STACK;
     
   case DOUBLE:
     *copy = *point;
-    printf("P: %016llx\n", *point);
-    printf("P: %016llx\n", *copy);
+    //printf("P: %016llx\n", *point);
+    //printf("P: %016llx\n", *copy);
     //*point = heartbreaker | Q(copy);
     return (Q(copy++) << 3) | DOUBLE;
     
@@ -174,10 +178,19 @@ quad copydata(quad data)
     base = copy;
     copy += 2;
     // Copy closure environment linked list
-    copyll(point, base + 1);
+    base[1] = copydata((Q(*point) << 3) | OBJECT) >> 3;
     return (Q(base) << 3) | FUNCTION;
   }
   return NIL;
+}
+
+quad maketransfer(quad data)
+{
+  //printf("yo:%llx\n", trf_mask);
+  quad val = *P(trf_mask ^ data);
+  // During debug only, can remove for better performance if safe
+  if (!(val & heartbreaker)) return data;
+  return (val ^ heartbreaker) | trf_mask;
 }
 
 void copyll(quad *point, quad *last)
@@ -200,17 +213,17 @@ void copyll(quad *point, quad *last)
 
 void printmem(quad *start, int lines)
 {
-  int i;
+  int i, offset = 0;
   printf
-    ("-------------------------------------------------------------------------------------------\n");
-  for (i = lines / 4 - 1; i >= 0; i--)
-    printf("%2d:%016llx\t%2d:%016llx\t%2d:%016llx\t%2d:%016llx\n",
-	   i, *(start + i),
-	   i + lines / 4, *(start + i + lines / 4),
-	   i + lines / 2, *(start + i + lines / 2),
-	   i + lines / 4 * 3, *(start + i + lines / 4 * 3));
+    ("---------------------------------------------------------------------------------------------\n");
+  for (i = offset + lines / 4 - 1; i >= offset; i--)
+    printf("%04x:%016llx\t%04x:%016llx\t%04x:%016llx\t%04x:%016llx\n",
+	   8 * i, *(start + i),
+	   8 * (i + lines / 4), *(start + i + lines / 4),
+	   8 * (i + lines / 2), *(start + i + lines / 2),
+	   8 * (i + lines / 4 * 3), *(start + i + lines / 4 * 3));
   printf
-    ("-------------------------------------------------------------------------------------------\n");
+    ("---------------------------------------------------------------------------------------------\n");
 }
 
 // Peut-être appeler le GC dans les boucles aussi!
@@ -218,6 +231,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 {
   vals new;
   quad *i;
+  //printf("gc!\n");
   /*
     printf("-----------------------------------------\n");
     for (i = stack_base - 1; i >= stack_ptr; i--) {
@@ -231,11 +245,9 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 		     PROT_READ | PROT_WRITE | PROT_EXEC,
 		     MAP_PRIVATE | MAP_ANON, -1, 0);
   new.mem_base = copy;
-  clo_root = copy++;
-  *clo_root = NIL;
 
   printf("STEP: %p\n", copy);
-  printmem(mem_base, 48);
+  printmem(mem_base, 64);
   
   if (copy == MAP_FAILED) {
     fprintf(stderr, "Memory allocation failed (Process aborted)\n");
@@ -246,7 +258,8 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   copydata((Q(mem_base) << 3) | TABLE);
   printmem(new.mem_base, 48);
   //printf("Étape 2\n");
-  
+  for (i = stack_base - 1; i >= stack_ptr; i--)
+    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
   // Stack
   for (i = stack_base - 1; i >= stack_ptr; i--) {
     fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
@@ -254,6 +267,12 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     *i = copydata(*i);
     //printmem(new.mem_base, 48);
     //printf("%p:\t0x%016llX\n", i, *i);
+  }
+  for (i = stack_base - 1; i >= stack_ptr; i--) {
+    if (*i == FRAH) { i -= 4; continue; } // for ahead
+    if (*i & trf_mask)
+      *i = maketransfer(*i);
+    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
   }
   //printf("Étape 3\n");
   //printf("Étape 4\n");
