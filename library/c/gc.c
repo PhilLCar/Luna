@@ -246,8 +246,8 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
 		     MAP_PRIVATE | MAP_ANON, -1, 0);
   new.mem_base = copy;
 
-  printf("STEP: %p\n", copy);
-  printmem(mem_base, 64);
+  //printf("STEP: %p\n", copy);
+  //printmem(mem_base, 64);
   
   if (copy == MAP_FAILED) {
     fprintf(stderr, "Memory allocation failed (Process aborted)\n");
@@ -256,13 +256,13 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
   
   // Globals
   copydata((Q(mem_base) << 3) | TABLE);
-  printmem(new.mem_base, 48);
+  //printmem(new.mem_base, 48);
   //printf("Étape 2\n");
   for (i = stack_base - 1; i >= stack_ptr; i--)
-    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+    //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
   // Stack
   for (i = stack_base - 1; i >= stack_ptr; i--) {
-    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+    //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
     if (*i == FRAH) { i -= 4; continue; } // for ahead
     *i = copydata(*i);
     //printmem(new.mem_base, 48);
@@ -272,7 +272,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     if (*i == FRAH) { i -= 4; continue; } // for ahead
     if (*i & trf_mask)
       *i = maketransfer(*i);
-    fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
+    //fprintf(stderr, "%p:\t0x%016llX\n", i, *i);
   }
   //printf("Étape 3\n");
   //printf("Étape 4\n");
@@ -312,7 +312,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     }*/
   
   mem_max = Q(new.mem_base) + (mem_size / 4 * 3);
-  printmem(new.mem_base, 48);
+  //printmem(new.mem_base, 48);
   //for (i = stack_base - 1; i > stack_ptr; i--) {
   //printf("%p:\t0x%016llX\n", i, *i);
   //}

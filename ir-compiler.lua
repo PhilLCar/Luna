@@ -964,13 +964,14 @@ end
 function build(nargs, varargs, fname)
    local ret = ""
    local p = 1
-   if varargs then ret = "\tmovq\t%r15, (%r12)\n" end
+   if varargs then
+      ret = "\tmovq\t%r15, (%r12)\n"
+   end
    ret = ret ..
       "\tmovq\t$" .. nargs .. ", %rax\n" ..
       "\tcall\t_nil_fill\n"
    if varargs then
-      ret = ret ..
-	 "\tcall\t_varargs\n"
+      ret = ret .. "\tcall\t_varargs\n"
       if nargs == 0 then
 	 ret = ret .. "\tmovq\t%r15, %rdi\n"
 	 nargs = 1
@@ -1522,6 +1523,7 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
       asm = asm .. adjust
       rsp = rs2 - 1
    end
+   
    --[[asm = asm .. 
       "\tpushq\t$33\n" ..
       "\tandq\t$-16, %rsp\n"]]
@@ -1559,7 +1561,7 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
    end
    if func then asm = asm .. develop() end
    -- Restore
-   ------------------------------
+   ------------------------------   
    r_size = rs2
    r_index = alg
    tmp = protect(rs)
@@ -1577,8 +1579,7 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
 	 "\tandq\t$-16, %rsp\n" ..
 	 "\t.align\t8\n" ..
 	 "\t.fill\t3, 1, 0x90\n" ..
-	 "\tcallq\t" .. call .. "\n" ..
-	 "\tcall\t_clear_regs\n"
+	 "\tcallq\t" .. call .. "\n"
    else
       local r = pop()
       if isMem(r) then
@@ -1590,12 +1591,11 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
 	 "\tmovq\t8(%rax), %r14\n" ..
 	 "\t.align\t8\n" ..
 	 "\t.fill\t6, 1, 0x90\n" ..
-	 "\tcallq\t*(" .. r .. ")\n" ..
-	 "\tpopq\t%r14\n" ..
-	 "\tsarq\t$3, %r14\n" ..
-	 "\tcall\t_clear_regs\n"
+	 "\tcallq\t*(" .. r .. ")\n" .. --t ..
+	 "\tmovq\t" .. -8 * rs2 .. "(%rbp), %r14\n" ..
+	 "\tsarq\t$3, %r14\n"
    end
-   return asm .. tmp.. push("%rax")
+   return asm .. "\tcall\t_clear_regs\n" .. tmp .. push("%rax")
 end
 
 function chg(text, i, p)
