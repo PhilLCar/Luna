@@ -4,9 +4,9 @@ io:
 	io
 	print
 lua:
-	tonumber
-	tostring
-	next
 	type
+	tonumber
 	pairs
+	next
+	tostring
 	ipairs

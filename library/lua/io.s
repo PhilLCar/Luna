@@ -23,14 +23,15 @@ _load_io:
 	addq	$24, %r12
 	subq	$8, %rsp
 	pushq	$33
+	call	_prep_gc
 	movq	%rdx, %rax
 	call	_array_copy
 	leaq	-8(%rbp), %rsp
-	call	_prep_gc
 	movq	%rdx, -16(%rbp)
+	subq	$8, %rsp
+	call	_prep_gc
 	movq	$-1, %rax
 	movq	$-1, %rbx
-	subq	$8, %rsp
 	call	_transfer
 	leaq	_ST1(%rip), %rax
 	leaq	2(, %rax, 8), %rax
@@ -52,9 +53,10 @@ _load_io:
 	leaq	7(, %r12, 8), %rdx
 	addq	$16, %r12
 	movq	%rdx, -16(%rbp)
+	subq	$16, %rsp
+	call	_prep_gc
 	movq	$-1, %rax
 	movq	$-1, %rbx
-	subq	$16, %rsp
 	call	_transfer
 	leaq	_ST3(%rip), %rax
 	leaq	2(, %rax, 8), %rax
@@ -71,9 +73,10 @@ _load_io:
 	leaq	7(, %r12, 8), %rdx
 	addq	$16, %r12
 	movq	%rdx, -16(%rbp)
+	subq	$16, %rsp
+	call	_prep_gc
 	movq	$-1, %rax
 	movq	$-1, %rbx
-	subq	$16, %rsp
 	call	_transfer
 	leave
 	call	_clear_regs
@@ -119,11 +122,13 @@ _LU6:	cmpq	$33, (%rbx)
 	subq	$8, %rbx
 	jmp	_LU6
 _LU5:	pushq	$33
+	call	_prep_gc
 	movq	%rdx, %rax
 	call	_array_copy
 	leaq	-8(%rbp), %rsp
-	call	_prep_gc
 	movq	%rdx, -16(%rbp)
+	subq	$8, %rsp
+	call	_prep_gc
 	movsd	_DB7(%rip), %xmm4
 	movq	$129, -24(%rbp)
 	movsd	%xmm4, %xmm0
@@ -132,7 +137,7 @@ _LU5:	pushq	$33
 	addq	$8, %r12
 	movq	%r15, -32(%rbp)
 	movq	%xmm0, -40(%rbp)
-	subq	$32, %rsp
+	subq	$24, %rsp
 	movq	-16(%rbp), %rax
 	sarq	$3, %rax
 	cmpq	$65, (%rax)
@@ -146,6 +151,7 @@ _LU8:	cvtsi2sd (%rax), %xmm0
 	movsd	-40(%rbp), %xmm0
 _FRC1:
 	leaq	-56(%rbp), %rsp
+	call	_prep_gc
 	xorpd	%xmm1, %xmm1
 	cmpsd	$6, -56(%rbp), %xmm1
 	movq	%xmm1, %rax
@@ -171,7 +177,7 @@ _FRS1:
 	pushq	$33
 	andq	$-16, %rsp
 	.align	8
-	.fill	6, 1, 0x90
+	.fill	3, 1, 0x90
 	callq	_print
 	call	_clear_regs
 	leaq	-56(%rbp), %rsp
@@ -201,7 +207,7 @@ _TH1:
 	pushq	$33
 	andq	$-16, %rsp
 	.align	8
-	.fill	6, 1, 0x90
+	.fill	3, 1, 0x90
 	callq	_print
 	call	_clear_regs
 	leaq	-56(%rbp), %rsp
@@ -218,6 +224,7 @@ _FI1:
 _FRE1:
 	leaq	-16(%rbp), %rsp
 	movq	$33, %rax
+	call	_prep_gc
 	leave
 	ret
 _FE1:
@@ -239,21 +246,20 @@ print:
 	movq	%r13, %rbx
 	subq	$8, %rsp
 	call	_index	
-	movq	-24(%rbp), %rdx
-	movq	(%rax), %rcx
+	movq	(%rax), %rdx
 	leaq	_ST2(%rip), %rax
-	leaq	2(, %rax, 8), %r8
-	movq	%r8, %rax
-	movq	%rcx, %rbx
+	leaq	2(, %rax, 8), %rcx
+	movq	%rcx, %rax
+	movq	%rdx, %rbx
 	call	_index	
 	movq	(%rax), %r15
 	movq	%r15, -16(%rbp)
-	movq	%rdx, -24(%rbp)
 	movq	-8(%rbp), %rax
 	sarq	$3, %rax
 	leaq	-8(%rax), %rbx
 	movq	(%rax), %rax
-	leaq	-24(%rbp), %rsp
+	leaq	-16(%rbp), %rsp
+	leaq	4(, %r14, 8), %r14
 	pushq	%r14
 	movq	%rax, %rdi
 	movq	$1, %r15
@@ -297,23 +303,21 @@ _DE12:	movq	-16(%rbp), %rax
 	.align	8
 	.fill	6, 1, 0x90
 	callq	*(%rax)
-	popq	%r14
+	movq	-24(%rbp), %r14
+	sarq	$3, %r14
 	call	_clear_regs
-	movq	-24(%rbp), %rdx
 	leaq	-8(%rbp), %rsp
-	movq	%rdx, -16(%rbp)
 	leaq	_ST21(%rip), %rax
 	leaq	2(, %rax, 8), %rdi
-	leaq	-16(%rbp), %rsp
 	pushq	$33
 	andq	$-16, %rsp
 	.align	8
-	.fill	6, 1, 0x90
+	.fill	3, 1, 0x90
 	callq	_print
 	call	_clear_regs
 	leaq	-8(%rbp), %rsp
-	movq	-16(%rbp), %rdx
 	movq	$33, %rax
+	call	_prep_gc
 	leave
 	ret
 _FE2:

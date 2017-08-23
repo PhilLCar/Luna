@@ -953,8 +953,7 @@ function init(text, i, p)
    v_size = vs
 
    ret = ret ..
-      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
-      "\tcall\t_prep_gc\n"
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
    rsp = r_size - 1
    
    return ret, i
@@ -1083,7 +1082,8 @@ function whenv(text, i, p)
 
    rsp = r_size - 1
    ret = "_WH" .. p .. ":\n" ..
-      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
+      "\tcall\t_prep_gc\n"
       
    
    tmp, i = _translate(text, i, false, false)
@@ -1115,7 +1115,8 @@ function rpenv(text, i, p)
 
    rsp = r_size - 1
    ret = ret ..  "_RP" .. p .. ":\n" ..
-      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
+      "\tcall\t_prep_gc\n"
    
    tmp, i = _translate(text, i, false, false)
    ret = ret .. tmp .. "_UN" .. p .. ":\n"
@@ -1185,6 +1186,7 @@ function frenv(text, i, p)
       "\tmovsd\t" .. -8 * (r_size - 3) .. "(%rbp), %xmm0\n" ..
       "_FRC" .. p .. ":\n" ..
       "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
+      --"\tcall\t_prep_gc\n" ..
       "\txorpd\t%xmm1, %xmm1\n" ..
       "\tcmpsd\t$6, " .. -8 * (r_size - 1) .. "(%rbp), %xmm1\n" ..
       "\tmovq\t%xmm1, %rax\n" ..
@@ -1242,12 +1244,15 @@ function fienv(text, i, p)
    ret = ret ..
       "_FIC" .. p .. ":\n" ..
       "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n" ..
+      "\tcall\t_prep_gc\n" ..
       "\tmovq\t" .. -8 * (r_size - 3) .. "(%rbp), %rax\n" ..
       "\tsarq\t$3, %rax\n" ..
       "\tpushq\t%r14\n" ..
       "\tmovq\t" .. -8 * (r_size - 2) .. "(%rbp), %rdi\n" ..
       "\tmovq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsi\n" ..
       "\tmovq\t8(%rax), %r14\n" ..
+      "\t.align\t8\n" ..
+      "\t.fill\t6, 1, 0x90\n" ..
       "\tcall\t*(%rax)\n" ..
       "\tpopq\t%r14\n" ..
       "\tcmpq\t$17, %rax\n" ..
@@ -1256,7 +1261,7 @@ function fienv(text, i, p)
       "\tcmpq\t$33, %rax\n" ..
       "\tjz\t" .. l1 .. "\n" ..
       "\tpushq\t%rax\n" ..
-      "\tleaq\t" .. -8 * (v - 1) .. "(%rsp), %r15\n" ..
+      "\tleaq\t" .. -8 * (v - 1) .. "(%rsp), %r15\n" .. 
       "\tcmp\t$0, %rbx\n" ..
       "\tjz\t" .. l1 .. "\n" ..
       l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
@@ -1663,10 +1668,9 @@ function set(text, i, p)
       end
    elseif fill then
       asm = asm .. prep(true) .. 
-	 "\tcall\t_fill\n" ..
-	 "\tcall\t_prep_gc\n"
+	 "\tcall\t_fill\n"
    end
-   return asm, i
+   return asm .. prep(true) .. "\tcall\t_prep_gc\n", i
 end
 
 function ret(text, i, p)
@@ -1706,9 +1710,9 @@ function ret(text, i, p)
    end
    tmp, i = _translate(text, i, false, false)
    if rsp ~= 0 then
-      asm = asm .. "\tleave\n\tret\n"
+      asm = asm .. "\tcall\t_prep_ex_gc\n\tleave\n\tret\n"
    else
-      asm = asm .. "\tpopq\t%rbp\n\tret\n"
+      asm = asm .. "\tcall\t_prep_ex_gc\n\tpopq\t%rbp\n\tret\n"
    end
    r_size, v_size = rs, vs
    return asm, i
@@ -2012,9 +2016,9 @@ function _translate(text, i, sets, loop)
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
 	    asm = asm .. "\tmovq\t$33, %rax\n"
 	    if rsp ~= 0 then
-	       asm = asm .. "\tleave\n\tret\n"
+	       asm = asm .. "\tcall\t_prep_ex_gc\n\tleave\n\tret\n"
 	    else
-	       asm = asm .. "\tpopq\t%rbp\n\tret\n"
+	       asm = asm .. "\tcall\t_prep_ex_gc\n\tpopq\t%rbp\n\tret\n"
 	    end
 	 else
 	    asm = asm .. "\n"
