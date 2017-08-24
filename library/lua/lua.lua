@@ -61,3 +61,9 @@ function ipairs(tab)
    end
    return inext, tab, 0
 end
+
+function require(file_name)
+end
+
+function load(file_name)
+end

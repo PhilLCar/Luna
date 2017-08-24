@@ -1,13 +1,16 @@
 string:
 	string
+os:
 io:
 	print
 	io
 lua:
-	ipairs
-	type
+	load
 	unpack
 	next
+	type
+	require
 	pairs
 	tonumber
 	tostring
+	ipairs

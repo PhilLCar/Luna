@@ -2,49 +2,20 @@
 #include <string.h>
 
 #ifdef __linux__
-#define print	_print
+#define write	_write
+#define read	_read
+#define open	_open
+#define p_open	_p_open
+#define f_write	_f_write
+#define f_read	_f_read
+#define f_close	_f_close
 #define format	_format
 #define scan	_scan
 #endif
 
 typedef long long quad;
 
-double scan(char *str)
-{
-  double c;
-  sscanf(str, "%lf", &c);
-  return c;
-}
-
-quad format(char *mem, char *spec, quad obj)
-{
-  int type = obj & 7;
-  quad val = obj >> 3;
-  switch(type) {
-  case 0:
-    sprintf(mem + 8, spec, (quad)val);
-    break;
-  case 2:
-    sprintf(mem + 8, spec, (char*)(val + 8));
-    break;
-  case 6:
-    sprintf(mem + 8, spec, *(double*)val);
-    break;
-  default:
-    sprintf(mem + 8, spec, val);
-    break;
-  }
-  int i;
-  for (i = 0;; i++)
-    if (!mem[i + 8]) break;
-  
-  quad *len = (quad*)mem;
-  *len = (quad)i;
-  
-  return (quad)i + 9;
-}
-
-int print(quad i)
+int write(quad i)
 {
   int type = i & 7;
   quad val = i >> 3;
@@ -71,7 +42,7 @@ int print(quad i)
     while (*(int*)val != 33) {
       if (first) printf("\t");
       else first = 1;
-      _print(val);
+      _write(val);
       val = val + 8;
     }
   break;
@@ -83,4 +54,102 @@ int print(quad i)
     break;
   }
   return 33;
+}
+
+quad read(char *mem)
+{
+  quad i = 0;
+  scanf("%s", &mem[8]);
+  
+  for (i = 0; ; i++)
+    if (!mem[8 + i]) break;
+  
+  quad *len = (quad*)mem;
+  *len = i;
+  
+  return i + 9;
+}
+
+FILE *open(char *filename, char *mode)
+{
+  return fopen(filename, mode);
+}
+
+quad p_open(char *mem, char *filename, int max)
+{
+  FILE *fp = popen(filename, "r");
+  quad i = 0;
+  if (fp == NULL) {
+    return 9;
+  }
+  if (fgets(mem, max, fp) != NULL)
+    for (i = 0; ; i++)
+      if (!mem[8 + i]) break;
+  
+  quad *len = (quad*)mem;
+  *len = i;
+
+  return i + 9;
+}
+
+void f_write(FILE *file, char *what)
+{
+  fputs(what, file);
+}
+
+quad f_read(char *mem, char *filename, int max)
+{
+  FILE *fp = fopen(filename, "r");
+  quad i = 0;
+  if (fp == NULL) {
+    return 9;
+  }
+  if (fgets(mem, max, fp) != NULL)
+    for (i = 0; ; i++)
+      if (!mem[8 + i]) break;
+  
+  quad *len = (quad*)mem;
+  *len = i;
+
+  return i + 9;
+}
+
+void f_close(FILE *file)
+{
+  fclose(file);
+}
+
+quad format(char *mem, char *spec, quad obj)
+{
+  int type = obj & 7;
+  quad val = obj >> 3;
+  switch(type) {
+  case 0:
+    sprintf(mem + 8, spec, (quad)val);
+    break;
+  case 2:
+    sprintf(mem + 8, spec, (char*)(val + 8));
+    break;
+  case 6:
+    sprintf(mem + 8, spec, *(double*)val);
+    break;
+  default:
+    sprintf(mem + 8, spec, val);
+    break;
+  }
+  quad i;
+  for (i = 0; ; i++)
+    if (!mem[8 + i]) break;
+  
+  quad *len = (quad*)mem;
+  *len = i;
+  
+  return i + 9;
+}
+
+double scan(char *str)
+{
+  double c;
+  sscanf(str, "%lf", &c);
+  return c;
 }

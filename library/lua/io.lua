@@ -4,11 +4,15 @@ io = {}
 io.write = function(...)
    local p = {...}
    for i = 1, #p do
-      _print(p[i])
+      _write(p[i])
       if i ~= #p then
-	 _print("\t")
+	 _write("\t")
       end
    end
+end
+
+io.read = function()
+   return _io_read()
 end
 
 io.open = function(filename, mode)
@@ -22,6 +26,6 @@ end
 -- MISC
 function print(...)
    io.write(...)
-   _print("\n")
+   _write("\n")
 end
 

@@ -1027,17 +1027,18 @@ _cr_en:	leaq	16(%r14), %rax
 	popq	%rdi
 	popq	%r14
 	ret
-
-	.global _open
-	# %rax: size
-	# NB: Open will not be used in the code, freeing will be done by the GC
-_open:
-	cmpq	$0, %rax
-	jz	_op_en
-	dec	%rax
-	movq	24(%r14), %r14
-	jmp	_open
-_op_en:	ret
+/**************************************
+#	.global _open
+#	# %rax: size
+#	# NB: Open will not be used in the code, freeing will be done by the GC
+#_open:
+#	cmpq	$0, %rax
+#	jz	_op_en
+#	dec	%rax
+#	movq	24(%r14), %r14
+#	jmp	_open
+#_op_en:	ret
+****************************************/
 
 # LUA SUPPORT
 ################################################################################
@@ -1196,8 +1197,7 @@ _format_c:
 	xchgq	%rax, %r12
 	addq	$7, %r12
 	andq	$-8, %r12
-	salq	$3, %rax
-	orq	$2, %rax
+	leaq	2(, %rax, 8), %rax
 	ret
 
 	.global _scan_c
@@ -1214,8 +1214,7 @@ _scan_c:
 	movsd	%xmm0, (%r12)
 	movq	%r12, %rax
 	addq	$8, %r12
-	salq	$3, %rax
-	orq	$6, %rax
+	leaq	6(, %rax, 8), %rax
 	ret
 
 	.global _unpack
@@ -1249,15 +1248,61 @@ _u_void:
 	xorq	%rbx, %rbx
 	movq	$33, %rax
 	ret
-
+	
 	.global _io_open
 	# %rdi: filename, %rsi: mode
 _io_open:
+	sarq	$3, %rdi
+	addq	$8, %rdi
+	sarq	$3, %rsi
+	addq	$8, %rsi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	and	$-16, %rsp
+	call	_open
+	leave
+	movq	$1, (%r12)
+	movq	%rax, 8(%r12)
+	leaq	4(, %r12, 8), %rax
+	addq	$16, %r12
 	ret
 
 	.global _io_popen
 	# %rdi: filename
 _io_popen:
+	sarq	$3, %rdi
+	addq	$8, %rdi
+	movq	%r12, %rsi
+	movq	_mem_max(%rip), %rdx
+	subq	%rsi, %rdx
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	and	$-16, %rsp
+	call	_p_open
+	leave
+	addq	%r12, %rax
+	xchg	%rax, %r12
+	addq	$7, %r12
+	andq	$-8, %r12
+	leaq	2(, %rax, 8), %rax
+	ret
+
+	.global _io_read
+_io_read:
+	movq	%r12, %rdi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	and	$-16, %rsp
+	call	_p_open
+	leave
+	addq	%r12, %rax
+	xchg	%rax, %r12
+	addq	$7, %r12
+	andq	$-8, %r12
+	leaq	2(, %rax, 8), %rax
 	ret
 
 # SPECIAL
@@ -1354,11 +1399,50 @@ _s_sub_ret:
 	.global _o_read
 	# %rdi: file, %rsi: how
 _o_read:
+	sarq	$3, %rdi
+	movq	8(%rdi), %rdi
+	movq	%r12, %rsi
+	movq	_mem_max(%rip), %rdx
+	subq	%r12, %rdx
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	call	_f_read
+	leave
+	addq	%r12, %rax
+	xchgq	%rax, %r12
+	leaq	2(, %rax, 8), %rax
+	addq	$7, %r12
+	andq	$-8, %r12
 	ret
 
+	.global _o_write
+	# %rdi: file, %rsi: what
+_o_write:
+	sarq	$3, %rdi
+	movq	8(%rdi), %rdi
+	sarq	$3, %rsi
+	addq	$8, %rsi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	call	_f_write
+	leave
+	ret
+	
 	.global _o_close
 	# %rdi: file
 _o_close:
+	sarq	$3, %rdi
+	movq	8(%rdi), %rdi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	call	_f_write
+	leave
 	ret
 	
 # DATA
@@ -1390,6 +1474,8 @@ _oa_read:
 	.asciz	"read"
 _oa_close:
 	.asciz	"close"
+_oa_write:	
+	.asciz	"write"
 _object_array:
 	.quad	_oa_read
 	.quad	_o_read
@@ -1398,5 +1484,10 @@ _object_array:
 _oa2:
 	.quad	_oa_close
 	.quad	_o_close
+	.quad	17
+	.quad	_oa3
+_oa3:
+	.quad	_oa_write
+	.quad	_o_write
 	.quad	17
 	.quad	17
