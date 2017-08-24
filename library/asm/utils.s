@@ -542,6 +542,8 @@ _cn_a:	cmpq	%r15, (%r12)
 _cn_en:	movb	$0, 8(%r12, %r15, )
 	leaq	2(, %r12, 8), %rax
 	leaq	9(%r12, %r15, ), %r12
+	addq	$7, %r12 ## mod
+	andq	$-8, %r12
 	popq	%rdi
 	ret
 
@@ -1176,6 +1178,78 @@ _inext_nil:
 	movq	$17, %rax
 	ret
 
+	.global _format_c
+	# %rdi: spec, %rsi: val
+_format_c:
+	sarq	$3, %rdi
+	addq	$8, %rdi	
+	movq	%rsi, %rdx
+	movq	%rdi, %rsi
+	movq	%r12, %rdi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	call	_format
+	leave
+	addq	%r12, %rax
+	xchgq	%rax, %r12
+	addq	$7, %r12
+	andq	$-8, %r12
+	salq	$3, %rax
+	orq	$2, %rax
+	ret
+
+	.global _scan_c
+	# %rdi: scan string
+_scan_c:
+	sarq	$3, %rdi
+	addq	$8, %rdi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	call	_scan
+	leave
+	movsd	%xmm0, (%r12)
+	movq	%r12, %rax
+	addq	$8, %r12
+	salq	$3, %rax
+	orq	$6, %rax
+	ret
+
+	.global _unpack
+	# %rdi: table
+_unpack:
+	sarq	$3, %rdi
+	movq	16(%rdi), %rax
+	cmpq	$17, %rax
+	jz	_u_void
+	movq	(%rax), %rdx # capacity
+	movq	8(%rax), %rcx # offset
+	leaq	16(%rdx, %rax, ), %rdx # max
+	leaq	8(%rcx, %rax, ), %rcx #start
+	movq	%rsp, %rax
+_u_lp:	cmpq	%rcx, %rdx
+	jz	_u_fill
+	cmpq	$17, (%rcx)
+	jz	_u_fill
+	pushq	(%rcx)
+	addq	$8, %rcx
+	jmp	_u_lp
+_u_fill:	
+	cmpq	%rax, %rsp
+	jz	_u_void
+	pushq	$33
+	movq	%rax, %rsp
+	leaq	-16(%rax), %rbx
+	movq	-8(%rax), %rax
+	ret
+_u_void:
+	xorq	%rbx, %rbx
+	movq	$33, %rax
+	ret
+
 # SPECIAL
 ################################################################################
 _special:
@@ -1257,6 +1331,8 @@ _s_sub_ret:
 	movb	$0, 8(%rsi, %r12, )
 	leaq	2(, %r12, 8), %rax
 	leaq	9(%rsi, %r12, ), %r12
+	addq	$7, %r12
+	andq	$-8, %r12
 	xorq	%rbx, %rbx
 	ret
 	

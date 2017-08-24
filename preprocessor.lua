@@ -526,6 +526,8 @@ function scan(array, start, stop, indent)
       j = j + 1
    end
    ret = ""
+   -- associate calls first
+   newarr = associate(newarr, true , false, indent, ":")
    -- PRIORITY LEVELS --
    -- Level 0 - Bitwise       : << >> >>> | & ^^ ~ === != [left-associative ]
    newarr = associate(newarr, true , true , indent, "~")
@@ -550,7 +552,7 @@ function scan(array, start, stop, indent)
 
    for i, v in ipairs(newarr) do
       if v == "," then v = " , "
-      elseif v == ":" then v = " : " 
+      elseif v == ":" then v = " : "
       elseif v == ";" then v = " ; "
       elseif v == "\n" then v = v .. strgen(_SPACE, indent + 1) end
       ret = ret .. v

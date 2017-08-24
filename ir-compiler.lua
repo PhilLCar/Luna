@@ -2019,12 +2019,14 @@ function _translate(text, i, sets, loop)
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
 	    asm = asm .. "\tmovq\t$33, %rax\n"
 	    if rsp ~= 0 then
-	       asm = asm .. "\tleave\n\tret\n"
+	       asm = asm .. "\tleave\n\tret\n" ..
+	       "\t.byte\t0x0F, 0x90\n"
 	    else
-	       asm = asm .. "\tpopq\t%rbp\n\tret\n"
+	       asm = asm .. "\tpopq\t%rbp\n\tret\n" ..
+	       "\t.byte\t0x0F, 0x90\n"
 	    end
 	 else
-	    asm = asm .. "\n"
+	    asm = asm .. "\t.byte\t0x0F, 0x90\n"
 	 end
 	 return asm, i
 

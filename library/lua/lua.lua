@@ -19,16 +19,32 @@ function type(var)
 end
 
 function tostring(var)
+   local t = _type(var)
+   if t == 1 then
+      if var then return "true" end
+      if var == false then return "false" end
+      return "nil"
+   elseif t == 2 then
+      return var
+   elseif t == 3 then
+      return table
+   elseif t == 6 then
+      return _format_c("%.13g", var)
+   end
 end
 
 function tonumber(var)
    local t = _type(var)
    if t == 2 then
-      -- do to number
+      return _scan_c(var)
    elseif t == 0 or t == 6 then
       return var
    end
    return nil
+end
+
+function unpack(tab)
+   return _unpack(tab)
 end
 
 function next(tab, index)
