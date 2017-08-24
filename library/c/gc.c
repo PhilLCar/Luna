@@ -38,6 +38,7 @@ typedef struct Vals {
 #define OBJECT   4
 // Object values
    #define CLO   0
+   #define FILE  1
 #define STACK    5
 #define DOUBLE   6
 #define FUNCTION 7
@@ -134,6 +135,13 @@ quad copydata(quad data)
       }
       *p = NIL;
       return ret;
+    case FILE:
+      base = copy;
+      copy += 2;
+      base[0] = point[0];
+      base[1] = point[1];
+      point[0] = heartbreaker | Q(base);
+      return (Q(base) << 3) | OBJECT;
     }
     break;
     

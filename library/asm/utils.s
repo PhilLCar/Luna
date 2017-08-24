@@ -1250,6 +1250,16 @@ _u_void:
 	movq	$33, %rax
 	ret
 
+	.global _io_open
+	# %rdi: filename, %rsi: mode
+_io_open:
+	ret
+
+	.global _io_popen
+	# %rdi: filename
+_io_popen:
+	ret
+
 # SPECIAL
 ################################################################################
 _special:
@@ -1257,6 +1267,8 @@ _special:
 	pushq	%rsi
 	cmpq	$2, %r15
 	jz	_special_string
+	cmpq	$4, %r15
+	jz	_special_object
 _special_index:
 	sarq	$3, %rax
 	leaq	8(%rax), %rdi
@@ -1286,6 +1298,9 @@ _special_ret:
 	ret
 _special_string:
 	leaq	_string_array(%rip), %rsi
+	jmp	_special_index
+_special_object:
+	leaq	_object_array(%rip), %rsi
 	jmp	_special_index
 	
 	.global	_s_sub
@@ -1335,6 +1350,16 @@ _s_sub_ret:
 	andq	$-8, %r12
 	xorq	%rbx, %rbx
 	ret
+
+	.global _o_read
+	# %rdi: file, %rsi: how
+_o_read:
+	ret
+
+	.global _o_close
+	# %rdi: file
+_o_close:
+	ret
 	
 # DATA
 ################################################################################
@@ -1357,5 +1382,21 @@ _sa_sub:
 _string_array:
 	.quad	_sa_sub
 	.quad	_s_sub
+	.quad	17
+	.quad	17
+
+	# File array names
+_oa_read:
+	.asciz	"read"
+_oa_close:
+	.asciz	"close"
+_object_array:
+	.quad	_oa_read
+	.quad	_o_read
+	.quad	17
+	.quad	_oa2
+_oa2:
+	.quad	_oa_close
+	.quad	_o_close
 	.quad	17
 	.quad	17
