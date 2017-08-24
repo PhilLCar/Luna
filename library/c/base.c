@@ -75,20 +75,20 @@ FILE *open(char *filename, char *mode)
   return fopen(filename, mode);
 }
 
-quad p_open(char *mem, char *filename, int max)
+quad p_open(char *filename, char *mem, int max)
 {
   FILE *fp = popen(filename, "r");
   quad i = 0;
   if (fp == NULL) {
     return 9;
   }
-  if (fgets(mem, max, fp) != NULL)
+  if (fgets(mem + 8, max, fp) != NULL)
     for (i = 0; ; i++)
       if (!mem[8 + i]) break;
   
   quad *len = (quad*)mem;
   *len = i;
-
+  
   return i + 9;
 }
 
@@ -97,14 +97,10 @@ void f_write(FILE *file, char *what)
   fputs(what, file);
 }
 
-quad f_read(char *mem, char *filename, int max)
+quad f_read(FILE *file, char *mem, int max)
 {
-  FILE *fp = fopen(filename, "r");
   quad i = 0;
-  if (fp == NULL) {
-    return 9;
-  }
-  if (fgets(mem, max, fp) != NULL)
+  if (fgets(mem + 8, max, file) != NULL)
     for (i = 0; ; i++)
       if (!mem[8 + i]) break;
   

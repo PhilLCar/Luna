@@ -1331,9 +1331,9 @@ function flatten()
    local l0, l1, l2 = label(), label(), label()
    local ret = prep(true) ..
       "\tcmpq\t$33, %rax\n" ..
-      "\tjnz\t" .. l0 .. "\n" ..
-      "\taddq\t$8, %rsp\n" ..
-      "\tjmp\t" .. l1 .. "\n" ..
+      "\tjz\t" .. l1 .. "\n" ..
+      --"\taddq\t$8, %rsp\n" ..
+      --"\tjmp\t" .. l1 .. "\n" ..
       l0 .. ":\tcmp\t$0, %rbx\n" ..
       "\tjz\t" .. l1 .. "\n" ..
       l2 .. ":\tcmpq\t$33, (%rbx)\n" ..
@@ -1583,7 +1583,7 @@ function performcall(func, adjust, rs, rs2, p, pp, alg, call)
    ------------------------------
    if call then
       asm = asm ..
-	 "\tpushq\t$33\n" ..
+	 "\tsubq\t$15, %rsp\n" ..
 	 "\tandq\t$-16, %rsp\n" ..
 	 "\t.align\t8\n" ..
 	 "\t.fill\t3, 1, 0x90\n" ..
@@ -1694,7 +1694,7 @@ function ret(text, i, p)
       local l1, l2 = label(), label()
       asm = asm .. flatten() ..
 	 "\tleaq\t" .. -8 * rs .. "(%rbp), %rbx\n"
-      r_size = rs
+      if p == 1 then rsp = rsp + 1 end
    elseif p > 1 then
       asm = asm .. "\tmovq\t$33, " ..  -8 * r_size .. "(%rbp)\n"..
 	 "\tleaq\t" .. -8 * (rs + 1) .. "(%rbp), %rbx\n"

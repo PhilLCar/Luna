@@ -2,15 +2,15 @@ string:
 	string
 os:
 io:
-	print
 	io
+	print
 lua:
-	load
+	pairs
+	tostring
 	unpack
 	next
 	type
-	require
-	pairs
 	tonumber
-	tostring
+	load
 	ipairs
+	require

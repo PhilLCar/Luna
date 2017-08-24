@@ -221,16 +221,13 @@ _prep:
 	pushq	%rax
 	movq	%xmm15, %rax
 	pushq	%rax
-	pushq	$33
+	pushq	%rbp
+	movq	%rsp, %rbp
 	andq	$-16, %rsp
 	call	_gc
+	leave
 	movq	%rdx, %r12
 	leaq	3(, %rax, 8), %r13
-	cmpq	$33, 8(%rsp)
-	jnz	_prep_pop
-	addq	$8, %rsp
-_prep_pop:
-	addq	$8, %rsp
 	popq	%rax
 	movq	%rax, %xmm15
 	popq	%rax
@@ -1266,6 +1263,7 @@ _io_open:
 	movq	%rax, 8(%r12)
 	leaq	4(, %r12, 8), %rax
 	addq	$16, %r12
+	xorq	%rbx, %rbx
 	ret
 
 	.global _io_popen
@@ -1287,6 +1285,7 @@ _io_popen:
 	addq	$7, %r12
 	andq	$-8, %r12
 	leaq	2(, %rax, 8), %rax
+	xorq	%rbx, %rbx
 	ret
 
 	.global _io_read
@@ -1296,13 +1295,14 @@ _io_read:
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	and	$-16, %rsp
-	call	_p_open
+	call	_read
 	leave
 	addq	%r12, %rax
-	xchg	%rax, %r12
+	xchgq	%rax, %r12
 	addq	$7, %r12
 	andq	$-8, %r12
 	leaq	2(, %rax, 8), %rax
+	xorq	%rbx, %rbx
 	ret
 
 # SPECIAL
@@ -1415,6 +1415,7 @@ _o_read:
 	leaq	2(, %rax, 8), %rax
 	addq	$7, %r12
 	andq	$-8, %r12
+	xorq	%rbx, %rbx
 	ret
 
 	.global _o_write
@@ -1430,6 +1431,7 @@ _o_write:
 	andq	$-16, %rsp
 	call	_f_write
 	leave
+	xorq	%rbx, %rbx
 	ret
 	
 	.global _o_close
@@ -1443,6 +1445,7 @@ _o_close:
 	andq	$-16, %rsp
 	call	_f_write
 	leave
+	xorq	%rbx, %rbx
 	ret
 	
 # DATA
