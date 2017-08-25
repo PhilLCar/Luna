@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef __linux__
@@ -75,20 +76,18 @@ FILE *open(char *filename, char *mode)
   return fopen(filename, mode);
 }
 
-quad p_open(char *filename, char *mem, int max)
+quad p_open(char *filename, char *mem, quad max)
 {
   FILE *fp = popen(filename, "r");
   quad i = 0;
-  if (fp == NULL) {
-    return 9;
-  }
-  if (fgets(mem + 8, max, fp) != NULL)
-    for (i = 0; ; i++)
-      if (!mem[8 + i]) break;
   
+  if (fp != NULL) {
+    i = fread(mem + 8, 1, max, fp);
+    mem[i + 8] = 0;
+    fclose(fp);
+  }
   quad *len = (quad*)mem;
   *len = i;
-  
   return i + 9;
 }
 
@@ -97,13 +96,19 @@ void f_write(FILE *file, char *what)
   fputs(what, file);
 }
 
-quad f_read(FILE *file, char *mem, int max)
+quad f_read(FILE *file, char *mem, int max, char *mode)
 {
   quad i = 0;
-  if (fgets(mem + 8, max, file) != NULL)
-    for (i = 0; ; i++)
-      if (!mem[8 + i]) break;
-  
+  if (strcmp(mode, "all")) {
+    i = fread(mem + 8, 1, max, file);
+    mem[i + 8] = 0;
+  }
+  else if (strcmp(mode, "line")) {
+    if (fgets(mem + 8, max, file) != NULL)
+      for (i = 0; ; i++)
+	if (!mem[8 + i]) break;
+  }
+
   quad *len = (quad*)mem;
   *len = i;
 

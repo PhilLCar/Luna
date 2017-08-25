@@ -1401,6 +1401,7 @@ _s_sub_ret:
 _o_read:
 	sarq	$3, %rdi
 	movq	8(%rdi), %rdi
+	movq	%rsi, %rcx
 	movq	%r12, %rsi
 	movq	_mem_max(%rip), %rdx
 	subq	%r12, %rdx

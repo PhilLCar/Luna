@@ -1049,6 +1049,8 @@ function ifenv(text, i, p, loop)
    
    tmp1, i = _translate(text, i, false, false)
    v = pop()
+   r_size = rs
+   rsp = rs - 1
    tmp2, i, tag = _translate(text, i, false, loop)
    if tag == "else" then
       jlab = "_EL" .. p
@@ -1066,15 +1068,18 @@ function ifenv(text, i, p, loop)
       "\tjz\t" .. jlab .. "\n" ..
       tmp2
    if tag == "else" then
+      r_size = rs
+      rsp = rs - 1
       tmp1, i = _translate(text, i, false, loop)
       ret = ret ..
 	 "\tjmp\t_FI" .. p .. "\n" .. jlab .. ":\n" ..
 	 tmp1 .. "_FI" .. p .. ":\n"
    else
-      ret = ret .. jlab .. ":\n" .. protect(rs) ..
-	 "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
-      rsp = r_size - 1
+      ret = ret .. jlab .. ":\n"
    end
+   ret = ret .. protect(rs) ..
+      "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
+   rsp = r_size - 1
    return ret, i
 end
 
