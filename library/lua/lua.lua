@@ -1,3 +1,14 @@
+function print(...)
+   local p = {...}
+   for i = 1, #p do
+      _write(p[i], false)
+      if i ~= #p then
+	 _write("\t", false)
+      end
+   end
+   _write("\n", false)
+end
+
 function type(var)
    local x = _type(var)
    if x == 0 then
@@ -14,6 +25,8 @@ function type(var)
       return "number"
    elseif x == 7 then
       return "function"
+   elseif x == 9 then
+      return "file"
    end
    return "nil"
 end
@@ -27,9 +40,13 @@ function tostring(var)
    elseif t == 2 then
       return var
    elseif t == 3 then
-      return table
+      return _format_c("table: %p", var)
    elseif t == 6 then
       return _format_c("%.13g", var)
+   elseif t == 6 then
+      return _format_c("function: %p", var)
+   elseif t == 9 then
+      return _format_c("file (%p)", var)
    end
 end
 

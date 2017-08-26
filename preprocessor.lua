@@ -415,7 +415,9 @@ function comb2(arr, left, indent, ...)
 	 if not comp_flags.npc then
 	    ts = trysolve(arr[i], arr[j], arr[i - 1])
 	 end
-	 if ts and left then
+	 if arr[i] == ":" then
+	    arr[j] = arr[i - 1] .. " " .. arr[i] .. " " .. arr[j]
+	 elseif ts and left then
 	    arr[j] = ts
 	 elseif left then
 	    arr[j] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"

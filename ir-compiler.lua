@@ -1465,7 +1465,10 @@ function fparams(text, i, p)
    align("%rdi")
    -- Get the parameters
    ------------------------------
-   asm = asm .. push(v2)
+   asm = asm .. use()
+   if v2 ~= "%rdi" then
+      asm = asm .. "\tmovq\t" .. v2 .. ", %rdi\n"
+   end
    for j = 1, p do
       tmp, i, func = _translate(text, i, false, false)
       asm = asm .. tmp
@@ -1784,7 +1787,7 @@ function _translate(text, i, sets, loop)
 	 struct = nil
       end
       if vname and instr ~= "params" then
-	 push("$17")
+	 asm = asm .. push(vname .. "(%rip)")
 	 vname = false
       end
       --------------------

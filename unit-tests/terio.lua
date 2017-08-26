@@ -18,3 +18,6 @@ for i = 1, #billets do
 end
 
 print(min, max, total)
+
+--1	14	54
+

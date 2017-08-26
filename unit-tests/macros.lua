@@ -4,7 +4,7 @@ function prob(a)
    if c == "string" then
       return a:sub(2, -2)
    elseif c == "number" then
-      return tostring(number)
+      return tostring(a)
    elseif c == "table" then
       return a[1]
    else

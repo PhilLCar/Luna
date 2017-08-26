@@ -4,12 +4,7 @@
 #include <sys/mman.h>
 #include <stdlib.h>
 #include <string.h>
-
-typedef long long quad;
-typedef struct Vals {
-  quad *mem_base;
-  quad *mem_ptr;
-} vals;
+#include "types.h"
 
 #ifdef __linux__
 #define stack_base  _stack_base
@@ -18,30 +13,6 @@ typedef struct Vals {
 #define trf_mask    _trf_mask
 #define gc          _gc
 #endif
-
-#define P(x) ((quad*)(x))
-#define C(x) ((char*)(x))
-#define Q(x) ((quad)(x))
-#define B(x) ((char)(x))
-
-#define ADDRESS  0
-#define SPECIAL  1
-// Special values
-   #define FALSE 1
-   #define TRUE  9
-   #define NIL   17
-   #define VOID  33
-   #define UNKN  65
-   #define FRAH  129
-#define STRING   2
-#define TABLE    3
-#define OBJECT   4
-// Object values
-   #define CLO   0
-   #define FILE  1
-#define STACK    5
-#define DOUBLE   6
-#define FUNCTION 7
 
 quad *stack_base;
 quad mem_size;
@@ -116,7 +87,7 @@ quad copydata(quad data)
     if (Q(point) == NIL) return (NIL << 3) | OBJECT;
     switch (*point) {
       quad ret;
-    case CLO:
+    case O_CLO:
       ret = (Q(copy) << 3) | OBJECT;
       p = copy;
       while (Q(point) != NIL) {
@@ -135,7 +106,7 @@ quad copydata(quad data)
       }
       *p = NIL;
       return ret;
-    case FILE:
+    case O_FILE:
       base = copy;
       copy += 2;
       base[0] = point[0];
