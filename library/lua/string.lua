@@ -4,6 +4,10 @@ string.sub = function (str, start, finish)
    return _s_sub(str, start, finish)
 end
 
+string.find = function (str, match)
+   return _s_find(str, match)
+end
+
 -- Generates string with integer numbers
 string.char = function (...)
 end

@@ -106,7 +106,9 @@ if comp_file then
    end
       
    local file = io.open(comp_file .. ".lua", "r")
-   local text = file:read("all")
+   local text = file:read("line")
+   if text:sub(1,2) == "#!" then text = file:read("all")
+   else text = text .. "\n" .. file:read("all") end
    file:close()
    comp_code = text
    

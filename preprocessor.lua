@@ -562,6 +562,15 @@ function scan(array, start, stop, indent)
    return ret, i
 end
 
+function escape(str, i)
+   local num
+   i = i + 1
+   num = str(i, i)
+   if num == 0 then
+      
+   return "\\" .. num;
+end
+
 -- Comment parsing
 function compar(str, i)
    local s = str:sub(i + 2, i + 3)
@@ -619,8 +628,8 @@ function strpar(str, i, t)
 	 elseif s == "\"" and t ~= s then
 	    ret = ret .. "\\\""
 	 elseif t and s == "\\" then
-	    i = i + 1
-	    ret = ret .. s .. str:sub(i, i)
+	    s, i = escape(str, i)
+	    ret = ret .. s
 	 elseif s == "]" and not t then
 	    local m, tmp = 1, s
 	    repeat
@@ -678,7 +687,7 @@ function ifenv(str, i, line, indent, elif)
    ret = ret .. tmp .. " "
    tmp, i, line = _preprocess(str, i, indent + 1, { "else", "end" })
    ret = ret .. tmp .. line .. " "
-   if line:sub(#line - 3, #line) == "else" then
+   if line:sub(-4, -1) == "else" then
       tmp, i, line = _preprocess(str, i, indent + 1, { "end" })
       ret = ret .. tmp .. line .. " "
    end
@@ -772,7 +781,7 @@ function _preprocess(str, i, indent, stops)
 	    return ret, i, strgen(_SPACE, nl - 1) .. line
 	 end
       end
-
+      
       if line == "end" then
 	 if #stops == 0 then
 	    typerr = "<eof> expected near 'end'."

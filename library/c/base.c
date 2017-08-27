@@ -25,6 +25,18 @@
 static FILE *curout;
 static FILE *curin;
 
+static char getformat(char* format)
+{
+  int i = 0;
+  char c;
+  for (c = format[i]; c != '%' && c != 0; i++) c = format[i];
+  c = format[i];
+  while (c != 'X' && c != 'x' && c != 'd' && c != 'p' && c != 'g' && c != 's' && c != 'c')
+    // peut être plus
+    c = format[++i];
+  return format[i];
+}
+
 int write(quad i, int loc)
 {
   int type = i & 7;
@@ -92,19 +104,11 @@ FILE *f_open(char *filename, char *mode)
   return f;
 }
 
-quad p_open(char *filename, char *mem, quad max, char *mode)
+FILE *p_open(char *filename, char *mode)
 {
-  FILE *fp = popen(filename, mode);
-  quad i = 0;
-  
-  if (fp != NULL) {
-    i = fread(mem + 8, 1, max, fp);
-    mem[i + 8] = 0;
-    fclose(fp);
-  } else return -1;
-  quad *len = (quad*)mem;
-  *len = i;
-  return i + 9;
+  FILE *f = popen(filename, mode);
+  if (f == NULL) return (FILE*)-1;
+  return f;
 }
 
 void f_write(FILE *file, quad arg)
@@ -200,6 +204,7 @@ quad format(char *mem, char *spec, quad obj)
 {
   int type = obj & 7;
   quad val = obj >> 3;
+  char c;
   switch(type) {
   case ADDRESS:
     sprintf(mem + 8, spec, (quad)val);
@@ -208,7 +213,12 @@ quad format(char *mem, char *spec, quad obj)
     sprintf(mem + 8, spec, (char*)(val + 8));
     break;
   case DOUBLE:
-    sprintf(mem + 8, spec, *(double*)val);
+    c = getformat(spec);
+    if (c == 'd' || c == 'x') {
+      sprintf(mem + 8, spec, (quad)*(double*)val);
+    }
+    else
+      sprintf(mem + 8, spec, *(double*)val);
     break;
   default:
     sprintf(mem + 8, spec, val);

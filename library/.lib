@@ -7,13 +7,13 @@ table:
 io:
 	io
 lua:
-	type
 	next
-	ipairs
-	tostring
-	unpack
-	pairs
-	print
-	require
 	load
+	print
+	unpack
+	tostring
+	ipairs
+	require
 	tonumber
+	type
+	pairs

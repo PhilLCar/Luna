@@ -21,6 +21,42 @@ _t_obj:	sarq	$3, %rdi
 	sarq	$3, %rax
 	jmp	_t_ret
 
+	.global _line_iter2
+	# %rdi : file
+_line_iter2:	
+	pushq	%rdi
+	call	_line_iter
+	cmpq	$17, %rax
+	popq	%rdi
+	jnz	_li_r
+	call	_io_close
+_li_r:	ret
+
+	.global _line_iter
+	# %rdi: file
+_line_iter:
+	sarq	$3, %rdi
+	movq	8(%rdi), %rdi
+	movq	%r12, %rsi
+	leaq	_l_str(%rip), %rdx
+	movq	_mem_max(%rip), %rcx
+	sub	%r12, %rcx
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	call	_f_read
+	leave
+	cmpq	$-1, %rax
+	jz	_return_error
+	addq	%r12, %rax
+	xchgq	%rax, %r12
+	leaq	2(, %rax, 8), %rax
+	addq	$7, %r12
+	andq	$-8, %r12
+	xorq	%rbx, %rbx
+	ret
+
 	.global _next
 	# %rdi: table, %rsi: index
 _next:	
@@ -251,10 +287,6 @@ _io_popen:
 	addq	$8, %rdi
 	sarq	$3, %rsi
 	addq	$8, %rsi
-	movq	%rsi, %rcx
-	movq	%r12, %rsi
-	movq	_mem_max(%rip), %rdx
-	subq	%rsi, %rdx
 	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
@@ -263,11 +295,10 @@ _io_popen:
 	leave
 	cmpq	$-1, %rax
 	jz	_return_error
-	addq	%r12, %rax
-	xchg	%rax, %r12
-	addq	$7, %r12
-	andq	$-8, %r12
-	leaq	2(, %rax, 8), %rax
+	movq	$1, (%r12)
+	movq	%rax, 8(%r12)
+	leaq	4(, %r12, 8), %rax
+	addq	$16, %r12
 	xorq	%rbx, %rbx
 	ret
 
@@ -404,6 +435,32 @@ _t_c:	leaq	_ctype(%rip), %rax
 	ret
 
 	.global _io_lines
+	# %rdi: filename
+_io_lines:
+	pushq	%rbp
+	movq	%rsp, %rbp
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	sarq	$3, %rdi
+	addq	$8, %rdi
+	leaq	_r_str(%rip), %rsi
+	call	_f_open
+	movq	%rax, 8(%r12)
+	movq	$1, (%r12)
+	leaq	4(, %r12, 8), %rdi
+	addq	$16, %r12
+	leaq	_line_iter2(%rip), %rax
+	movq	%rax, (%r12)
+	movq	$17, 8(%r12)
+	leaq	7(, %r12, 8), %rax
+	addq	$16, %r12
+	movq	%rdi, 8(%r12)
+	movq	$33, (%r12)
+	leaq	8(%r12), %rbx
+	leave
+	ret	
+	
+	/*.global _io_lines
 	# %rdi: file
 _io_lines:
 	pushq	%rbp
@@ -423,7 +480,7 @@ _io_lines:
 	call	_f_close
 	popq	%rax
 	leave
-	ret
+	ret*/
 
 	.global _io_output
 	# %rdi: file
@@ -507,6 +564,9 @@ _db1:
 
 _r_str:
 	.asciz	"r"
+
+_l_str:
+	.asciz	"l"
 	
 _ftype:
 	.quad	4

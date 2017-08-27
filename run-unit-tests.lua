@@ -1,5 +1,8 @@
 #! /usr/bin/env lua
 
+local total, pass, fail, unkn
+local names, time, failed, fsize
+
 function listlua()
    local proc, files, i = io.popen("ls ./unit-tests"), {}, 0
    for f in proc:lines() do
@@ -46,6 +49,7 @@ function progress() --88, 22 --> 66
    io.write("  Pass   Fail   Unkn     Progress " .. spc ..
 	       string.format("%3d", completed) .. " / " ..
 	       string.format("%3d", total) .. "     Prct       Time\n")
+   --print("!!:" .. "[ \27[1;38;5;47m2\27[0m !!")
    io.write("[ \27[1;38;5;47m" .. string.format("%4d", pass) ..
 	       "\27[0m | \27[1;38;5;203m" .. string.format("%4d", fail) ..
 	       "\27[0m | \27[1;38;5;98m" .. string.format("%4d", unkn) ..
@@ -137,8 +141,8 @@ print()
 if pass == total then
    print("ALL UNIT TESTS PASSED")
 else
-   print(tostring(string.format("%.1f", (fail + unkn) / total * 100))
-	    .. "% OF UNIT TESTS FAILED:")
+   print(tostring(string.format("%.1f", (fail + unkn) / total * 100)) ..
+	    "% OF UNIT TESTS FAILED:")
    for i = 1, fsize do
       print("\t- " .. failed[i])
    end
