@@ -412,6 +412,24 @@ function label(...)
    return "_LU" .. _lab
 end
 
+function getbytelen(str)
+   -- Excludes extra characters required in escape representation
+   local len, i = 0, 1
+   local s
+   while i <= #str do
+      s = str:sub(i, i)
+      i = i + 1
+      if s == "\\" then
+	 while tonumber(str:sub(i, i)) do
+	    i = i + 1
+	 end
+	 i = i + 1
+      end
+      len = len + 1
+   end
+   return len
+end
+
 function flt(op)
    local ret = ""
    local v1 = pop()
@@ -618,7 +636,7 @@ function str(value)
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
-	 "\t.quad\t" .. (#value - 2) .. "\n" ..
+	 "\t.quad\t" .. getbytelen(value) - 2 .. "\n" ..
 	 "\t.asciz\t" .. value .. "\n"
    end
    return r .. "\tleaq\t" .. l .. "(%rip), %rax\n" ..
@@ -751,7 +769,7 @@ function encl(value)
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
-	 "\t.quad\t" .. (#value - 2) .. "\n" ..
+	 "\t.quad\t" .. getbytelen(value) - 2 .. "\n" ..
 	 "\t.asciz\t" .. value .. "\n"
    end
    return r ..
@@ -769,7 +787,7 @@ function clo(sets, value)
       l = label("_ST")
       str_tbl[value] = l
       data = data .. l .. ":\n" ..
-	 "\t.quad\t" .. (#value - 2) .. "\n" ..
+	 "\t.quad\t" .. getbytelen(value) - 2 .. "\n" ..
 	 "\t.asciz\t" .. value .. "\n"
    end
    if sets then
@@ -797,7 +815,7 @@ function index(address, global)
 	 str_tbl[global] = l
 	 need_data = true
 	 data = data .. l .. ":\n" ..
-	    "\t.quad\t" .. (#global - 2) .. "\n" ..
+	    "\t.quad\t" .. getbytelen(global) - 2 .. "\n" ..
 	    "\t.asciz\t" .. global .. "\n"
       end
       ret = ret ..

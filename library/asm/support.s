@@ -201,13 +201,15 @@ _format_c:
 _scan_c:
 	sarq	$3, %rdi
 	addq	$8, %rdi
+	movq	%r12, %rsi
 	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
 	call	_scan
 	leave
-	movsd	%xmm0, (%r12)
+	cmpq	$0, %rax
+	jz	_return_error
 	movq	%r12, %rax
 	addq	$8, %r12
 	leaq	6(, %rax, 8), %rax
@@ -347,7 +349,7 @@ _o_dt:	pushq	%rdi
 	leave
 	popq	%rdi
 	cmpq	$-1, %rax
-	jz	_return_error
+	jz	_o_err
 	jns	_o_str
 	leaq	6(, %r12, 8), %rax
 	addq	$8, %r12
@@ -374,6 +376,8 @@ _o_en:	movq	-8(%rbx), %rax
 _o_no:	xorq	%rbx, %rbx
 	leave
 	ret
+_o_err:	leave
+	jmp	_return_error
 
 	.global	_io_close
 	# %rdi: file

@@ -49,10 +49,9 @@ function progress() --88, 22 --> 66
    io.write("  Pass   Fail   Unkn     Progress " .. spc ..
 	       string.format("%3d", completed) .. " / " ..
 	       string.format("%3d", total) .. "     Prct       Time\n")
-   --print("!!:" .. "[ \27[1;38;5;47m2\27[0m !!")
-   io.write("[ \27[1;38;5;47m" .. string.format("%4d", pass) ..
-	       "\27[0m | \27[1;38;5;203m" .. string.format("%4d", fail) ..
-	       "\27[0m | \27[1;38;5;98m" .. string.format("%4d", unkn) ..
+   io.write("[ \27[1;38;5;47m", string.format("%4d", pass),
+	       "\27[0m | \27[1;38;5;203m", string.format("%4d", fail),
+	       "\27[0m | \27[1;38;5;98m", string.format("%4d", unkn),
 	       "\27[0m ]  [")
    prop = completed / total * (18 + width)
    for i = 1, 18 + width do
@@ -62,8 +61,8 @@ function progress() --88, 22 --> 66
 	 io.write("-")
       end
    end
-   io.write("]  [ " .. string.format("%3.0f", prop / (18 + width) * 100) .. "% ]  [ " ..
-	       string.format("%5.1fs ]\n", (gettime() - time) / 1000000000))
+   io.write("]  [ ", string.format("%3.0f", prop / (18 + width) * 100), "% ]  [ ",
+      string.format("%5.1fs ]\n", (gettime() - time) / 1000000000))
    io.write("\27[2A\27[90D\r")
 end
 
@@ -73,7 +72,7 @@ function getexpresult(filename)
    local ret = ""
    while line ~= nil do
       if line:sub(1, 2) == "--" then
-	 ret = ret .. line:sub(3, #line)
+	 ret = ret .. line:sub(3, -1)
 	 line = file:read("line")
 	 if line ~= nil then
 	    ret = ret .. "\n"
@@ -86,6 +85,7 @@ function getexpresult(filename)
 	 line = file:read("line")
       end
    end
+   --print(ret)
    file:close()
    return ret
 end
@@ -103,23 +103,23 @@ fsize = 0
 
 progress()
 
+
 for i = 1, #names do
    -- Compile
    local name = names[i]
    os.execute("./luna -s " .. name .. " &> /dev/null")
-   local execs = listexe()
    -- Execute
    local sname, present = name:sub(1, #name - 4) .. ".exe", false
-   for i = 1, #execs do
-      if execs[i] == sname then
-	 present = true
-      end
-   end
-   if present then
-      local file = io.popen(sname)
+   local file = io.popen(sname)
+   if file then
       local result = file:read("all")
       file:close()
+      --print(result)
+      --print(#result)
+      --print(#("RR:\"" .. result .. "\""))
       local expected = getexpresult(name)
+      --print("EE:\"" .. expected .. "\"")
+      --io.read()
       if result == expected then
 	 pass = pass + 1
       else

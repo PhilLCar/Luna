@@ -563,12 +563,26 @@ function scan(array, start, stop, indent)
 end
 
 function escape(str, i)
-   local num
+   local s, num = ""
    i = i + 1
-   num = str(i, i)
-   if num == 0 then
-      
-   return "\\" .. num;
+   num = str:sub(i, i)
+   if tonumber(num) then
+      while tonumber(num) do
+	 s = s .. num
+	 i = i + 1
+	 num = str:sub(i, i)
+      end
+      i = i - 1
+      s = tonumber(s)
+      num = 0
+      local l = 1
+      while s ~= 0 do
+	 num = num + (s % 8) * l
+	 s = s >> 3
+	 l = l * 10
+      end
+   end
+   return "\\" .. tostring(num), i;
 end
 
 -- Comment parsing
@@ -622,8 +636,8 @@ function strpar(str, i, t)
 	 s = str:sub(i, i)
 	 if s == "\n" then
 	    if not t then ret = ret .. "\\n" end
-	    ret = ret .. "\n"
-	 elseif s == "\t" and not t then
+	    --ret = ret .. "\n"
+	 elseif s == "\t" then
 	    ret = ret .. "\\t"
 	 elseif s == "\"" and t ~= s then
 	    ret = ret .. "\\\""

@@ -8,12 +8,12 @@ io:
 	io
 lua:
 	next
-	load
 	print
-	unpack
-	tostring
-	ipairs
 	require
-	tonumber
 	type
 	pairs
+	tonumber
+	tostring
+	load
+	unpack
+	ipairs

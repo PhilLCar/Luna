@@ -31,7 +31,7 @@ static char getformat(char* format)
   char c;
   for (c = format[i]; c != '%' && c != 0; i++) c = format[i];
   c = format[i];
-  while (c != 'X' && c != 'x' && c != 'd' && c != 'p' && c != 'g' && c != 's' && c != 'c')
+  while (c != 'f' && c != 'X' && c != 'x' && c != 'd' && c != 'p' && c != 'g' && c != 's' && c != 'c')
     // peut être plus
     c = format[++i];
   return format[i];
@@ -234,11 +234,9 @@ quad format(char *mem, char *spec, quad obj)
   return i + 9;
 }
 
-double scan(char *str)
+int scan(char *str, double *mem)
 {
-  double c;
-  sscanf(str, "%lf", &c);
-  return c;
+  return sscanf(str, "%lf", mem);
 }
 
 FILE *output(quad ptr)
