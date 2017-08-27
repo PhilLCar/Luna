@@ -47,6 +47,8 @@ if not comp_flags.lib then
       "\tpushq\t%r13\n" ..
       "\tpushq\t%r14\n" ..
       "\tpushq\t%r15\n" ..
+      "\tpushq\t%rdi\n" .. --ARGC
+      "\tpushq\t%rsi\n" .. --ARGV
       "\tpushq\t%rbp\n" ..
       "\tmovq\t%rsp, %rbp\n" ..
       "\txor\t%rbx, %rbx\n" .. 
@@ -97,7 +99,8 @@ local data = "\n# DATA" ..
 local outro = ""
 
 if not comp_flags.lib then
-   outro = 
+   outro =
+      "\taddq\t$16, %rsp\n" ..
       "\tpopq\t%r15\n" ..
       "\tpopq\t%r14\n" ..
       "\tpopq\t%r13\n" ..

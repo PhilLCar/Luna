@@ -559,6 +559,36 @@ _exec_call:
 	xorq	%rbx, %rbx
 	ret
 
+	.global _fill_args
+_fill_args:
+	movq	(%rbp), %rax
+	movq	8(%rax), %rcx  # argv
+	movq	16(%rax), %rdx # argc
+	sarq	$3, %rdi
+	xorq	%r8, %r8
+_fl_lp:	cmpq	%r8, %rdx
+	jz	_fl_en
+	movq	(%rcx), %rax
+	movq	$-1, %rbx
+_new_string:
+	incq	%rbx
+	movb	(%rbx, %rax, ), %sil
+	movb	%sil, 8(%rbx, %r12, )
+	cmpb	$0, %sil
+	jnz	_new_string
+	movq	%rbx, (%r12)
+	leaq	2(, %r12, 8), %r9
+	leaq	9(%rbx, %r12, ), %r12
+	addq	$7, %r12
+	andq	$-8, %r12
+	leaq	(, %r8, 8), %rax
+	movq	%rdi, %rbx
+	call	_i_new
+	movq	%r9, (%rax)
+	dec	%rdx
+	jmp	_fl_lp
+_fl_en:	ret
+
 # DATA
 ################################################################################
 	#.data

@@ -134,6 +134,8 @@ _nw_s:	pushq	%rax
 	ret
 _nw_rt:	addq	$8, %rsp
 	ret
+	.global _i_new
+	# %rax: tagged-int, %rbx: untagged-table
 _i_new:
 	push	%rbx
 	pushq	%rdi
@@ -176,7 +178,7 @@ _ca_lp:	salq	$1, %rdx
 	movq	%rcx, %r15
 	subq	%rsi, %r15
 	leaq	8(%rdx), %rax         # Upper limit of new area
-	leaq	8(%rdi, %r15, ), %r15 # Position of last copied element
+	leaq	(%rdi, %r15, ), %r15 # Position of last copied element
 _over_nil_fil:
 	movq	$17, (%r12, %rax, )
 	subq	$8, %rax

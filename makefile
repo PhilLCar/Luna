@@ -5,11 +5,13 @@
 PDFLATEX = pdflatex
 CC     := gcc
 LUAC   := ./luna
-CFLAGS := -Wall -Wstrict-prototypes -Wextra -pedantic -fPIC 
+CFLAGS := -Wall -Wstrict-prototypes -Wextra -pedantic
 LFLAGS := -lib
 
 MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 LIB         := library
+MLIB        := $(LIB)/lualib.o
+CLIB        := $(LIB)/.lib
 CSRC        := $(LIB)/c
 SSRC        := $(LIB)/asm
 LSRC        := $(LIB)/lua
@@ -29,13 +31,16 @@ all: lib
 	@echo "You can do this by executing :"
 	@echo '	% export PATH=$(MKFILE_PATH):$$PATH'
 
-lib: rmlib $(OBJL) $(OBJC) $(OBJS) #$(LIB)/shared/baselib.so
+lib: rmlib $(MLIB) $(OBJL) #$(OBJC) $(OBJS) #$(LIB)/shared/baselib.so
+
+$(MLIB): $(OBJC) $(OBJS)
+	@$(CC) $(CFLAGS) -c -o $(MLIB) $(OBJC) $(OBJS)
 
 $(OBJ)/%.o: $(CSRC)/%.c
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) -fPIC $(CFLAGS) -c $< -o $@
 
 $(OBJ)/%.o: $(SSRC)/%.s
-	@$(CC) $(CFLAGS) -c $< -o $@
+	@$(CC) -fPIC $(CFLAGS) -c $< -o $@
 
 $(OBJ)/%.o: $(LSRC)/%.lua
 	@$(LUAC) $(LFLAGS) $< $@

@@ -80,6 +80,8 @@ function ipairs(tab)
 end
 
 function require(file_name)
+   if file_name then
+   end
 end
 
 function load(file_name)
