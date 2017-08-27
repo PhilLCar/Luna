@@ -546,9 +546,14 @@ function forscope(str, i, fname, flvl)
       tmp, i = nextexpr(str, i)
       if fp[#fp] ~= "=" then
 	 while tmp and
-	    (isBracketed(tmp) or isString(tmp) or isParenthesized(tmp) or isAccoladed(tmp))
+	    (isBracketed(tmp) or isString(tmp) or isParenthesized(tmp) or
+		isAccoladed(tmp) or tmp == ":")
 	 do
 	    fp[#fp] = fp[#fp] .. " " .. tmp
+	    if tmp == ":" then
+	       tmp, i = nextexpr(str, i)
+	       fp[#fp] = fp[#fp] .. " " .. tmp
+	    end
 	    tmp, i = nextexpr(str, i)
 	 end
       end

@@ -1,8 +1,8 @@
-000	Integer
-001	Boolean
+000	Integer/Address
+001	Special value
 010	String
 011	Table
-100	Function
-101	IO Object
-110	EMPTY
-111	EMPTY
+100	Object
+101	Stack
+110	Double
+111	Function

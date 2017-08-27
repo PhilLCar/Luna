@@ -53,7 +53,7 @@ quad copydata(quad data)
     *(point++) = heartbreaker | Q(copy);
     base = copy;
     copy += 3;
-    if (*base == VOID) {
+    if (*base == -VOID) {
       base[1] = point[0];
       base[2] = point[1];
       return (Q(base) << 3) | TABLE;

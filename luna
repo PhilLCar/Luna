@@ -116,9 +116,13 @@ if comp_file then
    -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
    if not comp_flags.asm then
       if comp_flags.lib then
-	 os.execute("gcc -c " .. comp_target .. ".s -o " .. comp_target .. ".o")
+	 os.execute("gcc -fPIC -c " .. comp_target .. ".s -o " .. comp_target .. ".o")
       else
-	 os.execute("gcc ./library/o/*.o " .. comp_target .. ".s -o " .. comp_target .. ".exe")
+	 local includes = "library/o/* "
+	 --for lib in pairs(libs) do
+	    --includes = includes .. "library/o/" .. lib .. ".o "
+	 --end
+	 os.execute("gcc " .. includes .. comp_target .. ".s -o " .. comp_target .. ".exe")
       end
    end
    if not comp_flags.asm and not comp_flags.sub then

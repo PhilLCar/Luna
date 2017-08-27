@@ -8,6 +8,14 @@ print(file:read(nil, nil, nil))
 print(file:read("number", "line") + 3)
 print(file:read(5))
 file:close()
+file = io.open("doc/normes.txt", "r")
+local a, b = file:lines()
+print(#b)
+file:seek()
+for i, v in file:lines() do
+   print(i, v)
+end
+file:close()
 --print("test")
 --print(file)
 

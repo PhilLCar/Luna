@@ -3,14 +3,17 @@
 .SUFFIXES: .lua .s .c .o .exe .tex .pdf
 
 PDFLATEX = pdflatex
-CC   := gcc
-LUAC := ./luna
+CC     := gcc
+LUAC   := ./luna
+CFLAGS := -Wall -Wstrict-prototypes -Wextra -pedantic -fPIC 
+LFLAGS := -lib
+
 MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-LIB  := library
-CSRC := $(LIB)/c
-SSRC := $(LIB)/asm
-LSRC := $(LIB)/lua
-OBJ  := $(LIB)/o
+LIB         := library
+CSRC        := $(LIB)/c
+SSRC        := $(LIB)/asm
+LSRC        := $(LIB)/lua
+OBJ         := $(LIB)/o
 
 
 CFILES := $(wildcard $(CSRC)/*.c)
@@ -26,16 +29,19 @@ all: lib
 	@echo "You can do this by executing :"
 	@echo '	% export PATH=$(MKFILE_PATH):$$PATH'
 
-lib: rmlib $(OBJL) $(OBJC) $(OBJS)
+lib: rmlib $(OBJL) $(OBJC) $(OBJS) #$(LIB)/shared/baselib.so
 
 $(OBJ)/%.o: $(CSRC)/%.c
-	@$(CC) -Wall -Wstrict-prototypes -Wextra -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ)/%.o: $(SSRC)/%.s
-	@$(CC) -c $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(OBJ)/%.o: $(LSRC)/%.lua
-	@$(LUAC) -lib $< $@
+	@$(LUAC) $(LFLAGS) $< $@
+
+#$(LIB)/shared/baselib.so:
+#	$(CC) $(CFLAGS) -shared -O -g $(CFILES) $(SFILES) -o baselib.so
 
 rmlib:
 	@$(RM) $(OBJ)/*.o $(LIB)/.lib

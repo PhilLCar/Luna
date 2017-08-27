@@ -10,7 +10,7 @@
   #define TRUE		9
   #define NIL		17
   #define VOID		33
-  #define UNKN		65
+  #define UNKN		-1
   #define FRAH		129
 #define STRING		2
 #define TABLE		3

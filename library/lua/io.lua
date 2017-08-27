@@ -18,6 +18,7 @@ io.write = function (...)
 end
 
 io.read = function (...)
+   _set_nargs(2)
    return _io_read(nil, ...)
 end
 

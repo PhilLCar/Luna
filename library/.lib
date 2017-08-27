@@ -5,13 +5,13 @@ table:
 io:
 	io
 lua:
-	next
-	type
-	require
-	unpack
-	ipairs
-	pairs
-	load
 	tonumber
+	require
 	tostring
+	unpack
+	next
+	load
+	pairs
 	print
+	type
+	ipairs
