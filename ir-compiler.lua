@@ -2025,7 +2025,7 @@ function _translate(text, i, sets, loop)
 
       elseif instr == "fend" then
 	 if asm:sub(#asm - 3, #asm) ~= "ret\n" then
-	    asm = asm .. "\tmovq\t$33, %rax\n"
+	    asm = asm .. "\tmovq\t$17, %rax\n"
 	    if rsp ~= 0 then
 	       asm = asm .. "\tleave\n\tret\n" ..
 	       "\t.byte\t0x0F, 0x90\n"

@@ -117,8 +117,51 @@ _wr_lp:	movq	(%r15), %rsi
 	jmp	_wr_lp
 _wr_en:	leave
 	xorq	%rbx, %rbx
-	movq	$33, %rax
+	movq	$17, %rax
 	ret
+
+	.global	_s_find
+	# %rdi: string, %rsi: match
+_s_find:	
+	sarq	$3, %rdi
+	movsd	(%rdi), %xmm0
+	addq	$8, %rdi
+	sarq	$3, %rsi
+	movsd	(%rsi), %xmm1
+	addq	$8, %rsi
+	cvtsd2si %xmm0, %rdx
+	cvtsd2si %xmm1, %rcx
+	movq	%rdi, %r8
+	movq	%rdx, %r9
+	subq	%rcx, %r9
+	js	_sf_nl
+_sf_lp:	movq	%rdi, %rax
+	movq	%rsi, %rbx
+	call	_cl_lp
+	cmpq	$9, %rax
+	jz	_sf_en
+	inc	%rdi
+	dec	%r9
+	js	_sf_nl
+	jmp	_sf_lp
+_sf_en:	subq	%r8, %rdi
+	addq	%rdi, %rcx
+	cvtsi2sd %rdi, %xmm0
+	cvtsi2sd %rcx, %xmm1
+	movsd	%xmm0, (%r12)
+	movsd	%xmm1, (%r12)
+	leaq	6(, %r12, 8), %rax
+	addq	$8, %r12
+	leaq	6(, %r12, 8), %rdx
+	addq	$8, %r12
+	movq	$33, (%r12)
+	movq	%rdx, 8(%r12)
+	leaq	8(%rdx), %r12
+	ret
+_sf_nl:	xorq	%rbx, %rbx
+	movq	$17, %rax
+	end
+	
 
 	# %rdi: file
 _o_seek:
@@ -140,7 +183,7 @@ _seek:	pushq	%rbp
 	call	_f_seek
 	leave
 	xorq	%rbx, %rbx
-	movq	$33, %rax
+	movq	$17, %rax
 	ret
 
 	.global	_ol_tp
@@ -201,10 +244,17 @@ _ol_en:	pushq	$33
 	# String array names
 _sa_sub:
 	.asciz	"sub"
+_sa_find:	
+	.asciz	"find"
 	
 _string_array:
 	.quad	_sa_sub
 	.quad	_s_sub
+	.quad	17
+	.quad	_sa2
+_sa2:
+	.quad	_sa_find
+	.quad	_s_find
 	.quad	17
 	.quad	17
 

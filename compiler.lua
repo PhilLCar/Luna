@@ -362,6 +362,7 @@ function evaluate(str, i, fname, flvl, ...)
 	    if a and typ == 0 then
 	       register(false, n)
 	    end
+	    if typ == 1 then n = nil end
 	    tmp, i, expr[c], expr["code"][c], en = funscope(str, i, n)
 	 else
 	    tmp, i, expr[c], expr["code"][c], en = funscope(str, i)

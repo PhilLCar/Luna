@@ -207,7 +207,7 @@ _u_fill:
 	ret
 _u_void:
 	xorq	%rbx, %rbx
-	movq	$33, %rax
+	movq	$17, %rax
 	ret
 
 	.global _set_nargs
@@ -359,7 +359,7 @@ _close:	pushq	%rbp
 	andq	$-16, %rsp
 	call	_f_close
 	leave
-	movq	$33, %rax
+	movq	$17, %rax
 	xorq	%rbx, %rbx
 	ret
 
@@ -378,7 +378,7 @@ _flush:	pushq	%rbp
 	andq	$-16, %rsp
 	call	_f_flush
 	leave
-	movq	$33, %rax
+	movq	$17, %rax
 	xorq	%rbx, %rbx
 	ret
 
@@ -476,6 +476,25 @@ _get_stderr:
 	leave
 	leaq	4(, %r12, 8), %rax
 	addq	$16, %r12
+	xorq	%rbx, %rbx
+	ret
+
+############## OS Functions ###############
+
+	.global _os_exec
+_os_exec:
+	cmpq	$17, %rdi
+	jz	_exec_call
+	sarq	$3, %rdi
+	addq	$8, %rdi
+_exec_call:
+	subq	$8, %rsp #stack alignment
+	call	_o_exec
+	addq	$8, %rsp
+	cvtsi2sd %rax, %xmm0
+	movsd	%xmm0, (%r12)
+	leaq	6(, %r12, 8), %rax
+	addq	$8, %r12
 	xorq	%rbx, %rbx
 	ret
 

@@ -1,17 +1,19 @@
 string:
 	string
 os:
+	os
 table:
+	table
 io:
 	io
 lua:
-	load
-	unpack
-	require
-	ipairs
-	tonumber
-	tostring
 	type
 	next
-	print
+	ipairs
+	tostring
+	unpack
 	pairs
+	print
+	require
+	load
+	tonumber

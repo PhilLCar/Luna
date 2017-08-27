@@ -18,6 +18,8 @@
 #define output		_output
 #define input		_input
 #define err		_err
+#define o_exit		_o_exit
+#define o_exec		_o_exec
 #endif
 
 static FILE *curout;
@@ -259,4 +261,18 @@ void err(quad *mem)
 {
   mem[0] = 1;
   mem[1] = (quad)stderr;
+}
+
+int o_exit(quad i)
+{
+  double d = *(double*)(i >> 3);
+  exit((int)d);
+}
+
+int o_exec(char *exe_str)
+{
+  if ((quad)exe_str == NIL)
+    return system("");
+  else
+    return system(exe_str);
 }
