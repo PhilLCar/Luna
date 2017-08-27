@@ -8,6 +8,8 @@ io.input = function (filename)
    return _io_input(filename)
 end
 
+io.stdin = io.input(nil)
+io.stdout = io.output(nil)
 io.stderr = _get_stderr()
 
 io.write = function (...)
@@ -45,19 +47,5 @@ io.type = function (file)
 end
 
 io.lines = function (filename)
-   local file, line = _io_open(filename, "r")
-   local tab = {}
-   while true do
-      line = _io_read(file, "*line")
-      if line then
-	 tab[#tab + 1] = line
-      else
-	 break
-      end
-   end
-   _io_close(file)
-   return tab
+   return _io_lines(filename)
 end
-
-io.output(nil)
-io.input(nil)

@@ -412,7 +412,7 @@ _io_lines:
 	andq	$-16, %rsp
 	sarq	$3, %rdi
 	addq	$8, %rdi
-	movq	$17, %rsi
+	leaq	_r_str(%rip), %rsi
 	call	_f_open
 	movq	%rax, %rdi
 	subq	$8, %rsp
@@ -421,6 +421,7 @@ _io_lines:
 	xchg	%rax, (%rsp)
 	movq	%rax, %rdi
 	call	_f_close
+	popq	%rax
 	leave
 	ret
 
@@ -484,6 +485,10 @@ _get_stderr:
 
 _db1:
 	.double	1
+
+_r_str:
+	.asciz	"r"
+	
 _ftype:
 	.quad	4
 	.asciz	"file"

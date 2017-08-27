@@ -95,22 +95,36 @@ _s_sub_ret:
 
 	# %rdi: file, %rsi: what
 _o_write:
+	movq	%r15, (%r12)
+	movq	$2, %rax
+	call	_nil_fill
+	call	_varargs
+	sarq	$3, %r15
 	sarq	$3, %rdi
-	movq	%rdi, %r15
 	movq	8(%rdi), %rdi
 	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
+	subq	$8, %rsp
+	pushq	%rdi
+_wr_lp:	movq	(%r15), %rsi
+	cmpq	$33, %rsi
+	jz	_wr_en
+	movq	(%rsp), %rdi
 	call	_f_write
-	leave
+	subq	$8, %r15
+	jmp	_wr_lp
+_wr_en:	leave
 	xorq	%rbx, %rbx
 	movq	$33, %rax
 	ret
 
 	# %rdi: file
 _o_seek:
-	movq	$2, %rax
+	sarq	$3, %rdi
+	movq	8(%rdi), %rdi
+	movq	$3, %rax
 	call	_nil_fill
 	cmpq	$17, %rsi
 	jz	_seek
@@ -138,7 +152,8 @@ _o_lines:
 	movq	8(%rdi), %rdi
 _ol_tp:	movq	$33, (%r12)
 	movq	$17, 8(%r12)
-	movq	%rsp, 16(%r12)
+	leaq	-8(%rsp), %rax
+	movq	%rax, 16(%r12)
 	leaq	3(, %r12, 8), %rbx
 	addq	$24, %r12
 _ol_lp:	movq	%r12, %rsi
