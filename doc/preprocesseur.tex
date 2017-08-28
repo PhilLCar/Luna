@@ -11,11 +11,11 @@
 \usepackage{color}
 \usepackage{caption}
 \usepackage{titlesec}
-\usepackage{tabulary}
+\usepackage{longtable}
 
 \renewcommand{\arraystretch}{1.5}
 
-\setcounter{secnumdepth}{5}
+\setcounter{secnumdepth}{3}
 \titleformat*{\section}{\LARGE\bfseries}
 \titleformat*{\subsection}{\Large\bfseries}
 \titleformat*{\subsubsection}{\large\bfseries}
@@ -112,56 +112,80 @@ Tous les opérateurs ont au moins un paramètre et au plus deux. Lors du stage d
 Tous les opérateurs du langage Lua sont supportés par \luna{}, et certains autres ont étés ajoutés. Voici la table complète des opérateurs et de leur priorité (le niveau 0 représentant la priorité la plus haute):
 \paragraph{Table des priorité}
 \begin{center}
-  \begin{tabular}{r|l|l}
-    Priorité & Niveau & Opérateurs\\
+  \begin{tabular}{c|l|c|l}
+    Priorité & Niveau & Associativité & Opérateurs\\
     \hline\hline
-    0 & Opération sur les bits & {\lstinline$<< >> >>> | & ^^ === != ~$} \\
+    0 & Opération sur les bits & Gauche & {\lstinline$<< >> >>> | & ^^ === != ~$} \\
     \hline
-    1 & Puissance & {\lstinline$^$}\\
+    1 & Puissance & Droite & {\lstinline$^$}\\
     \hline
-    2 & Opérateur unaire & {\lstset{style=lua}\lstinline$- not ~ #$}\\
+    2 & Opérateur unaire & Gauche &{\lstset{style=lua}\lstinline$- not ~ #$}\\
     \hline
-    3 & Multiplicatif & {\lstinline$* / % \ //$}\\
+    3 & Multiplicatif & Gauche & {\lstinline$* / % \ //$}\\
     \hline
-    4 & Additif & {\lstinline$+ -$}\\
+    4 & Additif & Gauche & {\lstinline$+ -$}\\
     \hline
-    5 & Concaténation & {\lstinline$..$}\\
+    5 & Concaténation & Droite & {\lstinline$..$}\\
     \hline
-    6 & Booléen & {\lstinline$== ~= <= >= < >$}\\
+    6 & Booléen & Gauche & {\lstinline$== ~= <= >= < >$}\\
     \hline
-    7 & Conjonctif & {\lstset{style=lua}\lstinline$and$}\\
+    7 & Conjonctif & Gauche & {\lstset{style=lua}\lstinline$and$}\\
     \hline
-    8 & Disjonctif & {\lstset{style=lua}\lstinline$or$}
+    8 & Disjonctif &  Gauche & {\lstset{style=lua}\lstinline$or$}
   \end{tabular}
 \end{center}
-\paragraph{Référence}
-\begin{tabular}{p{1.3cm} r p{12cm}}
-  {\lstinline$a << n$} & \textbf{bsal/bshl} &  Décale \texttt{a} de \texttt{n} bits vers la gauche (décalage arithmétique ou logique).\\
-  {\lstinline$a >> n$} & \textbf{bsar} & Décale \texttt{a} de \texttt{n} bits vers la droite. Si le MSB est 1, tous les bits décalés depuis le MSB sont mis à 1 (décalage arithmétique, conserve la négativité).\\
-  {\lstinline$a >>> n$} & \textbf{bshr} & Décale \texttt{a} de \texttt{n} bits vers la droite. Les bits décalés depuis le MSB sont 0 (décalage logique, ne conserve pas la négativité).\\
-  {\lstinline$a | b$} & \textbf{bor} & Effectue un 'OR' bit à bit entre \texttt{a} et \texttt{b}.\\
-  {\lstinline$a & b$} & \textbf{band} & Effectue un 'AND' bit à bit entre \texttt{a} et \texttt{b}.\\
-  {\lstinline$a ~ b$} \newline {\lstinline$a ^^ b$} & \textbf{bxor} & Effectue un 'XOR' bit à bit entre \texttt{a} et \texttt{b}.\\
-  {\lstinline$a === b$} & \textbf{beq} & Compare les pointeurs, retourne vrai si ils pointent vers le même endroit.\\
-  {\lstinline$!=$} & \textbf{bneq} & Compare les pointeurs, retourne faux si ils pointent vers le même endroit.\\
-  {\lstinline$^^ ~$} & \textbf{bxor} & Opérateur 'XOR' sur les bits\\
-  {\lstinline$^^ ~$} & \textbf{bxor} & Opérateur 'XOR' sur les bits\\
-  {\lstinline$^^ ~$} & \textbf{bxor} & Opérateur 'XOR' sur les bits
-\end{tabular}
-
+Le sens de l'associativité décrit dans quel ordre les expression vont se former si plusieurs d'entre elles du même niveau de priorité se trouvent côte-à-côte. Par exemple:
+\begin{lstlisting}[style=lua,caption={Exemple du sens de l'associativité},label=DescriptiveLabel]
+  x^y^z = (x ^ (y ^ z) --droite
+  1-2-3 = ((1 - 2) - 3) --gauche
+\end{lstlisting}
+Pour de plus amples détails vous pouver consulter le jeu d'instruction du au paragraphe \ref{par:instructions}.
+\newpage
 \subsubsection{Types et repésentation interne}
+Vu que Lua est typé dynamiquement, chaque variable doit contenir son information de type. On tire profit du fait que les pointeur n'occupent que 6 bytes les plus bas pour stocker l'information de type. En décalant les pointeurs de 3 bits vers la gauche, on obtient suffisemment d'espace pour encore 8 types différents. Pour récupérer les types on fait 'AND' avec 7, et pour récupérer le pointeur 'SAR' avec 3. Le paragraphe suivant décrit les types et leur représentation interne. À des fins de clareté on fera référence à toutes les valeurs qui ont leur 3 LSB libre comme étant étiquetées et toutes celles étant dans leur format \textit{naturel} comme étant non-étiquetées.
 \setcounter{paragraph}{-1}
-\paragraph{Entiers/Adresses}
-\paragraph{Valeurs spéciales}
-\paragraph{Chaînes de caractères}
-\paragraph{Tables}
-\paragraph{Objets}
+\paragraph{Entiers/Adresses - \texttt{000}}
+Le choix a été pour éviter les comparaisons constantes de représenter tous les nombres en lua sous forme de doubles. Ainsi le type entier est en quelque sorte désuet au point de vue de l'utilisateur, cependant, certaine structures internes utilisent encore sa représentation.
+
+Une valeur contenant ses trois LSB à 0 indique qu'elle ne pointe sur rien et donc que le GC peut l'ignorer. C'est pourquoi toutes les addresses sont des multiples de 8. Le compilateur s'assure d'aligner les adresses de retour et d'appelle, ainsi que de conserver la mémoire et la pile alignée. Ce faisant, on évite les accidents où le GC tenterait de copier une addresse de retour. La reconnaissance par le GC n'est pas la seule utilité de cet alignment. En effet, l'alignement général du stack et de la mémoire sur des multiples de 8 améliore la performance du cache, car aucun \textit{data chunk} ne risque d'être tronqué.
+\paragraph{Valeurs spéciales - \texttt{001}}
+Les valeurs spéciales sont des constantes qui vont permettre au compilateur de d'obtenir de l'information sur certains object, au GC de reconnaître des cas particulier, ou simplement de représenter des constantes du langages. Voici la table de valeurs spéciales.
+\begin{center}
+  \begin{tabular}{r|c|p{12cm}}
+    Nom & Valeur (hex) & Utilisation\\
+    \hline
+    FALSE & \texttt{0x01} & Représente la constante {\lstset{style=lua}\lstinline$false$}\\
+    TRUE  & \texttt{0x09} & Représente la constante {\lstset{style=lua}\lstinline$true$}\\
+    NIL   & \texttt{0x11} & Représente la constante {\lstset{style=lua}\lstinline$nil$}\\
+    VOID  & \texttt{0x21} & Indique que la pile est vide et ne contient plus de valeur\\
+    UNKN  & \texttt{0x41} & (Unknown) Indique que la longueur d'un tableau n'est plus fiable et doit être recalculée\\
+    FRAH  & \texttt{0x81} & (For Ahead) Signale au GC qu'une boucle {\lstset{style=lua}\lstinline$for$} se trouve à cet endoroit sur la pile\\
+  \end{tabular}
+\end{center}
+\paragraph{Chaînes de caractères - \texttt{010}}
+Les chaînes de caractères sont représentées par une case mémoire (8 bytes) indiquant la taille de la séquence de byte qui suit (moins le caractère nul). La fin du string contient au moins un caractère nul, mais potentiellement plus pour être aligné avec la mémoire. Exemple:
+\begin{center}//Bonjour tous
+  \begin{table}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{0000000073756E74}\\
+    \hline
+    \texttt{2072756F696E6F42}\\
+    \hline
+    \texttt{000000000000000C}\\
+    \hline
+  \end{tabular}
+  \caption{Exemple de la représentation en mémoire du string {\lstset{style=lua}\lstinline$"Bonjour tous"$}}
+  \end{table}
+\end{center}
+\paragraph{Tables - \texttt{011}}
+\paragraph{Objets - \texttt{100}}
 \setcounter{subparagraph}{-1}
-\subparagraph{Fermetures}
-\subparagraph{Fichiers}
-\paragraph{Pile}
-\paragraph{Nombres à virgule flottante}
-\paragraph{Fonctions}
+\subparagraph{Fermetures - \texttt{0100}}
+\subparagraph{Fichiers - \texttt{1100}}
+\paragraph{Pile - \texttt{101}}
+\paragraph{Nombres à virgule flottante (doubles) - \texttt{110}}
+\paragraph{Fonctions - \texttt{111}}
 
 \subsubsection{Fermetures}
 
@@ -212,7 +236,9 @@ local x = "tout" .. --[[le]] "monde"
    beau]]
 local y = "dehors"
 \end{lstlisting}
-en devient un beaucoup plus simple:
+
+\newpage
+devient en fait beaucoup plus simple:
 \begin{lstlisting}[belowcaptionskip = -1\baselineskip]
 
 local x = ("tout" .. monde) 
@@ -258,6 +284,7 @@ end
 
 Bien évidemment, une telle fonction requière une certaine quantitée de ressource en comparaison avec une autre qui n'aurait pas autant d'éléments à prendre en charge. Il faut cependant réaliser qu'elle permet de lire des nombres et des opérateurs collés et ensuite de les décoller. Un des avantages immense de cette partie du processus sera évidente ultérieurement, alors que l'écriture d'une fonction de \textit{parsing} deviendra triviale.
 
+\newpage
 \subsubsection{Parenthèsage}
 Comme dans tous les langages à notation infixe, le compilateur doit s'assurer d'avoir un parenthèsage complet avant d'évaluer une expression.
 \begin{lstlisting}[caption={Parenthèsage incomplet},label=DescriptiveLabel]
@@ -294,6 +321,8 @@ end
 \end{lstlisting}
 
 Comme on peut le voir dans l'exemple ci-haut, il est possible de référer aux indices textuels d'une table en utilisant «\texttt{table.index}»; cela reviens exactement au même qu'écrire «\texttt{table ["index"]}». La seconde forme sera priorisé dans le texte final puisqu'elle est standard et fonctionne avec tous les types d'index. On remarque aussi qu'il est possible de déclarer des fonction sans utiliser explicitement l'opérateur de déclaration «=». Cette déclaration en ligne est pratique car agréable à l'oeil, mais ce n'est pas un format conventionnel que le compilateur pourra traiter, il faut donc aussi les développer:
+
+\newpage
 \begin{lstlisting}[belowcaptionskip = -1\baselineskip]
 tmp = { allo = 9 } 
 
@@ -313,6 +342,7 @@ table.x.y.z:sub(1, 1) ==
 
 On peut voir que développer le «\texttt{:}» est en fait sous-optimal, dans le second cas, la table «\texttt{table}» devra être indexée deux fois, une fois à 4 niveau de profondeur, la seconde à 3. En conservant le «\texttt{:}», on peut implémenter une manière beaucoup plus efficace de réaliser cette opération en rajoutant des instructions au compilateur.
 
+\newpage
 \subsection{Mécanisme}
 Le préprocesseur a de nombreuses fonctions à remplir. Ces fonctions sont pour la plupart cependant simplement destinée à faciliter la tâche des compilateurs ultérieurement et à favoriser les chances de succès, c'est-à-dire qu'aucune d'entre elles ne fait réellement partie du processus de compilation. Le tout semblant un peu superflu, on souhaite réduire au maximum le temps que le programme prend pour effectuer cette tâche. La première version du préprocesseur était très simple mais demandait le lire le texte à plusieurs reprise en modifiant une chose à chaque fois. La version présentement utilisée ne fait qu'un seul passage, et exécute chacune de ces fonctions simultanément.
 
@@ -332,6 +362,11 @@ Le nouveau \textit{string} produit utilise la notation classique avec les guille
 
 \subsubsection{Lecture de ligne}
 À chaque ligne la fonction \texttt{nexttoken} est appelée jusqu'à ce que lecteur rencontre le caractère \textit{newline}, atteigne un délimitateur d'environnement, ou atteigne la fin du fichier. Cependant, si la ligne se termine par un terme qui en nécessite un autre (comme un opérateur) la ligne ne sera pas considérée comme terminée. Au fur et à mesure que les mots sont lus, ils sont ajouter à une table d'expressions. C'est cette table qui sera utilisée pour le parenthèsage.
+
+\paragraph{Conversion de la macro «.»}
+La représentation sous forme de table est le moment idéal pour éliminer les index de table qui utilisent le point. Le préprocesseur peut facilement passer à travers les éléments, lorsqu'il détecte un point, il supprime cet élément ainsi que le \texttt{précédent} de la table et remplace le \texttt{suivant} par \texttt{précédent ["suivant"]}.
+
+\newpage
 \paragraph{Parenthèsage} 
 Le système de parenthèsage est plutôt simple, il est réalisé par les fonction \texttt{comb1} et \texttt{comb2}, depuis la fonction \texttt{scan}. Essentiellement, \texttt{scan} les appelles successivement avec une liste d'opérateur à associer (dans l'ordre de priorité du langage). La fonction de combinaison parcours la table, et lorsqu'elle trouve un opérateur de ses paramètres, elle va tout d'abord tenter de résoudre le calcul posé par cet opérateur grâce à \texttt{trysolve}. Dans le cas d'un échec elle va retourner un string qui correspond au deux opérandes et l'opérateur entre parenthèses.
 \begin{lstlisting}[caption={Trace partielle d'exécution de la fonction scan},label=DescriptiveLabel]
@@ -360,16 +395,15 @@ scan(expr):
 
 \texttt{scan} s'exécute récursivement lorsque des parenthèses sont déja présentes. Avant d'appeler les fonctions de combinaison, \texttt{scan} s'assure également de combiner les fonctions avec leurs paramètres. Il est impératif que cette fonction produise du code fidèle (sans parenthèse superflue), car en lua les parenthèse de trop sont utilisée pour la troncation de la séquence de retour, ainsi «\texttt{(var)}» n'a pas la même signification que «\texttt{var}».
 
-\paragraph{Conversion de la macro «.»}
-La représentation sous forme de table est le moment idéal pour éliminer les index de table qui utilisent le point. Le préprocesseur peut facilement passer à travers les éléments, lorsqu'il détecte un point, il supprime cet élément ainsi que le \texttt{précédent} de la table et remplace le \texttt{suivant} par \texttt{précédent ["suivant"]}.
-
 \subsubsection{Préprocesseur et parcours des environnements}
 Afin de préparer le code, le préprocesseur appelle la fonction de lecture de ligne en boucle. Mais parfois celle-ci tomber sur un délimitateur d'environnement. Les fonctions décrites précédemment sont toutes à l'affût des délimitateurs, si l'une d'entre elles détecte un mot réservé qui débute un environnement, le préprocesseur s'appelera lui-même en augmentant de 1 le paramètre d'indexation. Le préprocesseur descend ainsi récursivement dans les environnements s'assurant par le fait même d'une bonne indexation et d'une structure cohérente.
 
+\newpage
 \subsection{Récapitulation}
 Le préprocesseur est utile pour de nombreuse raison, la principale étant de produire du code lisible pour le compilateur. Cependant il est également pratique pour nettoyer un code mal indenté, détecter les erreurs de l'utilisateur et précompiler le code pour rendre celui-ci le plus cours possible.
 
-\begin{lstlisting}[caption={Récapitulatif des fonctionnalitées},label=DescriptiveLabel, belowcaptionskip = -0.8\baselineskip]
+Fichier avant traitement:
+\begin{lstlisting}[caption={Récapitulatif des fonctionnalitées},label=DescriptiveLabel]
 function add(v1, v2)
 --[[ 
       Ceci est un exemple de fichier qui 
@@ -387,6 +421,7 @@ function add(v1, v2)
 end
 \end{lstlisting}
 
+Fichier après traitement:
 \begin{lstlisting}[belowcaptionskip = -1\baselineskip]
 add = function (v1 , v2) 
    local mem ; mem = function (v) 
@@ -402,5 +437,37 @@ end
 
 \newpage
 \section{Compilateur}
-
+\paragraph{Jeu d'instruction IR}
+\label{par:instructions}
+\begin{longtable}{p{1.3cm} r p{12cm}}
+  {\lstinline$m << n$} & \textbf{bsal/bshl} &  Décale l'entier \texttt{m} de \texttt{n} bits vers la gauche (décalage arithmétique ou logique).\\
+  {\lstinline$m >> n$} & \textbf{bsar} & Décale l'entier \texttt{m} de \texttt{n} bits vers la droite. Si le MSB est 1, tous les bits décalés depuis le MSB sont mis à 1 (décalage arithmétique, conserve la négativité).\\
+  {\lstinline$m >>> n$} & \textbf{bshr} & Décale \texttt{m} de \texttt{n} bits vers la droite. Les bits décalés depuis le MSB sont 0 (décalage logique, ne conserve pas la négativité).\\
+  {\lstinline$m | n$} & \textbf{bor} & Effectue un 'OR' bit à bit entre \texttt{m} et \texttt{n}.\\
+  {\lstinline$m & n$} & \textbf{band} & Effectue un 'AND' bit à bit entre \texttt{m} et \texttt{n}.\\
+  {\lstinline$m ~ n$} \newline {\lstinline$m ^^ n$} & \textbf{bxor} & Effectue un 'XOR' bit à bit entre \texttt{m} et \texttt{n}.\\
+  {\lstinline$p === q$} & \textbf{beq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$true$} si ils pointent vers le même objet.\\
+  {\lstinline$p != q$} & \textbf{bneq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$false$} si ils pointent vers le même objet.\\
+  {\lstinline$a ^ b$} & \textbf{pow} & Effectue de calcul de \texttt{a} à la puissance \texttt{b}, si \texttt{a} est négatif, alors \texttt{b} doit impérativement être un entier sans quoi le résultat est indéfini.\\
+  {\lstinline$-a$} & \textbf{neg} & Inverse le signe du nombre \texttt{a}.\\
+  {\lstinline$~n$} & \textbf{binv} & Inverse les bits du nombre entier \texttt{n}.\\
+  {\lstset{style=lua}\lstinline$not x$} & \textbf{not} & \texttt{x} prend la valeur {\lstset{style=lua}\lstinline$true$} si \texttt{x} vaut {\lstset{style=lua}\lstinline$nil$} ou {\lstset{style=lua}\lstinline$false$}, et la valeur {\lstset{style=lua}\lstinline$false$} dans tous les autres cas.\\
+  {\lstinline$#x$} & \textbf{len} & Si \texttt{x} est une table ou un string, retourne sa longueur. La longueur d'une table est considérée comme le nombre d'éléments non-nuls entre l'index 1 et le premier élément valant {\lstset{style=lua}\lstinline$nil$}.\\
+  {\lstinline$a * b$} & \textbf{mul} & Effectue la multiplication de deux doubles.\\
+  {\lstinline$a / b$} & \textbf{div} & Effectue la division de deux doubles.\\
+  {\lstinline$a % b$} & \textbf{mod} & Calcule le modulo de \texttt{a} dans la base \texttt{b}\\
+  {\lstinline$a \ b$} \newline {\lstinline$a // b$} & \textbf{idiv} & Effectue la division entière de \texttt{a} par \texttt{b}.\\
+  {\lstinline$a + b$} & \textbf{add} & Effectue l'addition de deux doubles.\\
+  {\lstinline$a - b$} & \textbf{sub} & Effectue la soustraction de deux doubles.\\
+  {\lstinline$s .. t$} & \textbf{con} & Effectue la concaténation de la chaîne de caractère \texttt{s} avec la chaîne de caractère \texttt{t}\\
+  {\lstinline$x == y$} & \textbf{eq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont les mêmes, {\lstset{style=lua}\lstinline$false$} sinon.\\
+  {\lstinline$x == y$} & \textbf{neq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont différentes, {\lstset{style=lua}\lstinline$false$} sinon.\\
+  {\lstinline$x <= y$} & \textbf{lte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$x >= y$} & \textbf{gte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$x < y$} & \textbf{lt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$x > y$} & \textbf{gt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$x and y$} & \textbf{and} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, poursuit l'exécution à \texttt{y}, sinon retourne la valeur de \texttt{x}, si l'exécution est poursuivie à \texttt{y}, retourne la valeur de \texttt{y}\\
+  {\lstinline$x or y$} & \textbf{or} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, retourne \texttt{x}, sinon poursuit l'exécution à \texttt{y}, et retourne \texttt{y}\\
+  
+\end{longtable}
 \end{document}
