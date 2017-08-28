@@ -12,6 +12,8 @@
 \usepackage{caption}
 \usepackage{titlesec}
 \usepackage{longtable}
+\usepackage{amsmath}
+\usepackage{amssymb}
 
 \renewcommand{\arraystretch}{1.5}
 
@@ -142,7 +144,7 @@ Le sens de l'associativité décrit dans quel ordre les expression vont se forme
 Pour de plus amples détails vous pouver consulter le jeu d'instruction du au paragraphe \ref{par:instructions}.
 \newpage
 \subsubsection{Types et repésentation interne}
-Vu que Lua est typé dynamiquement, chaque variable doit contenir son information de type. On tire profit du fait que les pointeur n'occupent que 6 bytes les plus bas pour stocker l'information de type. En décalant les pointeurs de 3 bits vers la gauche, on obtient suffisemment d'espace pour encore 8 types différents. Pour récupérer les types on fait 'AND' avec 7, et pour récupérer le pointeur 'SAR' avec 3. Le paragraphe suivant décrit les types et leur représentation interne. À des fins de clareté on fera référence à toutes les valeurs qui ont leur 3 LSB libre comme étant étiquetées et toutes celles étant dans leur format \textit{naturel} comme étant non-étiquetées.
+Vu que Lua est typé dynamiquement, chaque variable doit contenir son information de type. On tire profit du fait que les pointeur n'occupent que 6 bytes les plus bas pour stocker l'information de type. En décalant les pointeurs de 3 bits vers la gauche, on obtient suffisemment d'espace pour encore 8 types différents. Pour récupérer les types on fait 'AND' avec 7, et pour récupérer le pointeur 'SAR' avec 3. Le paragraphe suivant décrit les types et leur représentation interne. À des fins de clareté on fera référence à toutes les valeurs qui ont leur 3 LSB libre comme étant étiquetées (T: \textit{tagged}) et toutes celles étant dans leur format \textit{naturel} comme étant non-étiquetées (UT: \textit{untagged}).
 \setcounter{paragraph}{-1}
 \paragraph{Entiers/Adresses - \texttt{000}}
 Le choix a été pour éviter les comparaisons constantes de représenter tous les nombres en lua sous forme de doubles. Ainsi le type entier est en quelque sorte désuet au point de vue de l'utilisateur, cependant, certaine structures internes utilisent encore sa représentation.
@@ -163,9 +165,8 @@ Les valeurs spéciales sont des constantes qui vont permettre au compilateur de 
   \end{tabular}
 \end{center}
 \paragraph{Chaînes de caractères - \texttt{010}}
-Les chaînes de caractères sont représentées par une case mémoire (8 bytes) indiquant la taille de la séquence de byte qui suit (moins le caractère nul). La fin du string contient au moins un caractère nul, mais potentiellement plus pour être aligné avec la mémoire. Exemple:
-\begin{center}//Bonjour tous
-  \begin{table}
+Les chaînes de caractères sont représentées par une case mémoire (8 bytes) contenant la taille de la séquence de byte qui suit (moins le caractère nul) sous la forme d'un entier non-étiqueté. La fin du string contient au moins un caractère nul, mais potentiellement plus pour être aligné avec la mémoire. Exemple:
+\begin{center}
   \begin{tabular}{|c|}
     \hline
     \texttt{0000000073756E74}\\
@@ -175,15 +176,118 @@ Les chaînes de caractères sont représentées par une case mémoire (8 bytes) 
     \texttt{000000000000000C}\\
     \hline
   \end{tabular}
-  \caption{Exemple de la représentation en mémoire du string {\lstset{style=lua}\lstinline$"Bonjour tous"$}}
-  \end{table}
+  \captionof{figure}{Exemple de la représentation en mémoire du string \protect\lstset{style=lua}\lstinline$"Bonjour tous"$}
 \end{center}
 \paragraph{Tables - \texttt{011}}
+Les tables en Lua ont la propriété de pouvoir recevoir non seulement des nombre mais aussi des chaînes de caractères comme index. Bien que pratique d'un point de vu programmation, ceci rend leur implémentation plus complexe. Plusieurs option sont disponible pour permettre un tel usage. L'idée évidente serait d'empiler des paires \texttt{CLEF}/\texttt{VALEUR} une par dessus l'autre. Cependant cette technique est difficile car elle requière un grand espace mémoire contigue, l'alternative évidente est donc la liste chaînée. La liste chaînée pose cependant un inconvéniant majeur lors du parcours des valeurs de la table, si on veut accéder au 100\textsuperscript{ième} élément, il faut faire 101 accès mémoire! Considérant que Lua repose beaucoup sur l'utilisation des tables, et que la majoritée des tables sont initialisées à la bonne taille, une combinaison des deux options plus haute a été choisie.
+\begin{center}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{*(Tableau (TB) : UT Ptr)}\\
+    \hline
+    \texttt{*(Liste chaînée (LC) : UT Ptr)}\\
+    \hline
+    \texttt{\#{}(Longueur : UT Int)}\\
+    \hline
+  \end{tabular}
+  \captionof{figure}{Représentation en mémoire d'une table}
+\end{center}
+NB: À l'intérieur de la table, toutes les valeurs sont non-étiquetées pour favoriser un traitement rapide de l'information.
+
+ Chaque pointeur de la liste pointe sur le prochain élément jusqu'à ce qu'il n'y en aie plus, il vaut alors NIL. Si une table ne contient pas de liste chaînée, alors le pointeur de liste vaut NIL. Tous les index non entier ($\in\mathbb{R}\setminus\mathbb{Z}$) et les chaînes de caractères sont dirigés vers la liste chaînées.
+\begin{center}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{*(A : UT Ptr)}\\
+    \hline
+    \texttt{\#{}(VALEUR : T)}\\
+    \hline
+    \texttt{LC->\#{}(CLEF : T)}\\
+    \hline
+  \end{tabular}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{*(B : UT Ptr)}\\
+    \hline
+    \texttt{\#{}(VALEUR : T)}\\
+    \hline
+    \texttt{A->\#{}(CLEF : T)}\\
+    \hline
+  \end{tabular}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{*(C : UT Ptr)}\\
+    \hline
+    \texttt{\#{}(VALEUR : T)}\\
+    \hline
+    \texttt{B->\#{}(CLEF : T)}\\
+    \hline
+  \end{tabular}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{NIL}\\
+    \hline
+    \texttt{\#{}(VALEUR : T)}\\
+    \hline
+    \texttt{C->\#{}(CLEF : T)}\\
+    \hline
+  \end{tabular}
+  \captionof{figure}{Exemple d'une séquence de chaînage de la liste chaînée}
+\end{center}
+
+La partie tableau de la liste contient tous les index entiers. Si on tente d'accéder à un index trop élevé ou trop bas en mode «accès», NIL sera retourné. En mode «définition» le tableau sera copié à un autre endroit dans la mémoire et redimensionné pour accomoder le nouvel index. Le GC est responsable de redimensionner une table inutilement trop volumineuse.
+\begin{center}
+\begin{tabular}{|c|}
+    \hline
+    \texttt{...}\\
+    \hline
+    \texttt{NIL}\\
+    \hline
+    \texttt{\#{}(DÉCALAGE : T Int)}\\
+    \hline
+    \texttt{TB->\#{}(CAPACITÉ : T Int)}\\
+    \hline
+\end{tabular}
+\captionof{figure}{Base du tableau d'index entiers}
+\end{center}
+Ceci donne la possibilité à l'usager de créer une perte de mémoire assez massive en définissant deux index extrêmement éloignés l'un de l'autre, cependant un tel comportement n'aurait pas vraiment de but autre que celui de faire planter le programe. Le bénéfice d'avoir un tableau directement indexable surpasse largement les inconvénients.
+
+\newpage
 \paragraph{Objets - \texttt{100}}
+Le type objet sert pour tous les types qui ne font pas partie des 7 principaux. En décalant à droite, on obtient un pointeur vers une case mémoire qui contient le type de l'objet, le compilateur doit donc faire une étape de plus pour obtenir le type, c'est pourquoi il décrit les objets moins fréquents. On considère que le type pointé en mémoire s'ajoute à 8 pour qu'il n'y ait pas de conflit avec les autres types existants. Par exemple, le type 4->0, est en fait le type 8 (le premier après Fonction (7)).
 \setcounter{subparagraph}{-1}
-\subparagraph{Fermetures - \texttt{0100}}
-\subparagraph{Fichiers - \texttt{1100}}
-\paragraph{Pile - \texttt{101}}
+\subparagraph{Fermetures - \texttt{1000}}
+Les fermetures suivent le même principe que la liste chaînée des tables, mais elles sont chaînées dans l'autre sens de sorte que l'objet le plus récent est accessible le plus rapidement. Leur forme est la même que celle des maillons des tables, mais avec une case mémoire en plus pour le type. Vu qu'elles pointes toutes vers la même racine(ENV), ce sont les feuilles qui sont sauvegarder dans chaque fonction (FN).
+
+\begin{center}
+\begin{tabular}{|c|}
+    \hline
+    \texttt{*(ENV : UT Ptr) | NIL}\\
+    \hline
+    \texttt{\#{}(VALEUR : T)}\\
+    \hline
+    \texttt{\#{}(CLEF : T)}\\
+    \hline
+    \texttt{FN->\#{}(Type : 0)}\\
+    \hline
+\end{tabular}
+\captionof{figure}{Format d'une valeur «enfermée»}
+\end{center}
+
+\subparagraph{Fichiers - \texttt{1001}}
+Les fichiers sont principalement gérés par du code C. L'objet fichier est une paire comprenant le type et soit un pointeur vers le fichier ouvert ({\lstset{style=lua}\lstinline$io.ftype() == "file"$}), ou la valeur NIL ({\lstset{style=lua}\lstinline$io.ftype() == "closed file"$}).
+\begin{center}
+\begin{tabular}{|c|}
+    \hline
+    \texttt{*(FILE : UT Ptr) | NIL}\\
+    \hline
+    \texttt{File->\#{}(Type : 1)}\\
+    \hline
+\end{tabular}
+\captionof{figure}{Format d'une valeur «enfermée»}
+\end{center}
+
+\paragraph{Piles - \texttt{101}}
 \paragraph{Nombres à virgule flottante (doubles) - \texttt{110}}
 \paragraph{Fonctions - \texttt{111}}
 
@@ -192,6 +296,8 @@ Les chaînes de caractères sont représentées par une case mémoire (8 bytes) 
 \subsubsection{Assignation}
 
 \subsubsection{Boucles}
+
+\subsubsection{Appel récursif}
 
 \subsubsection{Librairies}
 
