@@ -1,0 +1,125 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage{inconsolata}
+\usepackage[T1]{fontenc}
+\usepackage{listings}
+\usepackage[margin=1in]{geometry}
+\usepackage[sfdefault]{roboto} 
+\usepackage[T1]{fontenc}
+\usepackage{color}
+\usepackage{caption}
+
+\title{Compilateur Lua - Projet IFT3150}
+\date{\today}
+\author{Philippe Caron}
+
+\makeatletter
+\newcommand\InconsolataFont{
+  \fontfamily{inconsolata}\selectfont
+}
+\makeatother
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{lgray}{rgb}{0.95,0.95,0.95}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{reserved}{rgb}{0.8,0,0.8}
+\definecolor{comment}{rgb}{0.5,0,0}
+\definecolor{def}{rgb}{0,0,1}
+\definecolor{string}{rgb}{0.5, 0, 0.5}
+\definecolor{no}{rgb}{1, 1, 1}
+
+\captionsetup[lstlisting]{font=scriptsize, labelfont=bf}
+\lstset{ %
+  backgroundcolor=\color{lgray},   
+  basicstyle=\normalsize\ttfamily,        % the size of the fonts that are used for the code
+  breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=b,  
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  extendedchars=true,% lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+  %frame=single,                   % how far the line-numbers are from the code
+   % the style that is used for the line-numbers
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+  showstringspaces=false,          % underline spaces within strings only
+  showtabs=false,
+                     % the step between two line-numbers. If it's 1, each line will be numbered   % string literal style
+  tabsize=2,	                   % sets default tabsize to 2 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+
+\lstdefinestyle{lua}{
+  belowcaptionskip=1\baselineskip,
+  breaklines=true,
+  xleftmargin=\parindent,
+  language=[5.3]Lua,
+  showstringspaces=false, 
+  keepspaces=true,  
+  commentstyle=\color{comment}, 
+  keywordstyle=\bfseries\color{reserved}, 
+  stringstyle=\color{string},  
+  numbers=left,
+  numbersep=5pt,                    % show tabs within strings adding particular underscores
+  stepnumber=1,
+  numberstyle=\tiny\color{gray}
+  %identifierstyle=\color{blue},
+}
+\lstdefinestyle{out}{
+  belowcaptionskip=1\baselineskip,
+  breaklines=true,
+  xleftmargin=\parindent,
+  showstringspaces=false, 
+  keepspaces=true,
+  language={},
+  numberstyle=\tiny\color{no}
+}
+\renewcommand{\lstlistingname}{Exemple}
+
+%\lstset{escapechar=@,style=customc}
+%\newcommand{\includecode}[2][c]{\lstinputlisting[caption=#2, escapechar=, style=custom#1]{#2}<!---->}
+% ...
+
+%\includecode{sched.c}
+%\includecode[asm]{sched.s}
+% ...
+
+%\lstlistoflistings
+
+\begin{document}
+\maketitle
+\section{Introduction}
+Le but du préprocesseur est de standardiser tous les fichiers de code de manière à ce que le compilateur puisse éventuellement traiter des fichiers suivant un certain patron plus strict de formattage. C'est important puisque rien ne garanti que tous les programmeurs ont la même éthique d'écriture. Dans ce cas-ci particulièrement, le préprocesseur est très utile car le langage Lua a une syntaxe plus permissive que la plupart des autres langages impératifs. Alors que beaucoup exigent le fameux «;» à la fin de chaque ligne, en Lua il n'est nécessaire que pour séparter deux instructions consécutives ambiguës. Il existe également plusieurs forme équivalentes pour exprimer la même chose, ce qui pourrait devenir compliquer pour un compilateur. Finalement, les expressions ne sont pas forcément correctement parenthésées au moment de la compilation, le préprocesseur permet de compléter les parenthèse manquante.
+
+\section{Fonctions du préprocesseur}
+Afin de faciliter au maximum le travail du compilateur, le préprocesseur rempli de nombreuses fonctions simultanément.
+
+\subsection{Détection d'erreur}
+Il est facile de faire des erreurs en programant, mais pas toujours de les trouver. Le simple fait de chercher une parenthèse mal fermée peut représenter une perte de temps importante. Par exemple dans le segment de code suivant, on voit qu'une parenthèse fermante manque.
+\lstset{style = lua}
+\begin{lstlisting}[caption={Mauvais parenthèsage},label=DescriptiveLabel]
+  local x = print(test(i)
+\end{lstlisting}
+Un des rôles du préprocesseur va être d'avertir l'usager de son erreur. Si on tente d'exécuter luna sur le code suivant, on obtient ceci:
+\lstset{style = out}
+\begin{lstlisting}
+FILE: tmp.lua
+Error at line 1: Parenthesis mismatch.
+local x = print(test(i)
+               ^
+\end{lstlisting}
+
+\subsection{Effacement des commentaires}
+
+\subsection{Indexation}
+
+\subsection{Parenthèsage}
+
+\subsection{Précompilation}
+
+\subsection{Standardisation}
+
+\section{Mécanisme}
+
+\end{document}

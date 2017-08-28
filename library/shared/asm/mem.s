@@ -1,4 +1,4 @@
-.text
+	.text
 
 # MEMORY ROUTINES
 ################################################################################
@@ -9,7 +9,7 @@
 _transfer:
 	movq	%rdi, -8(%rsp)
 _tf_lp:	movq	(%rbp, %rax, 8), %rdi
-	xorq	_trf_mask(%rip), %rdi
+	xorq	_trf_mask@GOTPCREL(%rip), %rdi
 	leaq	(%rax, %rbx, ), %r15
 	leaq	(%rbp, %r15, 8), %r15
 	cmpq	%r15, %rsp
@@ -177,7 +177,7 @@ _clear_regs:
 
 	.global _prep_gc
 _prep_gc:
-	cmpq	%r12, _mem_max(%rip)
+	cmpq	%r12, _mem_max@GOTPCREL(%rip)
 	jb	_prep
 	ret
 _prep:
@@ -224,7 +224,7 @@ _prep:
 	pushq	%rbp
 	movq	%rsp, %rbp
 	andq	$-16, %rsp
-	call	_gc
+	call	_gc@PLT
 	leave
 	movq	%rdx, %r12
 	leaq	3(, %rax, 8), %r13
@@ -289,7 +289,7 @@ mmap_syscall_linux:
 
 mmap_syscall:
         movq	$0, %rdi             	# rdi = address
-        movq	_mem_size(%rip), %rsi	# rsi = block length
+        movq	_mem_size@GOTPCREL(%rip), %rsi	# rsi = block length
         movq	$7, %rdx            	# rdx = PROT_READ | PROT_WRITE | PROT_EXEC
         movq	$-1, %r8           	# r8 = file descriptor (-1 = none)
         movq	$0, %r9              	# r9 = offset

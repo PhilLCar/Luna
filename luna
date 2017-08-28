@@ -1,8 +1,11 @@
 #! /usr/bin/env lua
 local i = 1
 comp_flags = {}
+libs = {}
+tmps = {}
 comp_code = ""
 comp_name = ""
+comp_path = ""
 
 function help()
    print("Usage:\n\n\tluna {-flag} file[.lua] [target[.s|.o|.exe]]\n\n" ..
@@ -22,15 +25,23 @@ function help()
    os.exit()
 end
 
-function getname(name)
-   for i = 1, #name do
-      local s = name:sub(i, i)
+function getname(data)
+   local name, path = "", ""
+   for i = 1, #data do
+      local s = data:sub(i, i)
       if s == "/" then
-	 comp_name = ""
+	 path = path .. name .. "/"
+	 name = ""
       else
-	 comp_name = comp_name .. s
+	 name = name .. s
       end
    end
+   if name:sub(-4, -4) == "." then
+      name = name:sub(1, -5)
+   elseif name:sub(-2, -2) == "." then
+      name = name:sub(1, -3)
+   end
+   return name, path
 end
 
 while arg[i] and arg[i]:sub(1, 1) == "-" do
@@ -49,6 +60,8 @@ while arg[i] and arg[i]:sub(1, 1) == "-" do
       comp_flags.npc = true
    elseif a == "-sas" then
       comp_flags.sas = true
+   elseif a == "-tmp" then
+      comp_flags.tmp = true
    elseif a == "-h" then -- help
       help()
    else
@@ -70,42 +83,53 @@ if comp_flags.inf then
    print("LUNA [Lua Compiler for Intel x86-64] (2017)")
    print("\tAuthor      : Philippe Caron")
    print("\tLua version : 5.3")
-   print("\tAssembler   : gcc\n")
+   print("\tC Compiler  : gcc\n")
+   print("\tAssembler   : gas\n")
 end
 
 if comp_file then
-   if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
-      comp_file = comp_file:sub(1, #comp_file - 4)
-   end
+   --if comp_file:sub(#comp_file - 3, #comp_file) == ".lua" then
+      --comp_file = comp_file:sub(1, #comp_file - 4)
+   --end
 
    -- EVENTUALLY: CHECK FOR FLAG CONFLICTS
    if arg[i + 1] ~= nil then
       comp_target = arg[i + 1]
+   end
+   if comp_target then
+      comp_name, comp_path = getname(comp_target)
+      comp_target = comp_path .. comp_name
+   else
+      comp_name, comp_path = getname(comp_file)
+      comp_target = comp_path .. comp_name
+   end
+   --[[
       local ext = comp_target:sub(#comp_target - 1, #comp_target)
       if ext == ".s" then
 	 comp_target = comp_target:sub(1, #comp_target - 2)
 	 comp_flags.asm = true
-	 getname(comp_target)
+	 comp_name, comp_path = getname(comp_target)
       elseif ext == ".o" then
 	 comp_target = comp_target:sub(1, #comp_target - 2)
-	 comp_flags.lib = true
-	 getname(comp_target)
+	 if not comp_flags.tmp then comp_flags.lib = true end
+	 comp_name, comp_path = getname(comp_target)
       elseif comp_target:sub(#comp_target - 3, #comp_target) == ".exe" then
 	 comp_target = comp_target:sub(1, #comp_target - 2)
-	 getname(comp_target)
+	 comp_name, comp_path = getname(comp_target)
       elseif comp_target:sub(#comp_target, #comp_target) ~= "/" then
-	 getname(comp_file)
+	 comp_name, comp_path = getname(comp_file)
 	 comp_target = comp_target .. "/" .. comp_name
       else
-	 getname(comp_file)
+	 comp_name, comp_path = getname(comp_file)
 	 comp_target = comp_target .. comp_name
       end
    else
       comp_target = comp_file
-      getname(comp_target)
-   end
+      comp_name, comp_path = getname(comp_target)
+      end]]
+   
       
-   local file = io.open(comp_file .. ".lua", "r")
+   local file = io.open(comp_file, "r")
    local text = file:read("line")
    if text:sub(1,2) == "#!" then text = file:read("all")
    else text = text .. "\n" .. file:read("all") end
@@ -117,17 +141,32 @@ if comp_file then
    require("ir-compiler")
    -- ATTENTION CHEMIN RELATIF, NE FONCTIONNERA PAS PARTOUT!!
    if not comp_flags.asm then
-      if comp_flags.lib then
+      if comp_flags.lib or comp_flags.tmp then
 	 os.execute("gcc -fPIC -c " .. comp_target .. ".s -o " .. comp_target .. ".o")
       else
-	 local includes = "library/o/* "
-	 --for lib in pairs(libs) do
-	    --includes = includes .. "library/o/" .. lib .. ".o "
-	 --end
+	 local includes = "library/o/liblua.o "
+	 for lib in pairs(libs) do
+	    includes = includes .. "library/o/" .. lib .. ".o "
+	 end
+	 for tmp, done in pairs(tmps) do
+	    if not done then
+	       local n, p = getname(tmp)
+	       if p:sub(1, 1) ~= "/" then
+		  p = comp_path .. p
+	       end
+	       os.execute("./luna -tmp " .. p .. n .. ".lua tmp/" .. n .. ".o")
+	    end
+	    includes = includes .. "tmp/" .. tmp .. ".o "
+	 end
 	 os.execute("gcc " .. includes .. comp_target .. ".s -o " .. comp_target .. ".exe")
       end
    end
    if not comp_flags.asm and not comp_flags.sub then
       os.execute("rm " .. comp_target .. ".s")
+   end
+
+   for tmp in pairs(tmps) do
+      local n = getname(tmp)
+      os.execute("rm tmp/" .. n .. ".o")
    end
 end

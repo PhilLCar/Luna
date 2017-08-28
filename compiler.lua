@@ -8,7 +8,6 @@ local _CLO = "__CLO__"
 local _SIZE = "__SIZE__"
 local globals = {}
 local prelibs = {}
-libs = {}
 
 ops = {}
 ops["+"]      = "add"
@@ -210,7 +209,11 @@ function access(var, flvl, def)
 	 return "gbl\t" .. var .. "\n"
       end
    end
-   return "var\t" .. var .. "\n"
+   if comp_flags.lib then
+      return "var\t" .. var .. "\n"
+   else
+      return "gbl\t" .. var .. "\n"
+   end
 end
 
 function translate(expr, fname, flvl, def)
@@ -267,6 +270,24 @@ function translate(expr, fname, flvl, def)
 	 else
 	    if tmp == "break" then
 	       ret = ret .. "brk\n"
+	    elseif tmp == "require" or tmp == "load" then
+	       tmp, t = nextexpr(expr, t)
+	       tmp = tmp:sub(3, -3)
+	       if tmp:sub(-2, -1) == ".o" then
+		  tmp = tmp:sub(1, -3)
+		  tmps[tmp] = true
+	       elseif tmp:sub(-4, -1) == ".lua" then
+		  tmp = tmp:sub(1, -5)
+		  tmps[tmp] = false
+	       end
+	       local r = ""
+	       for i = 0, #tmp do
+		  r = r .. tmp:sub(i, i)
+		  if (tmp:sub(i, i) == "/") then
+		     r = ""
+		  end
+	       end
+	       nextop("req\t" .. r .. "\n")
 	    else
 	       nextop(access(tmp, flvl, def))
 	       func = tmp

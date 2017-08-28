@@ -1107,7 +1107,7 @@ function helperror(i)
       print("Line information not available : " .. typerr)
       os.exit()
    end
-   local file, text = io.open(comp_file .. ".lua", "r")
+   local file, text = io.open(comp_file, "r")
    local linum, chnum = 1, 0
    local line, done = "", false
    text = file:read("all")
@@ -1128,7 +1128,7 @@ function helperror(i)
       line = line .. text:sub(i, i)
    end
    
-   print("FILE: " .. comp_file .. ".lua")
+   print("FILE: " .. comp_file)
    print("Error at line " .. tostring(linum) .. ": " .. typerr)
    io.write(line)
    print(strgen(" ", chnum - 1) .. "^")

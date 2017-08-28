@@ -4,18 +4,19 @@
 
 PDFLATEX = pdflatex
 CC     := gcc
+LINKER := ld
 LUAC   := ./luna
 CFLAGS := -Wall -Wstrict-prototypes -Wextra -pedantic
 LFLAGS := -lib
 
 MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 LIB         := library
-MLIB        := $(LIB)/lualib.o
-CLIB        := $(LIB)/.lib
 CSRC        := $(LIB)/c
 SSRC        := $(LIB)/asm
 LSRC        := $(LIB)/lua
 OBJ         := $(LIB)/o
+CLIB        := $(LIB)/.lib
+MLIB        := $(OBJ)/liblua.o
 
 
 CFILES := $(wildcard $(CSRC)/*.c)
@@ -26,7 +27,10 @@ OBJL := $(patsubst $(LSRC)/%.lua, $(OBJ)/%.o, $(LFILES))
 OBJC := $(patsubst $(CSRC)/%.c, $(OBJ)/%.o, $(CFILES))
 OBJS := $(patsubst $(SSRC)/%.s, $(OBJ)/%.o, $(SFILES))
 
-all: lib
+default:
+	@make -s all
+
+all: lib rapport
 	@echo "You can add $(MKFILE_PATH) to your PATH to use Luna from any folder"
 	@echo "You can do this by executing :"
 	@echo '	% export PATH=$(MKFILE_PATH):$$PATH'
@@ -34,7 +38,8 @@ all: lib
 lib: rmlib $(MLIB) $(OBJL) #$(OBJC) $(OBJS) #$(LIB)/shared/baselib.so
 
 $(MLIB): $(OBJC) $(OBJS)
-	@$(CC) $(CFLAGS) -c -o $(MLIB) $(OBJC) $(OBJS)
+	@$(LINKER) -r $(OBJC) $(OBJS) -o $(MLIB)
+	@$(RM) $(OBJC) $(OBJS)
 
 $(OBJ)/%.o: $(CSRC)/%.c
 	@$(CC) -fPIC $(CFLAGS) -c $< -o $@
@@ -68,8 +73,8 @@ cleansubfiles:
 	@$(RM) doc/*.aux doc/*.log doc/*.out unit-tests/*.s unit-tests/*.lir unit-tests/*.pp.lua
 
 rapport:
-	@for f in doc/*.tex; do $(PDFLATEX) "$$f"; done
-	make cleansubfiles
+	@cd doc; for f in *.tex; do $(PDFLATEX) "$$f" >/dev/null; done
+	@make cleansubfiles
 
 .tex.pdf:
 	$(PDFLATEX) $*.tex

@@ -1,4 +1,4 @@
-.text
+	.text
 	
 # ARRAY ROUTINES
 ################################################################################
@@ -44,7 +44,7 @@ _index:
 	movq	%rbx, %r15
 	andq	$7, %r15
 	cmpq	$3, %r15
-	jnz	_special
+	jnz	_special@PLT
 	sarq	$3, %rbx
 	movq	%rax, %r15
 	andq	$7, %r15
@@ -57,7 +57,7 @@ _ix_lp:	cmpq	$17, %r15
 	movq	(%r15), %rbx
 	pushq	%rax
 	pushq	%r15
-	call	_compare
+	call	_compare@PLT
 	popq	%r15
 	leaq	8(%r15), %rbx
 	movq	8(%rbx), %r15
@@ -262,7 +262,7 @@ _set_size:
 	pushq	%rbx
 	pushq	%rax
 	salq	$3, %rax
-	call	_i_new
+	call	_i_new@PLT
 	popq	%rax
 	popq	%rbx
 	movq	%rax, (%rbx)
@@ -276,7 +276,7 @@ _append:
 	cmpq	$-1, (%rbx)
 	jnz	_append_elem
 	movq	%rbx, %rax
-	call	_check
+	call	_check@PLT
 	movq	%rax, %rbx
 _append_elem:	
 	movq	(%rbx), %rax
@@ -284,7 +284,7 @@ _append_elem:
 	pushq	%rax
 	pushq	%rbx
 	salq	$3, %rax
-	call	_i_new
+	call	_i_new@PLT
 	popq	%rbx
 	popq	%r15
 	movq	%r15, (%rbx)
@@ -314,7 +314,7 @@ _clo_ref:
 	movq	%rax, %rdi
 _cr_lp:	movq	%rdi, %rax
 	movq	8(%r14), %rbx
-	call	_compare
+	call	_compare@PLT
 	cmpq	$9, %rax
 	jz	_cr_en
 	movq	24(%r14), %r14

@@ -9,13 +9,11 @@ table:
 io:
 	io
 lua:
+	tonumber
+	pairs
+	print
+	type
 	unpack
 	next
-	tonumber
 	ipairs
-	print
-	load
-	require
-	type
 	tostring
-	pairs

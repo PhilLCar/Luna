@@ -1,4 +1,4 @@
-.text
+	.text
 	
 # LUA SUPPORT
 ################################################################################
@@ -25,11 +25,11 @@ _t_obj:	sarq	$3, %rdi
 	# %rdi : file
 _line_iter2:	
 	pushq	%rdi
-	call	_line_iter
+	call	_line_iter@PLT
 	cmpq	$17, %rax
 	popq	%rdi
 	jnz	_li_r
-	call	_io_close
+	call	_io_close@PLT
 _li_r:	ret
 
 	.global _line_iter
@@ -39,13 +39,13 @@ _line_iter:
 	movq	8(%rdi), %rdi
 	movq	%r12, %rsi
 	leaq	_l_str(%rip), %rdx
-	movq	_mem_max(%rip), %rcx
+	movq	_mem_max@GOTPCREL(%rip), %rcx
 	sub	%r12, %rcx
 	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_f_read
+	call	_f_read@PLT
 	leave
 	cmpq	$-1, %rax
 	jz	_return_error
@@ -120,7 +120,7 @@ _next_ret:
 _next_gsd:
 	movq	%rdi, %rbx
 	movq	%rsi, %rax
-	call	_index
+	call	_index@PLT
 	cmpq	$17, %rax
 	jz	_next_ret
 _next_gsd_lp:	
@@ -157,7 +157,7 @@ _inext:
 	leaq	8(, %rbx, 8), %rax
 	sarq	$3, %rdi
 	movq	%rdi, %rbx
-	call	_i_index
+	call	_i_index@PLT
 	cmpq	$17, (%rax)
 	jz	_inext_nil
 	movq	(%rax), %rbx
@@ -186,7 +186,7 @@ _format_c:
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_format
+	call	_format@PLT
 	leave
 	addq	%r12, %rax
 	xchgq	%rax, %r12
@@ -206,7 +206,7 @@ _scan_c:
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_scan
+	call	_scan@PLT
 	leave
 	cmpq	$0, %rax
 	jz	_return_error
@@ -271,7 +271,7 @@ _io_open:
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	and	$-16, %rsp
-	call	_f_open
+	call	_f_open@PLT
 	leave
 	cmpq	$-1, %rax
 	jz	_return_error
@@ -293,7 +293,7 @@ _io_popen:
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	and	$-16, %rsp
-	call	_p_open
+	call	_p_open@PLT
 	leave
 	cmpq	$-1, %rax
 	jz	_return_error
@@ -311,11 +311,11 @@ _io_read:
 	movq	%rsp, %rbp
 	movq	%r15, (%r12)
 	movq	$2, %rax
-	call	_nil_fill
+	call	_nil_fill@PLT
 	cmpq	$1, (%r12)
 	jnz	_orc
 	incq	(%r12)
-_orc:	call	_varargs
+_orc:	call	_varargs@PLT
 	cmpq	$17, %rdi
 	jz	_o_in
 	sarq	$3, %rdi
@@ -338,14 +338,14 @@ _o_db:	sarq	$3, %rdx
 	cvtsd2si %xmm0, %rcx
 	movq	$33, %rdx
 	jmp	_o_dt
-_o_mx:	movq	_mem_max(%rip), %rcx
+_o_mx:	movq	_mem_max@GOTPCREL(%rip), %rcx
 	subq	%r12, %rcx
 _o_dt:	pushq	%rdi
 	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_f_read
+	call	_f_read@PLT
 	leave
 	popq	%rdi
 	cmpq	$-1, %rax
@@ -392,7 +392,7 @@ _close:	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_f_close
+	call	_f_close@PLT
 	leave
 	movq	$17, %rax
 	xorq	%rbx, %rbx
@@ -411,7 +411,7 @@ _flush:	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_f_flush
+	call	_f_flush@PLT
 	leave
 	movq	$17, %rax
 	xorq	%rbx, %rbx
@@ -448,12 +448,12 @@ _io_lines:
 	sarq	$3, %rdi
 	addq	$8, %rdi
 	leaq	_r_str(%rip), %rsi
-	call	_f_open
+	call	_f_open@PLT
 	movq	%rax, 8(%r12)
 	movq	$1, (%r12)
 	leaq	4(, %r12, 8), %rdi
 	addq	$16, %r12
-	leaq	_line_iter2(%rip), %rax
+	leaq	_line_iter2@GOTPCREL(%rip), %rax
 	movq	%rax, (%r12)
 	movq	$17, 8(%r12)
 	leaq	7(, %r12, 8), %rax
@@ -497,7 +497,7 @@ _i_out:	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_output
+	call	_output@PLT
 	movq	%rax, 8(%r12)
 	movq	$1, (%r12)
 	leaq	4(, %r12, 8), %rax
@@ -517,7 +517,7 @@ _i_in:	pushq	%rbp
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_input
+	call	_input@PLT
 	movq	%rax, 8(%r12)
 	movq	$1, (%r12)
 	leaq	4(, %r12, 8), %rax
@@ -533,7 +533,7 @@ _get_stderr:
 	movq	%rsp, %rbp
 	subq	$15, %rsp
 	andq	$-16, %rsp
-	call	_err
+	call	_err@PLT
 	leave
 	leaq	4(, %r12, 8), %rax
 	addq	$16, %r12
@@ -550,7 +550,7 @@ _os_exec:
 	addq	$8, %rdi
 _exec_call:
 	subq	$8, %rsp #stack alignment
-	call	_o_exec
+	call	_o_exec@PLT
 	addq	$8, %rsp
 	cvtsi2sd %rax, %xmm0
 	movsd	%xmm0, (%r12)
@@ -583,7 +583,7 @@ _new_string:
 	andq	$-8, %r12
 	leaq	(, %r8, 8), %rax
 	movq	%rdi, %rbx
-	call	_i_new
+	call	_i_new@PLT
 	movq	%r9, (%rax)
 	dec	%rdx
 	jmp	_fl_lp

@@ -109,7 +109,7 @@ for i = 1, #names do
    local name = names[i]
    os.execute("./luna -s " .. name .. " &> /dev/null")
    -- Execute
-   local sname, present = name:sub(1, #name - 4) .. ".exe", false
+   local sname, present = name:sub(1, -5) .. ".exe", false
    local file = io.popen(sname)
    if file then
       local result = file:read("all")

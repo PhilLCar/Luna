@@ -35,7 +35,7 @@ if comp_flags.mem then
 end
 
 local intro
-if not comp_flags.lib then
+if not comp_flags.lib and not comp_flags.tmp then
    intro =
       "\t.text\n" ..
       "\t.global\t_main\n" ..
@@ -75,11 +75,18 @@ if not comp_flags.lib then
 	 "\t.fill\t3, 1, 0x90\n" ..
 	 "\tcallq\t_load_" .. i .. "\n"
    end
-else
+elseif comp_flags.lib then
    intro =
       "\t.text\n" ..
       "\t.global\t_load_" .. comp_name .. "\n" ..
       "_load_" .. comp_name .. ":\n" ..
+      "\tpushq\t%rbp\n" ..
+      "\tmovq\t%rsp, %rbp\n"
+else
+   intro =
+      "\t.text\n" ..
+      "\t.global\t_load_tmp_" .. comp_name .. "\n" ..
+      "_load_tmp_" .. comp_name .. ":\n" ..
       "\tpushq\t%rbp\n" ..
       "\tmovq\t%rsp, %rbp\n"
 end
@@ -98,7 +105,7 @@ local data = "\n# DATA" ..
 
 local outro = ""
 
-if not comp_flags.lib then
+if not comp_flags.lib and not comp_flags.tmp then
    outro =
       "\taddq\t$16, %rsp\n" ..
       "\tpopq\t%r15\n" ..
@@ -1967,6 +1974,15 @@ function _translate(text, i, sets, loop)
 	 vname = false
 	 struct = true
 	 asm = asm .. tmp
+
+      elseif instr == "req" then
+	 asm = asm .. prep(true) ..
+	    "\tsubq\t$15, %rsp\n" ..
+	    "\tandq\t$-16, %rsp\n" ..
+	    "\t.align\t8\n" ..
+	    "\t.fill\t3, 1, 0x90\n" ..
+	    "\tcall\t_load_tmp_" .. value .. "\n" ..
+	    "\tleaq\t" .. -8 * (r_size - 1) .. "(%rbp), %rsp\n"
 	 
       elseif instr == "chg" then
 	 tmp, i = chg(text, i, tonumber(value))

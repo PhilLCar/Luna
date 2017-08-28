@@ -1,4 +1,4 @@
-.text
+	.text
 	
 # OPERATOR ROUTINES
 ################################################################################
@@ -169,7 +169,7 @@ _comp_d_l:
 _gte:	
 	pushq	%rax
 	pushq	%rbx
-	call	_gt
+	call	_gt@PLT
 	cmpq	$1, %rax
 	popq	%rbx
 	popq	%rax
@@ -182,7 +182,7 @@ _gte:
 _lte:	
 	pushq	%rax
 	pushq	%rbx
-	call	_lt
+	call	_lt@PLT
 	cmpq	$1, %rax
 	popq	%rbx
 	popq	%rax
@@ -193,7 +193,7 @@ _lte:
 	.global	_neq
 	# %rax: arg1, %rbx: arg2
 _neq:	
-	call	_compare
+	call	_compare@PLT
 	cmpq	$1, %rax
 	jz	_cp_t
 	jmp	_cp_f	
@@ -421,3 +421,4 @@ _db0:
 	.double 0
 _ln2:
 	.double 0.69314718055994530941723212145817
+
