@@ -32,7 +32,6 @@ quad copydata(quad data)
   quad *base, *p;
   int i, size, max, min;
 
-  //printf("%llx:%d\n", Q(point), type);
   if (trf_mask & data) return data;
   else if (type == ADDRESS || type == SPECIAL) return data;
   else if (type != DOUBLE && Q(point) != NIL && *point & heartbreaker) return (*point << 3) | type;
@@ -117,7 +116,6 @@ quad copydata(quad data)
     break;
     
   case STACK:
-    ////printmem(point, 20);
     // Seek end
     for (size = 0; point[-size] != VOID; size++);
     base = (copy + size);
@@ -196,16 +194,12 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     fprintf(stderr, "Memory allocation failed (Process aborted)\n");
     exit(1);
   }
-  
+  //printmem(new.mem_base, 65);
   // Globals
   copydata((Q(mem_base) << 3) | TABLE);
-
-  printf("**********************************************************************\n");
-  printmem(mem_base, 74);
   
   // Stack
   for (i = stack_base - 1; i >= stack_ptr; i--) {
-    printf("%016llX\t:\t%016llX\n", Q(i), *i);
     if (*i == FRAH) {
       i[-1] = copydata(i[-1]);
       i -= 4;
@@ -213,19 +207,17 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     } // for ahead
     *i = copydata(*i);
   }
-  printf("*****************************************************\n");
   for (i = stack_base - 1; i >= stack_ptr; i--) {
     if (*i == FRAH) { i -= 4; continue; } // for ahead
     if (*i & trf_mask)
       *i = maketransfer(*i);
-    printf("%016llX\t:\t%016llX\n", Q(i), *i);
   }
 
   munmap(mem_ptr, mem_size);
 
   new.mem_ptr  = copy;
 
-  /*/ Resizing -- if compacted data is over the max, the GC would perpetually be called
+  /**/// Resizing -- if compacted data is over the max, the GC would perpetually be called
   if ((copy - new.mem_base) > (mem_size / 4 * 3)) {
     copy = mmap(NULL,
 		(size_t)(mem_size << 1),
@@ -252,9 +244,7 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     munmap(new.mem_ptr, mem_size);
     mem_size >>= 1;
     new.mem_ptr = copy;
-    }*/
-
-  printmem(new.mem_base, 64);
+    }/**/
   
   mem_max = Q(new.mem_base) + (mem_size / 4 * 3);
     

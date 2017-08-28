@@ -58,6 +58,7 @@ function isOperator(str)
       str == "<<" or
       str == "!=" or
       str == "^^" or
+      str == "//" or
       -- 3 char operators
       str == "and"  or
       str == "not"  or
@@ -412,29 +413,31 @@ function comb2(arr, left, indent, ...)
 	       end
 	    end
 	 end
-	 if not comp_flags.npc then
-	    ts = trysolve(arr[i], arr[j], arr[i - 1])
-	 end
-	 if arr[i] == ":" then
-	    arr[j] = arr[i - 1] .. " " .. arr[i] .. " " .. arr[j]
-	 elseif ts and left then
-	    arr[j] = ts
-	 elseif left then
-	    arr[j] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"
-	 elseif ts then
-	    arr[i - 1] = ts
-	 else
-	    arr[i - 1] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"
-	 end
-	 for k = i, j - 1 do
-	    arr[k] = nil
-	 end
-	 if left then
-	    arr[i - 1] = nil
-	    i = j
-	 else
-	    arr[j] = nil
-	    i = i - 1
+	 if arr[i - 1] and not isOperator(arr[i - 1]) then
+	    if not comp_flags.npc then
+	       ts = trysolve(arr[i], arr[j], arr[i - 1])
+	    end
+	    if arr[i] == ":" then
+	       arr[j] = arr[i - 1] .. " " .. arr[i] .. " " .. arr[j]
+	    elseif ts and left then
+	       arr[j] = ts
+	    elseif left then
+	       arr[j] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"
+	    elseif ts then
+	       arr[i - 1] = ts
+	    else
+	       arr[i - 1] = "(" .. arr[i - 1] .. " " .. arr[i] .. " " .. arr[j] .. ")"
+	    end
+	    for k = i, j - 1 do
+	       arr[k] = nil
+	    end
+	    if left then
+	       arr[i - 1] = nil
+	       i = j
+	    else
+	       arr[j] = nil
+	       i = i - 1
+	    end
 	 end
       end
       i = i + t
@@ -532,14 +535,13 @@ function scan(array, start, stop, indent)
    newarr = associate(newarr, true , false, indent, ":")
    -- PRIORITY LEVELS --
    -- Level 0 - Bitwise       : << >> >>> | & ^^ ~ === != [left-associative ]
-   newarr = associate(newarr, true , true , indent, "~")
    newarr = associate(newarr, true, false, indent, "<<", ">>", ">>>", "|", "&", "^^", "===", "!=", "~")
    -- Level 1 - Power         : ^                         [right-associative]
    newarr = associate(newarr, false, false, indent, "^")
-   -- Level 2 - Unary         : - not #                   [left-associative ]
-   newarr = associate(newarr, true , true , indent, "-", "not", "#")
-   -- Level 3 - Multiplicative: * / % \                   [left-associative ]
-   newarr = associate(newarr, true , false, indent, "*", "/", "%", "\\")
+   -- Level 2 - Unary         : - not # ~                 [left-associative ]
+   newarr = associate(newarr, true , true , indent, "-", "not", "~", "#")
+   -- Level 3 - Multiplicative: * / % \ //                [left-associative ]
+   newarr = associate(newarr, true , false, indent, "*", "/", "%", "\\", "//")
    -- Level 4 - Additive      : + -                       [left-associative ]
    newarr = associate(newarr, true , false, indent, "+", "-")
    -- Level 5 - Concatenation : ..                        [right-associative]

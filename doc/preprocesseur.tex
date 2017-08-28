@@ -11,6 +11,9 @@
 \usepackage{color}
 \usepackage{caption}
 \usepackage{titlesec}
+\usepackage{tabulary}
+
+\renewcommand{\arraystretch}{1.5}
 
 \setcounter{secnumdepth}{5}
 \titleformat*{\section}{\LARGE\bfseries}
@@ -82,7 +85,7 @@
   numberstyle=\tiny\color{no}
 }
 \renewcommand{\lstlistingname}{Exemple}
-\newcommand{\luna}{\textbf{\texttt{ Luna }}}
+\newcommand{\luna}{\textbf{\texttt{Luna}}}
 
 %\lstset{escapechar=@,style=customc}
 %\newcommand{\includecode}[2][c]{\lstinputlisting[caption=#2, escapechar=, style=custom#1]{#2}<!---->}
@@ -99,13 +102,52 @@
 
 \newpage
 \section{Introduction}
-Ce documents décrit le fonctionnement du compilateur \luna en détail.\luna est conçu pour compiler le langage Lua 5.3 et produit du code assembleur (syntaxe GAS) pour l'architecture de processeur Intel X86-64, pouvant être compilé par gcc sur un ordinateur Linux ou OSX.
+Ce documents décrit le fonctionnement du compilateur \luna{} en détail.\luna{} est conçu pour compiler le langage Lua 5.3 et produit du code assembleur (syntaxe GAS) pour l'architecture de processeur Intel X86-64, pouvant être compilé par gcc sur un ordinateur Linux ou OSX.
 
 \subsection{Le langage Lua 5.3}
-Lua est un langage normalement utilisé pour les scripts, il est donc très simple, typé dynamiquement, et la gestion de mémoire est automatique. On pourrait dire que ces caractéristiques \textit{intuitives} pour l'humain le rendent relativement complexe à implémenter du côté machine. Il est normalement implémenté en C et roule sur une machine virtuelle \footnote{https://www.lua.org/manual/5.3/manual.html, 1 - Introduction}. Étant donné sa proximité avec C, il est possible d'appeler directement des fonction C depuis le code. Évidemment, le but ultime à vouloir compiler ce langage est de produire des fichiers exécutable par le processeur lui-même, il n'est donc pas question de perdre aucune des fonctionnalités originale du langage. C'est pourquoi le code compilé par \luna a aussi une collection de mémoire automatique, ainsi que la possibilité d'appeler une fonction C directement \footnote{La conversion de type n'est pas automatique, la fonction C est donc responsable de gérer la conversion de son côté}
+Lua est un langage normalement utilisé pour les scripts, il est donc très simple, typé dynamiquement, et la gestion de mémoire est automatique. On pourrait dire que ces caractéristiques \textit{intuitives} pour l'humain le rendent relativement complexe à implémenter du côté machine. Il est normalement implémenté en C et roule sur une machine virtuelle \footnote{https://www.lua.org/manual/5.3/manual.html, 1 - Introduction}. Étant donné sa proximité avec C, il est possible d'appeler directement des fonction C depuis le code. Évidemment, le but ultime à vouloir compiler ce langage est de produire des fichiers exécutable par le processeur lui-même, il n'est donc pas question de perdre aucune des fonctionnalités originale du langage. C'est pourquoi le code compilé par \luna{} a aussi une collection de mémoire automatique, ainsi que la possibilité d'appeler une fonction C directement \footnote{La conversion de type n'est pas automatique, la fonction C est donc responsable de gérer la conversion de son côté}.
+
 \subsubsection{Opérateurs}
-\paragraph{Opérateurs standard}
-\paragraph{Opérateurs supplémentaires}
+Tous les opérateurs ont au moins un paramètre et au plus deux. Lors du stage de \textit{preprocessing} ils sont regroupés et parenthèsés adéquatement.
+Tous les opérateurs du langage Lua sont supportés par \luna{}, et certains autres ont étés ajoutés. Voici la table complète des opérateurs et de leur priorité (le niveau 0 représentant la priorité la plus haute):
+\paragraph{Table des priorité}
+\begin{center}
+  \begin{tabular}{r|l|l}
+    Priorité & Niveau & Opérateurs\\
+    \hline\hline
+    0 & Opération sur les bits & {\lstinline$<< >> >>> | & ^^ === != ~$} \\
+    \hline
+    1 & Puissance & {\lstinline$^$}\\
+    \hline
+    2 & Opérateur unaire & {\lstset{style=lua}\lstinline$- not ~ #$}\\
+    \hline
+    3 & Multiplicatif & {\lstinline$* / % \ //$}\\
+    \hline
+    4 & Additif & {\lstinline$+ -$}\\
+    \hline
+    5 & Concaténation & {\lstinline$..$}\\
+    \hline
+    6 & Booléen & {\lstinline$== ~= <= >= < >$}\\
+    \hline
+    7 & Conjonctif & {\lstset{style=lua}\lstinline$and$}\\
+    \hline
+    8 & Disjonctif & {\lstset{style=lua}\lstinline$or$}
+  \end{tabular}
+\end{center}
+\paragraph{Référence}
+\begin{tabular}{p{1.3cm} r p{12cm}}
+  {\lstinline$a << n$} & \textbf{bsal/bshl} &  Décale \texttt{a} de \texttt{n} bits vers la gauche (décalage arithmétique ou logique).\\
+  {\lstinline$a >> n$} & \textbf{bsar} & Décale \texttt{a} de \texttt{n} bits vers la droite. Si le MSB est 1, tous les bits décalés depuis le MSB sont mis à 1 (décalage arithmétique, conserve la négativité).\\
+  {\lstinline$a >>> n$} & \textbf{bshr} & Décale \texttt{a} de \texttt{n} bits vers la droite. Les bits décalés depuis le MSB sont 0 (décalage logique, ne conserve pas la négativité).\\
+  {\lstinline$a | b$} & \textbf{bor} & Effectue un 'OR' bit à bit entre \texttt{a} et \texttt{b}.\\
+  {\lstinline$a & b$} & \textbf{band} & Effectue un 'AND' bit à bit entre \texttt{a} et \texttt{b}.\\
+  {\lstinline$a ~ b$} \newline {\lstinline$a ^^ b$} & \textbf{bxor} & Effectue un 'XOR' bit à bit entre \texttt{a} et \texttt{b}.\\
+  {\lstinline$a === b$} & \textbf{beq} & Compare les pointeurs, retourne vrai si ils pointent vers le même endroit.\\
+  {\lstinline$!=$} & \textbf{bneq} & Compare les pointeurs, retourne faux si ils pointent vers le même endroit.\\
+  {\lstinline$^^ ~$} & \textbf{bxor} & Opérateur 'XOR' sur les bits\\
+  {\lstinline$^^ ~$} & \textbf{bxor} & Opérateur 'XOR' sur les bits\\
+  {\lstinline$^^ ~$} & \textbf{bxor} & Opérateur 'XOR' sur les bits
+\end{tabular}
 
 \subsubsection{Types et repésentation interne}
 \setcounter{paragraph}{-1}

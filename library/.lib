@@ -10,10 +10,10 @@ io:
 	io
 lua:
 	tonumber
-	type
-	unpack
 	ipairs
-	next
+	type
 	tostring
-	print
+	next
+	unpack
 	pairs
+	print

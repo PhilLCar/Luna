@@ -36,6 +36,7 @@ ops["==="]    = "beq"
 ops["!="]     = "bneq"
 ops[">>>"]    = "bshr"
 ops["\\"]     = "idiv"
+ops["//"]     = "idiv"
 ops["#"]      = "len"
 
 function isWhitespace(c)
