@@ -788,9 +788,10 @@ end
 
 \newpage
 \section{Compilateur}
-\paragraph{Jeu d'instruction IR}
-\label{par:instructions}
-\begin{longtable}{p{1.3cm} r p{12cm}}
+Le compilateur est la partie de \luna{} chargée de transformée le code Lua en représentation intermédiaire, une représentation qui sera plus facile à interpréter pour le compilateur-IR. C'est essentiellement ce programme qui donne la structure que prendra le code final. Afin de décrire le langage Lua, le compilateur IR possède son propre jeu d'instruction.
+\subsection{Jeu d'instruction IR}
+\label{par:subsection}
+\begin{longtable}{p{2cm} r p{12cm}}
   {\lstinline$a + b$} & \textbf{add} & Effectue l'addition de deux doubles.\\
   {\lstinline$x and y$} & \textbf{and} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, poursuit l'exécution à \texttt{y}, sinon retourne la valeur de \texttt{x}, si l'exécution est poursuivie à \texttt{y}, retourne la valeur de \texttt{y}\\
   {\lstset{style=lua}\lstinline${, y}$} & \textbf{append} & Ajoute un élément à la table en cours de définition au prochain index vide après sa conclusion.\\
@@ -799,6 +800,7 @@ end
   {\lstinline$~n$} & \textbf{binv} & Inverse les bits du nombre entier \texttt{n}.\\
   {\lstinline$p != q$} & \textbf{bneq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$false$} si ils pointent vers le même objet.\\
   {\lstinline$m | n$} & \textbf{bor} & Effectue un 'OR' bit à bit entre \texttt{m} et \texttt{n}.\\
+  {\lstset{style=lua}\lstinline$a$} & \textbf{brk} & Saute à l'extérieur de la boucle courrante.\\
   {\lstinline$m << n$} & \textbf{bsal/bshl} &  Décale l'entier \texttt{m} de \texttt{n} bits vers la gauche (décalage arithmétique ou logique).\\
   {\lstinline$m >> n$} & \textbf{bsar} & Décale l'entier \texttt{m} de \texttt{n} bits vers la droite. Si le MSB est 1, tous les bits décalés depuis le MSB sont mis à 1 (décalage arithmétique, conserve la négativité).\\
   {\lstinline$m >>> n$} & \textbf{bshr} & Décale \texttt{m} de \texttt{n} bits vers la droite. Les bits décalés depuis le MSB sont 0 (décalage logique, ne conserve pas la négativité).\\
@@ -853,6 +855,7 @@ end
   {\lstinline$a ^ b$} & \textbf{pow} & Effectue de calcul de \texttt{a} à la puissance \texttt{b}, si \texttt{a} est négatif, alors \texttt{b} doit impérativement être un entier sans quoi le résultat est indéfini.\\
   {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{put} & Suite à \texttt{\textbf{new}} ou \texttt{\textbf{append}}, place le dernier élément à la place voulue dans la table.\\
   {\lstset{style=lua}\lstinline$a$} & \textbf{ref} & Réfère à une variable locale sur la pile.\\
+  {\lstset{style=lua}\lstinline$a$} & \textbf{ret} & Prépare à retourner des valeur d'une fonction.\\
    & \textbf{rend} & Marque la fin de l'environnement {\lstset{style=lua}\lstinline$repeat$}.\\
   {\lstset{style=lua}\lstinline$repeat$} & \textbf{repeat} & Marque le début de l'environnement {\lstset{style=lua}\lstinline$repeat$}.\\
    & \textbf{req} & Charge un autre programme lua.\\
@@ -872,6 +875,27 @@ end
   {\lstset{style=lua}\lstinline$end$} & \textbf{wend} & Termine la boucle while {\lstset{style=lua}\lstinline$while$}.\\
   {\lstset{style=lua}\lstinline$while$} & \textbf{while} & Marque le début de la boucle while {\lstset{style=lua}\lstinline$while$}.\\
   
-  
 \end{longtable}
+
+\newpage
+\subsection{Mécanisme}
+Ici, le préprocesseur montre son importance. Maintenant que toutes les expressions sont spéparées et parenthèsées correctment le compilateur n'a qu'à lire les expressions une à la fois en suivant le parenthèsage donné.
+\subsubsection{Lecture des expressions}
+Le compilateur lit les expression grâce à la fonction \texttt{nextexpr}. Contrairement à \texttt{nexttoken}, cette fonction lit les expressions dans leur entièrté, c'est-à-dire que si une parenthèse ouvrante suit un symbole, la fonction va continuer de lire jusqu'à attenindre un équilibre de parenthèse.
+
+\subsubsection{Compilation}
+La compilation est divisée principalement entre deux fonction: \texttt{translate} et \texttt{evaluate}, ainsi que toutes les fonctions d'environnement qui spécifient le format attendu dans lequel ces fonctions devraient être appeler.
+
+\paragraph{Evaluate}
+\texttt{evaluate} gère essentiellement 3 mode différents de modifications de variables: le mode local, le mode accès/global, et le mode retour. Chacun de ces environnement se comportent de manière similaires et requière donc l'étiquette à leur fin. Afin de «deviner» le nom de chaque variable, la fonction place d'abord toute les valeurs dans une table et se souvenant de la position du «=». Elle fait ensuite correspondre un nom à chaque variable en calculant le décalage. Si il n'y a pas assez de valeurs, elle remplie les valeurs manquantes avec des NIL.
+
+\paragraph{Translate}
+La fonction \texttt{translate} elle reçoit ses paramètres de evaluate. Ce sont des segments de code garantis d'être des expressions. En obéissant le parenthèsage, \texttt{translate} descend récursivement dans l'évaluation de l'intérieur de chaque parenthèse, et ajoute les opérateurs ainsi que les opérandes à une table. En sortant, la fonction possède donc une table facile à manipuler de la forme:
+\begin{lstlisting}[belowcaptionskip = -1\baselineskip]
+  { { op, op1, op2 }, { op, op1, op2}, ...} -- op: operateur, op1-2:operandes
+\end{lstlisting}
+ceci rend l'écriture du code IR beaucoup plus simple, et permet la gestion des cas spéciaux, comme and et or qui requière un traitement particulier.
+
+\section{Compilateur-IR}
+Le compilateur-IR est sans doute le fichier le plus complexe du compilateur \luna{}. C'est lui qui est chargé de reproduire la représentation IR en représentation 
 \end{document}
