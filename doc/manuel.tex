@@ -63,6 +63,31 @@
   tabsize=2,	                   % sets default tabsize to 2 spaces
   title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
 }
+\lstdefinelanguage
+    {test}
+    { morekeywords = {
+        movq, addq, sarq, salq, movsd, addsd, call, callq, pushq, popq, xor, xorq, lea, leaq, fill, align, subq, andq}, 
+      sensitive=false,
+      morecomment=[l]{\#{}},
+    }
+    
+\lstdefinestyle{asm}{
+  belowcaptionskip=0.5\baselineskip,
+  breaklines=true,
+  xleftmargin=\parindent,
+  language={test},
+  showstringspaces=false, 
+  keepspaces=true,  
+  commentstyle=\color{comment}, 
+  keywordstyle=\bfseries\color{reserved},
+  %keywordstyle={[2]\color{string}}
+  stringstyle=\color{string},  
+  numbers=left,
+  numbersep=5pt,                    % show tabs within strings adding particular underscores
+  stepnumber=1,
+  numberstyle=\tiny\color{gray}
+  %identifierstyle=\color{blue},
+}
 
 \lstdefinestyle{lua}{
   belowcaptionskip=0.5\baselineskip,
@@ -91,6 +116,7 @@
 }
 \renewcommand{\lstlistingname}{Exemple}
 \newcommand{\luna}{\textbf{\texttt{Luna}}}
+\newcommand{\R}[1]{\%{}{#1}}
 
 %\lstset{escapechar=@,style=customc}
 %\newcommand{\includecode}[2][c]{\lstinputlisting[caption=#2, escapechar=, style=custom#1]{#2}<!---->}
@@ -104,7 +130,7 @@
 
 \begin{document}
 \maketitle
-
+\tableofcontents
 \newpage
 \section{Introduction}
 Ce documents décrit le fonctionnement du compilateur \luna{} en détail.\luna{} est conçu pour compiler le langage Lua 5.3 et produit du code assembleur (syntaxe GAS) pour l'architecture de processeur Intel X86-64, pouvant être compilé par gcc sur un ordinateur Linux ou OSX.
@@ -144,7 +170,7 @@ Le sens de l'associativité décrit dans quel ordre les expression vont se forme
   x^y^z = (x ^ (y ^ z) --droite
   1-2-3 = ((1 - 2) - 3) --gauche
 \end{lstlisting}
-Pour de plus amples détails vous pouver consulter le jeu d'instruction du au paragraphe \ref{par:instructions}.
+Pour de plus amples détails vous pouver consulter le jeu d'instruction de la section \ref{subsec:instructions}.
 \newpage
 \subsubsection{Types et repésentation interne}
 Vu que Lua est typé dynamiquement, chaque variable doit contenir son information de type. On tire profit du fait que les pointeur n'occupent que 6 bytes les plus bas pour stocker l'information de type. En décalant les pointeurs de 3 bits vers la gauche, on obtient suffisemment d'espace pour encore 8 types différents. Pour récupérer les types on fait 'AND' avec 7, et pour récupérer le pointeur 'SAR' avec 3. Le paragraphe suivant décrit les types et leur représentation interne. À des fins de clareté on fera référence à toutes les valeurs qui ont leur 3 LSB libre comme étant étiquetées (T: \textit{tagged}) et toutes celles étant dans leur format \textit{naturel} comme étant non-étiquetées (UT: \textit{untagged}). Voici un tableau de référence pour comprendre les schéma de représentation interne:
@@ -355,6 +381,7 @@ Les piles sont très importantes en Lua, une bonne partie du langage repose sur 
 \end{center}
 
 \paragraph{Nombres à virgule flottante (doubles) - \texttt{110}}
+\label{par:doubles}
 Toutes les manipulation numérique effectuées par l'utilisateur se font sur les doubles. Ceci évide de devoir vérifier le type de chaque opérande avant chaque opération, ce qui rendrait le code lourd et beaucoup moins performant. Étant donné leur format, les double ne peuvent pas être décalés vers la gauche. On pourrait simplement masquer les trois LSB et ainsi perdre une certaine précision de la partie fractionnaire (3 bits/52). Mais cette option n'est pas idéale: en plus de perdre plus de 5\%{} de la précision, on se retrouve à devoir gérer des cas particulier (parfois les opérateur doivent utiliser \texttt{sarq} d'autre fois \texttt{xorq} pour désétiqueter, etc... Le plus simple sans compromettre la précision est tout simplement de gérer des pointeurs de double.
 
 \begin{center}
@@ -513,6 +540,7 @@ Si le paramètre variable est inclu, la fonction va ensuite appeler la routine \
 \subsubsection{Appels terminaux}
 Le compilateur optimise l'appel terminal en conservant le même \textit{frame} pour tous les appels terminaux. En raison de l'imprévisibilité de la taille du \textit{frame} dans une fonction variadique, celles-ci ne peuvent pas bénéficier de l'optimisation terminale.
 
+\newpage
 \subsubsection{Librairies}
 Le compilateur \luna{} a accès à une série de librairies où sont définies des variables et fonctions utiles. Quand les librairies sont construites, le compilateur inscrit les variables disponibles ainsi que leur provenance dans un fichier «.lib». Par la suite, chaque fois qu'il compile un fichier, il vérifie si celui-ci accède à une des variables des librairies. Si c'est le cas, il l'ajoute à la liste d'inclusion. De cette manière l'inclusion est automatique et l'usager n'a pas à se tracasser. De plus, le fichier exécutable produit ne contient pas de code mort qui augmenterait inutilement sa taille.
 
@@ -657,6 +685,7 @@ local x = 6.55
 
 Le principe est d'éviter au programme compilé des calculs facilement évitable. Au fur et à mesure que les parenthèses sont formées, le préprocesseur vérifie si celles-ci sont possible à évaluer (qu'elles ne contiennes pas de variable). Si l'évaluation est réussie, il remplace la parenthèse par le résultat de sont évaluation.
 
+\newpage
 \subsubsection{Standardisation}
 L'objectif final, et non le moindre, du préprocesseur est de limiter le langage à un sous emsemble sur lequel il le compilateur pourra compter. Le langage Lua offre de nombreuses contraction et macros que le préprocesseur transforme en version plus basique.
 \begin{lstlisting}[caption={Utilisation des contractions et des macros},label=DescriptiveLabel]
@@ -790,7 +819,7 @@ end
 \section{Compilateur}
 Le compilateur est la partie de \luna{} chargée de transformée le code Lua en représentation intermédiaire, une représentation qui sera plus facile à interpréter pour le compilateur-IR. C'est essentiellement ce programme qui donne la structure que prendra le code final. Afin de décrire le langage Lua, le compilateur IR possède son propre jeu d'instruction.
 \subsection{Jeu d'instruction IR}
-\label{par:subsection}
+\label{subsec:instructions}
 \begin{longtable}{p{2cm} r p{12cm}}
   {\lstinline$a + b$} & \textbf{add} & Effectue l'addition de deux doubles.\\
   {\lstinline$x and y$} & \textbf{and} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, poursuit l'exécution à \texttt{y}, sinon retourne la valeur de \texttt{x}, si l'exécution est poursuivie à \texttt{y}, retourne la valeur de \texttt{y}\\
@@ -896,6 +925,205 @@ La fonction \texttt{translate} elle reçoit ses paramètres de evaluate. Ce sont
 \end{lstlisting}
 ceci rend l'écriture du code IR beaucoup plus simple, et permet la gestion des cas spéciaux, comme and et or qui requière un traitement particulier.
 
+\newpage
 \section{Compilateur-IR}
-Le compilateur-IR est sans doute le fichier le plus complexe du compilateur \luna{}. C'est lui qui est chargé de reproduire la représentation IR en représentation 
+Le compilateur-IR est sans doute le fichier le plus complexe du compilateur \luna{}. C'est lui qui est chargé de reproduire la représentation IR en représentation assembleur, prête à être compilée par gcc. Le plus grand défi du compilateur-IR est de produire du code similaire au code C produit par gcc afin de pouvoir interfacer les deux langages. Pour ce faire, le compilateur se doit de respecter les standard de l'architecture.
+
+\subsection{Standards x86-64}
+\subsubsection{Convention d'appel}
+En x86-64, les fonction sont appelées avec un stack aligné sur un multiple de 16, et les 6 premiers paramètres sont passés par les registres (dans l'ordre) \R{rdi}, \R{rsi}, \R{rdx}, \R{rcx}, \R{r8}, \R{r9}. Les paramètres suivant sont poussés sur la pile de telle manière à ce que le plus bas soit le prochain, et le dernier le plus haut.
+
+\subsubsection{Utilisation des registres}
+\begin{center}
+  \begin{tabular}{r|c|p{12cm}}
+    Registre & Sauvegardé & Fonction \\
+    \hline
+    \R{rax} & Non & Valeur de retour, calcul\\
+    \R{rbx} & Oui & Usage varié\\
+    \R{rcx} & Non & Paramètre 4, calcul\\
+    \R{rdx} & Non & Paramètre 3, calcul\\
+    \R{rbp} & Oui & Base pointer\\
+    \R{rsp} & Oui & Stack pointer\\
+    \R{rsi} & Non & Paramètre 2, calcul\\
+    \R{rdi} & Non & Paramètre 1, calcul\\
+    \R{r8}  & Non & Paramètre 5, calcul\\
+    \R{r9}  & Non & Paramètre 6, calcul\\
+    \R{r10} & Non & Calcul\\
+    \R{r11} & Non & Calcul\\
+    \R{r12} & Oui & Usage varié\\
+    \R{r13} & Oui & Usage varié\\
+    \R{r14} & Oui & Usage varié\\
+    \R{r15} & Oui & Usage varié\\
+  \end{tabular}
+\end{center}
+
+\newpage
+\subsection{\luna{} et le standard}
+Les fonctions produite par \luna{} ne sont pas supposées être appelées par du code «étrangé», donc les standard de sauvegarde ne sont pas si importants au sens où tant que le compilateur gère correctement les registres pour lui, aucun programme extérieur ne risque d'être compromis par l'utilisation de registres supposément sauvegardés. Ceci dit, les fonctions produites par \luna{} ont toutes un préambule spécifique au langage, mais se comportent de manière très similaire à du code C par la suite.
+\begin{center}
+  \begin{lstlisting}[style=out]
+    	.align	8
+_FN1:
+	movq	$1, %rax
+	call	_nil_fill
+	call	_prep_gc
+test:                 # Appelee a partir d'ici, une fonction normale.
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movq	%rdi, -8(%rbp)
+	movq	-8(%rbp), %rdx
+  \end{lstlisting}
+\end{center}
+C'est pourquoi la directive IR \texttt{fname} est pratique, le but est qu'en rajoutant un flag -f à la compilation, le compilateur protège les registres sauvegardés (\textbf{\color{red}***pas implémenté}). Le compilateur profite également du fait que certains registres sont sauvegardés pour y stocker des variables permanentes.
+\subsubsection{Utilisation des registres par le compilateur \luna{}}
+\begin{center}
+  \begin{tabular}{r|c|p{12cm}}
+    Registre & Sauvegardé & Fonction \\
+    \hline
+    \R{rax} & Non & Valeur de retour, calcul\\
+    \R{rbx} & {\color{red}Non} & Pointeur de la pile de retour, calcul\\
+    \R{rcx} & Non & Paramètre 4, calcul\\
+    \R{rdx} & Non & Paramètre 3, calcul\\
+    \R{rbp} & Oui & Base pointer\\
+    \R{rsp} & Oui & Stack pointer\\
+    \R{rsi} & Non & Paramètre 2, calcul\\
+    \R{rdi} & Non & Paramètre 1, calcul\\
+    \R{r8}  & Non & Paramètre 5, calcul\\
+    \R{r9}  & Non & Paramètre 6, calcul\\
+    \R{r10} & Non & Calcul\\
+    \R{r11} & Non & Calcul\\
+    \R{r12} & Oui & Pointeur d'allocation\\
+    \R{r13} & Oui & Pointeur de la table globale\\
+    \R{r14} & Oui & Pointeur de l'environnement de fermeture\\
+    \R{r15} & {\color{red}Non} & Calcul sur les opérandes mémoire, nombre d'arguments\\
+  \end{tabular}
+\end{center}
+\luna{} fait donc deux contravention au standard, mais comme mentionné plus haut, ces contravention serait rapidement réglée par un push-pop s'il le fallait.
+\newpage
+\subsubsection{Alignement de la pile}
+Le compilateur respecte également la convention d'alignement de la pile, chaque appel de fonction extérieure ressemble à ceci:
+\begin{center}
+  \begin{lstlisting}[style=asm]
+	subq	$15, %rsp
+	andq	$-16, %rsp
+	.align	8
+	.fill	3, 1, 0x90
+	callq	_io_open
+	call	_clear_regs
+	leaq	-16(%rbp), %rsp
+  \end{lstlisting}
+\end{center}
+
+\subsubsection{Initialisation}
+Avant de commencer le programme, lua protège tous les registres à sauvegarder, ainsi que les registres \R{rsi} et \R{rdi} qui contiennent respecivement \texttt{argv} et \texttt{argc} (paramètres du main). Le compilateur nettoie également les registres car si ceux-ci ne sont pas typés, cela pose un risque de faire planter le GC
+
+\begin{center}
+  \begin{lstlisting}[style=asm]
+	pushq	%rbx
+	pushq	%r12
+	pushq	%r13
+	pushq	%r14
+	pushq	%r15
+	pushq	%rdi
+	pushq	%rsi
+	pushq	%rbp
+	movq	%rsp, %rbp
+	xor	%rbx, %rbx
+	movq	%rbp, _stack_base(%rip)
+	movq	$134217728, %rax
+	movq	%rax, _mem_size(%rip)
+	call	_minit
+	movq	%rax, %r12
+	addq	$100663296, %rax
+	movq	%rax, _mem_max(%rip)
+	movq	$0, (%r12)
+	movq	$17, 8(%r12)
+	movq	$17, 16(%r12)
+	lea	3(, %r12, 8), %r13
+	addq	$24, %r12
+	movq	$17, %r14
+	call	_clear_regs
+	.align	8
+	.fill	3, 1, 0x90
+	callq	_load_lua  #Chargement des librairies
+  \end{lstlisting}
+\end{center}
+\newpage
+\subsection{Gestion des registres et de la pile virtuelle}
+\subsubsection{Fonctionnement de la pile virtuelle et attribution des registres}
+Pour améliorer l'efficacité du compilateur, celui-ci utilise une pile virtuelle pour charger des valeurs dans les registre au lieu de les empiler. Afin de minimiser les risque d'erreur, les 8 registres de calculs se voient attribuer une place fixe (mod 8) dans la pile d'exécution. Ceci garanti que la restauration peut-être faite sans conflit (si le registre 3 doit être restauré, alors forcément qu'il n'est pas occupé car la pile ne s'y rend pas).
+
+\subsubsection{Masquage des pointeurs}
+Au paragraphe \ref{par:doubles} on explique que pour des raison de précision, les double sont stocké dans la mémoire. En choisissant un tel format, la précision est peut-être augmentée un peu or, le calcul est extrêment inefficace. C'est pourquoi durant les segments de calcul les doubles sont masqués par les registres \R{xmm4}-\R{xmm15}, tant qu'aucune opérations sur la piles n'est effectuées et que les registres \R{xmm} ne sont pas requis, ils peuvent y demeurer jusqu'à la fin du programme.
+
+\subsubsection{\textit{Buffer} de la pile virtuelle}
+Finalement, les valeurs poussée ne sont pas directement ajoutées à la pile virtuelle, mais sont plutôt dirigées vers un espace tampon. Ceci permet les séquences du type:
+\begin{center}
+  \begin{lstlisting}[style=asm, caption={Comparaison du code produit avec et sans buffer},label=DescriptiveLabel]
+	## Sans buffer:
+	movq	$1, %rdx
+	movq	$2, %rcx
+	addq	%rcx, %rdx
+	## Alors qu'on voudrait:
+	movq	$1, %rdx
+	addq	$2, %rdx
+  \end{lstlisting}
+\end{center}
+
+Quand une valeur successive est poussée dans le buffer, alors seulement la valeur du buffer est enregistrée dans la pile virtuelle et requière un registre. Le code produit par cette technique est très compact et a un aspect naturel:
+\begin{center}
+  \begin{lstlisting}[style=asm, caption={Exemple d'utilisation du buffer et des masques},label=DescriptiveLabel]
+	movq	-8(%rbp), %rdx
+	movq	-16(%rbp), %rax
+	sarq	$3, %rax
+	movq	%rdx, %rbx
+	sarq	$3, %rbx
+	movsd	(%rbx), %xmm4
+	addsd	(%rax), %xmm4
+	movq	-24(%rbp), %rax
+	sarq	$3, %rax
+	addsd	(%rax), %xmm4
+  \end{lstlisting}
+\end{center}
+Grâce au buffer et aux masques, l'addition de 3 doubles se fait en un minimum d'opération. Les références successive à \R{rdx} seront masquées par \R{xmm4}, et le processus couteux de désétiquetage est évité.
+
+\subsubsection{Valeurs de retour}
+Les valeurs de retour sont toujours dans \R{rax} comme le veut le standard, ce pendant en Lua, il est possible de retourner plusieurs valeurs. Quand une fonction retourne plusieurs valeurs, les valeurs supplémentaires sont empliées, et \R{rbx} pointe sur le stack (non-étiqueté). Ici l'étiquetage n'est pas très important car un stack de retour est volatile. Cette méthode est efficace car les fonctions à valeurs multiples qui sont utilisées dans les calculs vont se comporter comme des fonctions à une seule valeur de retour, mais lorsque le compilateur le demande (généralement après la directive IR \texttt{struct}) il peut transférer les valeurs du stack dans des variables. Dans le cas des fonctions variadiques, l'addresse du stack est stockée dans un registre. Lorsqu'on veut avoir accès aux arguments variables, le programme simule un retour de fonction en incrémentant le pointeur du stack et en plaçant la première valeur dans \R{rax}.
+
+\subsubsection{Protection de la pile d'exécution réelle}
+La plupart des opérateurs sont traduits directement dans le code produit, ce qui ne nécessite aucune protection, mais quand le programme fait appel à des fonction extérieure, il doit protéger la pile d'exécution, c'est pourquoi le compilateur-IR garde trace de la taille réelle du stack, ainsi que la position actuelle de \R{rsp}. Lors des appels de fonction, il place \R{rsp} juste en haut de la dernière valeur locale.
+
+\newpage
+\section{Compilateur \luna{}}
+Après avoir appelé le préprocesseur, le compilateur, puis le compilateur-IR, \luna{} appelle \texttt{gcc} et compile le code assembleur produit. Une série de \textit{switches} peuvent être utilisée lors de la compilation.
+
+\subsection{Modificateurs}
+Les arguments suivants peuvent être entrés dans \luna{}, voici un tableau de leur effet:
+\begin{center}
+  \begin{tabular}{r|p{12cm}}
+    Argument & Effet \\
+    \hline
+    -lib & Compile un fichier .o pour être inclu dans une librairie\\
+    \hline
+    -tmp & Compile un fichier .o temporaire pour être inclu dans un programme\\
+    \hline
+    -i & Donne de l'information sur le compilateur\\
+    \hline
+    -S & Arrête le processus de compilation au niveau assembleur\\
+    \hline
+    -f & {\color{red}***Non implémenté: protège les registres pour que les fonctions puissent être appelées par C}\\
+    \hline
+    -s & Laisse les sous-fichier de compilation\\
+    \hline
+    -npc & Désactive le précompilateur\\
+    \hline
+    -sas & Active la possibilité de définir la taille d'une table avec { n = taille }\\
+    \hline
+    -h & Affiche l'aide\\
+  \end{tabular}
+\end{center}
+
+\subsection{Commentaires}
+Le compilateur \luna{} n'est pas complètement fini, mais il couvre déjà une partie importante du langage Lua 5.3. Les prochaines étapes sont de finaliser les fonctionnalités non implémentées et le doter d'un meilleur GC.
+
 \end{document}

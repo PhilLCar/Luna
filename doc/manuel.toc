@@ -1,0 +1,78 @@
+\select@language {french}
+\contentsline {section}{\numberline {1}Introduction}{3}
+\contentsline {subsection}{\numberline {1.1}Le langage Lua 5.3}{3}
+\contentsline {subsubsection}{\numberline {1.1.1}Op\IeC {\'e}rateurs}{3}
+\contentsline {paragraph}{Table des priorit\IeC {\'e}}{3}
+\contentsline {subsubsection}{\numberline {1.1.2}Types et rep\IeC {\'e}sentation interne}{4}
+\contentsline {paragraph}{Entiers/Adresses - \texttt {000}}{4}
+\contentsline {paragraph}{Valeurs sp\IeC {\'e}ciales - \texttt {001}}{5}
+\contentsline {paragraph}{Cha\IeC {\^\i }nes de caract\IeC {\`e}res - \texttt {010}}{5}
+\contentsline {paragraph}{Tables - \texttt {011}}{5}
+\contentsline {paragraph}{Objets - \texttt {100}}{6}
+\contentsline {subparagraph}{Fermetures - \texttt {1000}}{6}
+\contentsline {subparagraph}{Fichiers - \texttt {1001}}{7}
+\contentsline {paragraph}{Piles - \texttt {101}}{7}
+\contentsline {paragraph}{Nombres \IeC {\`a} virgule flottante (doubles) - \texttt {110}}{7}
+\contentsline {paragraph}{Fonctions - \texttt {111}}{7}
+\contentsline {subsubsection}{\numberline {1.1.3}Fermetures}{8}
+\contentsline {paragraph}{Principe de fonctionnement}{8}
+\contentsline {paragraph}{D\IeC {\'e}roulement}{8}
+\contentsline {subsubsection}{\numberline {1.1.4}Assignation}{8}
+\contentsline {subsubsection}{\numberline {1.1.5}Boucles}{9}
+\contentsline {paragraph}{Boucle \texttt {\textbf {for ... in}}}{9}
+\contentsline {paragraph}{Boucle \texttt {\textbf {for}}}{9}
+\contentsline {subsubsection}{\numberline {1.1.6}Fonctions variadiques}{10}
+\contentsline {paragraph}{Param\IeC {\`e}tres manquants}{10}
+\contentsline {paragraph}{Param\IeC {\`e}tres variables}{10}
+\contentsline {subsubsection}{\numberline {1.1.7}Appels terminaux}{10}
+\contentsline {subsubsection}{\numberline {1.1.8}Librairies}{11}
+\contentsline {paragraph}{arg}{11}
+\contentsline {paragraph}{io}{11}
+\contentsline {paragraph}{lua}{11}
+\contentsline {paragraph}{os}{11}
+\contentsline {paragraph}{string}{11}
+\contentsline {paragraph}{table}{11}
+\contentsline {paragraph}{}{11}
+\contentsline {subsection}{\numberline {1.2}Collection de d\IeC {\'e}chets}{12}
+\contentsline {subsubsection}{\numberline {1.2.1}Type de GC}{12}
+\contentsline {subsubsection}{\numberline {1.2.2}Performance du GC}{12}
+\contentsline {subsubsection}{\numberline {1.2.3}Bugs}{12}
+\contentsline {section}{\numberline {2}Pr\IeC {\'e}processeur}{13}
+\contentsline {subsection}{\numberline {2.1}Fonctions du pr\IeC {\'e}processeur}{13}
+\contentsline {subsubsection}{\numberline {2.1.1}D\IeC {\'e}tection d'erreur}{13}
+\contentsline {subsubsection}{\numberline {2.1.2}Effacement des commentaires}{13}
+\contentsline {subsubsection}{\numberline {2.1.3}Indentation}{14}
+\contentsline {subsubsection}{\numberline {2.1.4}Parenth\IeC {\`e}sage}{15}
+\contentsline {subsubsection}{\numberline {2.1.5}Pr\IeC {\'e}compilation}{15}
+\contentsline {subsubsection}{\numberline {2.1.6}Standardisation}{16}
+\contentsline {subsection}{\numberline {2.2}M\IeC {\'e}canisme}{18}
+\contentsline {subsubsection}{\numberline {2.2.1}Fonction de \textit {parsing}}{18}
+\contentsline {subsubsection}{\numberline {2.2.2}Lecture de ligne}{18}
+\contentsline {paragraph}{Conversion de la macro \IeC {\guillemotleft }.\IeC {\guillemotright }}{18}
+\contentsline {paragraph}{Parenth\IeC {\`e}sage}{19}
+\contentsline {subsubsection}{\numberline {2.2.3}Pr\IeC {\'e}processeur et parcours des environnements}{19}
+\contentsline {subsection}{\numberline {2.3}R\IeC {\'e}capitulation}{20}
+\contentsline {section}{\numberline {3}Compilateur}{21}
+\contentsline {subsection}{\numberline {3.1}Jeu d'instruction IR}{21}
+\contentsline {subsection}{\numberline {3.2}M\IeC {\'e}canisme}{25}
+\contentsline {subsubsection}{\numberline {3.2.1}Lecture des expressions}{25}
+\contentsline {subsubsection}{\numberline {3.2.2}Compilation}{25}
+\contentsline {paragraph}{Evaluate}{25}
+\contentsline {paragraph}{Translate}{25}
+\contentsline {section}{\numberline {4}Compilateur-IR}{26}
+\contentsline {subsection}{\numberline {4.1}Standards x86-64}{26}
+\contentsline {subsubsection}{\numberline {4.1.1}Convention d'appel}{26}
+\contentsline {subsubsection}{\numberline {4.1.2}Utilisation des registres}{26}
+\contentsline {subsection}{\numberline {4.2}\textbf {\texttt {Luna}}{} et le standard}{27}
+\contentsline {subsubsection}{\numberline {4.2.1}Utilisation des registres par le compilateur \textbf {\texttt {Luna}}{}}{27}
+\contentsline {subsubsection}{\numberline {4.2.2}Alignement de la pile}{28}
+\contentsline {subsubsection}{\numberline {4.2.3}Initialisation}{28}
+\contentsline {subsection}{\numberline {4.3}Gestion des registres et de la pile virtuelle}{29}
+\contentsline {subsubsection}{\numberline {4.3.1}Fonctionnement de la pile virtuelle et attribution des registres}{29}
+\contentsline {subsubsection}{\numberline {4.3.2}Masquage des pointeurs}{29}
+\contentsline {subsubsection}{\numberline {4.3.3}\textit {Buffer} de la pile virtuelle}{29}
+\contentsline {subsubsection}{\numberline {4.3.4}Valeurs de retour}{30}
+\contentsline {subsubsection}{\numberline {4.3.5}Protection de la pile d'ex\IeC {\'e}cution r\IeC {\'e}elle}{30}
+\contentsline {section}{\numberline {5}Compilateur \textbf {\texttt {Luna}}{}}{31}
+\contentsline {subsection}{\numberline {5.1}Modificateurs}{31}
+\contentsline {subsection}{\numberline {5.2}Commentaires}{31}

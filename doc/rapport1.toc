@@ -1,0 +1,15 @@
+\select@language {french}
+\contentsline {section}{\numberline {1}Avant-propos}{1}
+\contentsline {section}{\numberline {2}Objectif}{1}
+\contentsline {section}{\numberline {3}Le pr\IeC {\'e}processeur}{1}
+\contentsline {subsubsection}{\numberline {3.0.1}nexttoken}{1}
+\contentsline {subsubsection}{\numberline {3.0.2}readexpr}{2}
+\contentsline {subsubsection}{\numberline {3.0.3}readline}{2}
+\contentsline {subsubsection}{\numberline {3.0.4}Fonctions d'environnement}{2}
+\contentsline {subsubsection}{\numberline {3.0.5}preprocess}{2}
+\contentsline {section}{\numberline {4}D\IeC {\'e}tection d'erreur}{3}
+\contentsline {section}{\numberline {5}\textit {Parsing}}{3}
+\contentsline {section}{\numberline {6}Formatage de la sortie}{3}
+\contentsline {section}{\numberline {7}Parenth\IeC {\`e}sage et retrait de macros}{3}
+\contentsline {section}{\numberline {8}Test de fonctionnement}{4}
+\contentsline {section}{\numberline {9}Conclusion}{4}

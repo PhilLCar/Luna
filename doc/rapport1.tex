@@ -2,50 +2,236 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[french]{babel}
+\usepackage{inconsolata}
 \usepackage[T1]{fontenc}
 \usepackage{listings}
 \usepackage[margin=1in]{geometry}
+\usepackage[sfdefault]{roboto} 
+\usepackage[T1]{fontenc}
+\usepackage{color}
+\usepackage{caption}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tikz}
+\usepackage{textcomp}
 
-\title{Rapport de progrès - Semaine 3}
+\renewcommand{\arraystretch}{1.5}
+
+\setcounter{secnumdepth}{3}
+\titleformat*{\section}{\LARGE\bfseries}
+\titleformat*{\subsection}{\Large\bfseries}
+\titleformat*{\subsubsection}{\large\bfseries}
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+
+\title{Semaine 1 (Préprocesseur) - Projet IFT3150}
 \date{\today}
 \author{Philippe Caron}
 
+\setlength{\emergencystretch}{1em}
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{lgray}{rgb}{0.98,0.98,0.98}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{reserved}{rgb}{0.8,0,0.8}
+\definecolor{comment}{rgb}{0.8,0,0}
+\definecolor{def}{rgb}{0,0,1}
+\definecolor{string}{rgb}{0.6, 0.05, 0.1}
+\definecolor{no}{rgb}{1, 1, 1}
+
+\captionsetup[lstlisting]{font=scriptsize, labelfont=bf}
+\lstset{ %
+  backgroundcolor=\color{lgray},   
+  basicstyle=\normalsize\ttfamily,        % the size of the fonts that are used for the code
+  breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=b, 
+  language=[5.3]Lua,
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  extendedchars=true,% lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+  %frame=single,                   % how far the line-numbers are from the code
+   % the style that is used for the line-numbers
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+  showstringspaces=false,          % underline spaces within strings only
+  showtabs=false,
+                     % the step between two line-numbers. If it's 1, each line will be numbered   % string literal style
+  tabsize=2,	                   % sets default tabsize to 2 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+\lstdefinelanguage
+    {test}
+    { morekeywords = {
+        movq, addq, sarq, salq, movsd, addsd, call, callq, pushq, popq, xor, xorq, lea, leaq, fill, align, subq, andq}, 
+      sensitive=false,
+      morecomment=[l]{\#{}},
+    }
+    
+\lstdefinestyle{asm}{
+  belowcaptionskip=0.5\baselineskip,
+  breaklines=true,
+  xleftmargin=\parindent,
+  language={test},
+  showstringspaces=false, 
+  keepspaces=true,  
+  commentstyle=\color{comment}, 
+  keywordstyle=\bfseries\color{reserved},
+  %keywordstyle={[2]\color{string}}
+  stringstyle=\color{string},  
+  numbers=left,
+  numbersep=5pt,                    % show tabs within strings adding particular underscores
+  stepnumber=1,
+  numberstyle=\tiny\color{gray}
+  %identifierstyle=\color{blue},
+}
+
+\lstdefinestyle{lua}{
+  belowcaptionskip=0.5\baselineskip,
+  breaklines=true,
+  xleftmargin=\parindent,
+  language=[5.3]Lua,
+  showstringspaces=false, 
+  keepspaces=true,  
+  commentstyle=\color{comment}, 
+  keywordstyle=\bfseries\color{reserved}, 
+  stringstyle=\color{string},  
+  numbers=left,
+  numbersep=5pt,                    % show tabs within strings adding particular underscores
+  stepnumber=1,
+  numberstyle=\tiny\color{gray}
+  %identifierstyle=\color{blue},
+}
+\lstdefinestyle{out}{
+  belowcaptionskip=-1\baselineskip,
+  breaklines=true,
+  xleftmargin=\parindent,
+  showstringspaces=false, 
+  keepspaces=true,
+  language={},
+  numberstyle=\tiny\color{no}
+}
+\renewcommand{\lstlistingname}{Exemple}
+\newcommand{\luna}{\textbf{\texttt{Luna}}}
+\newcommand{\R}[1]{\%{}{#1}}
+
+%\lstset{escapechar=@,style=customc}
+%\newcommand{\includecode}[2][c]{\lstinputlisting[caption=#2, escapechar=, style=custom#1]{#2}<!---->}
+% ...
+
+%\includecode{sched.c}
+%\includecode[asm]{sched.s}
+% ...
+
+%\lstlistoflistings
+
 \begin{document}
 \maketitle
-\section{Résumé de l'avancement}
-Au cours de la première semaine le projet a avancé à grands pas. Malheureusement, l'ordinateur sur lequel le projet était développé a connu quelques problèmes logiciels, la résolution de ces problèmes a occupé la semaine suivante. Malgré tout, la progrès de la première semaine étant suffisemment important, le projet demeure sur un échéancier raisonnable. Jusqu'a maintenant, le compilateur peut compter sur un préprocesseur fonctionnel, et un compilateur intermédiaire presque terminé. Il est possible de produire une représentation intermédiaire pour n'importe quel code lua ne comprenant ni fonction ni boucle.
+\section{Avant-propos}
+Suite à l'extension accordée, j'ai décidé de repartir à 0 pour le projet qui avait été monté en hâte et ne constituait pas une base solide pour continuer. Cependant en raison de l'échéancier très serré, je n'ai pas pris le temps de transcrire mes notes sous format PDF, ayant peur de manquer de temps pour l'objectif principal. Les rapports de progressions suivants seront tous rapportés d'après les notes que j'ai prises sur papier.
 
-\section{Objectifs immédiats (2 semaines)}
-La progression des prochaines semaines risque d'être ralentie par la période d'examen. Néanmoins, l'objectif principal est de terminer le compilateur intermédiaire et être bien avancé dans le compilateur. Pour ce faire, le compilateur intermédiaire devra pouvoir gérer les boucles et les fonctions, ainsi que pouvoir détecter les fermetures. Quant au compilateur principal, son implémentation devrait être relativement simple une fois le langage IR bien établi. Le principal défi sera l'allocation des registre selon la norme utilisée par gcc pour l'appel de fonctions.
-
-\section{Description des composantes terminées}
-\subsection{Préprocesseur}
-Un langage utilisant la notation infixe tel que lua nécessite d'emblée un préprocesseur. En effet, celui-ci s'assurera que le parenthésage de chaque expression est complet, de sorte qu'il sera facile pour le compilateur de gérer la priorité des opérations. De plus, on veut retirer le sucre syntaxique ainsi que les commentaires afin que le compilateur soit le plus simple possible.
-\subsubsection{Priorié des opérations}
-La priorité des opération en lua est très simple et ne comprend que huit niveau différents, tous sont associatif de la gauche à moins qu'il en soit spécifié autrement:
+\section{Objectif}
+Le but de la première semaine était de terminer le préprocesseur afin d'avoir une base solide pour commencer le projet rapidement. Les principaux objectifs à remplir par le préprocesseur sont
 \begin{itemize}
-\item Niveau 1 - Puissance: \^ (associativité à droite)
-\item Niveau 2 - Unaire: - not
-\item Niveau 3 - Multiplication: * /
-\item Niveau 4 - Addition: + -
-\item Niveau 5 - Concatenation: .. (associativité à droite)
-\item Niveau 6 - Comparaison: == ~= < > <= >=
-\item Niveau 7 - Conjonction: and
-\item Niveau 8 - Disjonction: or
+\item La détection d'erreur
+\item Le \textit{parsing} adéquat des expression
+\item Le formatage adéquat du résultat de sortie
+\item Le retrait des macros «.» et «:» et parenthèsage
 \end{itemize}
-Le préprocesseur parcour chaque déclaration en ordre de niveau dans le sens inverse de l'associativité, et regroupe les termes requis par des parenthèse.
-\subsubsection{Mise en forme}
-Pour faciliter le travail du compilateur, le code est mis en forme de manière standard. Les commentaires sont retirés tout comme le sucre syntaxique. Par exemple «\texttt{str:sub(i,i)}» devient «\texttt{str.sub(str, i, i)}» qui devient à son tour «\texttt{str ["sub"] (str , i , i)}». Le résultat est donc très facile à lire pour le compilateur.
-\subsection{Compilateur intermédiaire}
-Le compilateur intermédiaire n'est pas fini, mais il peut déjà produire un peu de code IR. Tout ce qui est expression simple (sans boucle ou fonction) peut être générer, quoique le tout n'aie pas encore été testé. Le but est que le code produit comprenne un jeu d'instruction similaire à du code assembleur, avec une structure très près de celle du code machine.
-\subsubsection{Gestion de l'affectation multiple}
-Ceci est le seul cas où le langage IR ne représentera pas le code assembleur produit. Lors d'affectation multiples (ex: «\texttt{local x, y, z = 1, 2}») le compilateur utilisera une syntaxe spéciale de sorte à s'assurer que la pile est de la bonne taille une fois l'exécution de l'affectation terminée.
-\section{Problèmes et limites}
-Pour l'instant les chaînes de caractères multi-lignes délimitées par «[[ ... ]]» ne sont pas prises en charge par le compilateur, ce n'est d'ailleurs pas une priorité car l'ajout de cette fonctionnalité n'a pas d'influence sur le déboggage du compilateur. De plus, son ajout est relativement rapide, à condition que tout fonctionne, ce qui est la priorité. Dans la même optique, les caractères spéciaux indiqués par un \textit{backslash} (\textbackslash) ne sont pas pris en charge non plus.
 
-Étant donné que tout le code produit jusqu'à présent est une première expérience de programmation en Lua, beaucoup de fonction sont programmées de manière lourde et inefficace. Une des principales choses à faire une fois le compilateur terminé sera de réécrire ces fonctions. Également, les programmes ne sont pas encore liés entre-eux alors certaines fonctions sont présentes en double, ce qui devra être corrigé.
+\section{Le préprocesseur}
+Le préprocesseur repose sur la fonction \texttt{preprocess} qui va en fait appeler la fonction \texttt{readline} en boucle, elle même basée sur la fonction \texttt{nexttoken}. Le tout à pour but de forcer le document à avoir une certaine forme.
+
+\subsubsection{nexttoken}
+Cette fonction a pour principale utilité de détecter les différents «jetons» du langage même si ceux si se ramassent collés ensemble. Elle doit donc tous les connaître et comparer chaque fragment de text de au plus 3 caractère au fur et à mesure qu'elle le parcours. Un fois qu'elle a identifier un jeton, elle retourne celui-ci et la nouvelle position du curseur. Afin de préserver le formatage de l'usager, le caractère '\textbackslash{}n' est considéré comme un jeton. Il pourra ainsi être incorporer au code sortant.
+
+En lisant des jettons comme des string, la fonction les formatte immédiatement de la bonne manière, de même si elle lit un commentaire, elle le saute, comme si il n'existait pas. Le formattage ainsi que le retrait de commentaire reposent tous deux sur la fonction \texttt{strpar} qui permet de lire les string en prenant en compte des \textit{nested brackets} («[[», «[=[», «[==[», etc.).
+
+\subsubsection{readexpr}
+Cette fonction lit des jettons jusqu'à ce que le jeton retourné soir le caractère de nouvelle ligne, ou un caractère délimitateur d'environnement (if, else, while, etc.). Si c'est le cas, la fonction regarde le jeton précédent: si c'est un opérateur, alors la ligne est considérée comme n'étant pas finie, autrement la ligne termine et la fonction retourne la ligne lue, et la position actuelle du curseur.
+
+Au fur et à mesure de la lecture les jetons sont ajoutés à une table. En même temps, les parenthèses sont comptées. Si la fin du fichier ou un jeton d'environnement est rencontré alors que le nombre de parenthèses n'est pas équilibré, cela déclenche une erreur.
+
+La table de jetons est ensuites envoyée à la fonction scan qui associe les différents jetons selon les opérateurs présent pour retourné une chaîne de caractère bien parenthèsée. Le fonctionnement de scan sera discuté plus loin.
+            
+\subsubsection{readline}
+En suite la fonction \texttt{readline} s'assure que la fonction précédent ne retourne pas juste des jetons de nouvelle ligne. Une fois que \texttt{readexpr} retourne une valeur autre, elle retourne la ligne et la position du curseur dans le texte.
+
+\subsubsection{Fonctions d'environnement}
+Les fonctions d'environnement appellent \texttt{readline} ou \texttt{readexpr} en fonction du patron sur lequel est basé leur environnement. Parexemple, l'environnement 'if' [très] simplifié ressemble à ceci
+\begin{lstlisting}[style=out]
+<if> := if <expr> then
+	<bloc>
+else
+	<bloc>
+end
+<bloc> := <bloc> <expr>
+<bloc> := <expr>
+<expr> := (<expr> op <expr>)
+<expr> := X
+\end{lstlisting}
+
+le patron de la fonction d'environnement pour \textit{parser} if risque donc de ressembler à ceci:
+
+\begin{lstlisting}[style=lua]
+  function parseif(...)
+     nexttoken(...) -- if
+     nextexpr(...) -- <expr>
+     nexttoken(...) -- then
+     while peektoken(...) ~= "else" do
+        nextexpr(...)
+     end
+     nexttoken(...) -- else
+     while peektoken(...) ~= "else" do
+        nextexpr(...)
+     end
+     nexttoken(...) --end
+  end
+\end{lstlisting}
+
+\subsubsection{preprocess}
+Tout en haut de la chaîne d'exécution il y a la fonction \texttt{preprocess} qui sert en quelque sorte de fonction d'aiguillage. Elle récupère les informations de d'environnement et dirige l'exécution vers la bonne fonction.
+
+\section{Détection d'erreur}
+Le processus de détection d'erreur est assez difficile à implémenter. En effet, dépendamment du type d'erreur, la cause peut être la où le curseur se trouve, ou bien il y a de ça 3 lignes. L'idée original du detecteur d'erreur était de «traîner» les valeurs \texttt{linum} (numéro de ligne) et \texttt{chnum} (numéro de caractère), et de les incrémenter ou décrémenter à mesure que le programme lisait le texte. Bien que théoriquement faisable, cette méthode s'est avérée très inefficace; un seul oubli (dans un texte d'un peu plus de 1000 lignes) et tout le système tombe à l'eau.
+
+La méthode actuelle est moins précise, mais est beaucoup plus fiable, elle ne se fie qu'au curseur, ainsi, lorsqu'un erreur survient, elle retourne simplement la position du curseur.
+
+\section{\textit{Parsing}}
+La récupération des jetons fut assez ardue. En effet, étant donné que tous les opérateurs n'on pas forcément la même taille, il faut à chaque étape vérifier le prochain \textit{substring} le longueur 1, 2 puis 3. La structure impérative du langage rend également difficle la prévisibilité des éléments à venir. Dans la plupart des fonction, il doit y avoir 3 ou 4 clauses d'exceptions. Par exemple, dans l'exemple suivant, \texttt{x.y} vaut toujours la même chose, mais il y a beaucoup de manière de le représenter.
+
+\begin{lstlisting}[style=lua]
+  x.y = function () ... end
+  function x.y () end
+  x["y"] = function () ... end
+  function x["y"] () ... end
+  a, x.y, c = 1, function () ... end, 2
+\end{lstlisting}
+
+Il en va de même pour beacoup d'autres éléments du langage qui ont plusieurs représentations valables (tables, string, etc.). Au final cependant, une fois toutes les exceptions couvertes, on obtient une fonction robuste (\texttt{nexttoken}) surlaque on peut se baser pour prélever du texte. En plus de rendre le code légèrement plus intuitif, le fait que tous les accès au texte partent d'une fonction réduit grandement le risque d'erreur.
+
+\section{Formatage de la sortie}
+En rétrospective le choix d'intégrer les caractères de changement de ligne spécifiés par l'utilisateur était vraiment une mauvaise idée. Bien que le code produit est maintenant très beau et fidèle à l'original, le traitement de tous les cas particulier engendrés par le support de cette fonctionnalité rend non seulement le code lourd et moins lisible, mais il augmente les chances de fausse erreur. Ceci dit, hormis ce détail, le formatage est très bien réussi et la fonction d'écriture fonctionne comme prévu.
+
+\section{Parenthèsage et retrait de macros}
+Au départ, l'objectif était de retirer les macros en premier lieu, afin de pouvoir traiter un code plus universel. Dans le cas du «.» c'est facile, et d'ailleurs c'est ce que le préprocesseur fait avant même de scanner. Cependant si on développe aussi «:» il faut le faire avant, car le résultat du développement de «:» engendre des «.». Le cas du «:» posait vraiment problème. Même si on sait que \texttt{x:y() == x.y(x)}, trouver exactement la valeur de \texttt{x} n'est pas toujours évident:
+\begin{lstlisting}[style=lua]
+  x.y():sub(2,3):find("a")
+\end{lstlisting}
+Et même si on était capable de le développer, on obtiendrait:
+\begin{lstlisting}[style=lua]
+  x.y().sub(x.y(),2,3).find(x.y().sub(x.y(),2,3), "a")
+\end{lstlisting}
+Ce on parle ici d'une séquence quasiement 3 fois plus longue à exécuter. Laisser les «:» et les traiter comme un opérateur était décidément plus intelligent. En tant qu'opérateur, on lui donne la priorité ultime; aucun opérateur n'a préséance.
+
+Le fonctionnement du parenthèsage est décrit en détail dans le manuel. Somme toute, même si il faut parcourir une table une dizaine de fois pour obtenir le résultat final, il n'y a pas vraiment de manière plus efficace de parenthèser un séquence. Si toutes les associations étaient dans le même sens, peut-être qu'on aurait pu envisager de \textit{pipe-liner} l'association, mais ce n'est pas le cas.
+
+\section{Test de fonctionnement}
+Pour s'assurer du bon fonctionnement du préprocesseur, il suffisait de l'exécuter sur lui-même, puis sur l'ancienne version, puis sur lui-même, et ainsi de suite jusqu'à ce que les deux versions soient les même, si il y a un équilibre, et que le compilateur Lua standard est en mesure d'exécuter cet équilibre, alors c'est que le fichier produit est stable et conforme à la norme. Le préprocesseur a passer ce test.
 
 \section{Conclusion}
-En bref, le projet avance bien, mais les problèmes techniques ayant ralenti le progrès il faudra s'assurer d'avoir un bon rythme au cours de prochaines semaines.
-
+Même s'il ne s'agit pas du code le plus élégants, le préprocesseur est efficace à convertir les fichier pour les rendre prêts pour le compilateur, et même si son système de détection d'erreur est loin d'être parfait, il attrape tout de même une bonne partie des erreur de formatage de l'utilisateur.
 \end{document}
