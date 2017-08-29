@@ -14,6 +14,8 @@
 \usepackage{longtable}
 \usepackage{amsmath}
 \usepackage{amssymb}
+\usepackage{tikz}
+\usepackage{textcomp}
 
 \renewcommand{\arraystretch}{1.5}
 
@@ -144,12 +146,50 @@ Le sens de l'associativité décrit dans quel ordre les expression vont se forme
 Pour de plus amples détails vous pouver consulter le jeu d'instruction du au paragraphe \ref{par:instructions}.
 \newpage
 \subsubsection{Types et repésentation interne}
-Vu que Lua est typé dynamiquement, chaque variable doit contenir son information de type. On tire profit du fait que les pointeur n'occupent que 6 bytes les plus bas pour stocker l'information de type. En décalant les pointeurs de 3 bits vers la gauche, on obtient suffisemment d'espace pour encore 8 types différents. Pour récupérer les types on fait 'AND' avec 7, et pour récupérer le pointeur 'SAR' avec 3. Le paragraphe suivant décrit les types et leur représentation interne. À des fins de clareté on fera référence à toutes les valeurs qui ont leur 3 LSB libre comme étant étiquetées (T: \textit{tagged}) et toutes celles étant dans leur format \textit{naturel} comme étant non-étiquetées (UT: \textit{untagged}).
+Vu que Lua est typé dynamiquement, chaque variable doit contenir son information de type. On tire profit du fait que les pointeur n'occupent que 6 bytes les plus bas pour stocker l'information de type. En décalant les pointeurs de 3 bits vers la gauche, on obtient suffisemment d'espace pour encore 8 types différents. Pour récupérer les types on fait 'AND' avec 7, et pour récupérer le pointeur 'SAR' avec 3. Le paragraphe suivant décrit les types et leur représentation interne. À des fins de clareté on fera référence à toutes les valeurs qui ont leur 3 LSB libre comme étant étiquetées (T: \textit{tagged}) et toutes celles étant dans leur format \textit{naturel} comme étant non-étiquetées (UT: \textit{untagged}). Voici un tableau de référence pour comprendre les schéma de représentation interne:
+
+
+\vspace{1.5cm}
+\begin{center}
+  \begin{tabular}{c|p{12cm}}
+    \textbf{Abbréviation} & \textbf{Signification}\\
+    \hline\hline
+    \texttt{Ptr} & Pointeur\\
+    \hline
+    \texttt{Int} & Entier\\
+    \hline
+    \texttt{Float} & Nombre à virgule flottante\\
+    \hline
+    \texttt{Byte} & Octet\\
+    \hline
+    \texttt{Fct} & Fonction\\
+    \hline
+    \texttt{UT} & Représentation naturelle\\
+    \hline
+    \texttt{T} & Le nombre est décalé de 3 bits vers la gauche et étiqueté\\
+    \hline
+    \texttt{+} & La case est occupée par une valeur\\
+    \hline
+    \texttt{*} & La case est occupée par un pointeur\\
+    \hline
+    \texttt{\#{}} & La case est occupée par une valeur quelconque (peut être un pointeur ou une valeur)\\
+    \hline
+    \texttt{X->B} & La case contient la valeur \texttt{B} et est pointée par \texttt{X}\\
+    \hline
+    \texttt{@} & Indique l'addresse de la case\\
+    \hline
+    \texttt{[x]} & Représente une séquence de x fois le contenu de la parenthèse\\
+  \end{tabular}
+\end{center}
 \setcounter{paragraph}{-1}
+
+\vspace{1.5cm}
+
 \paragraph{Entiers/Adresses - \texttt{000}}
 Le choix a été pour éviter les comparaisons constantes de représenter tous les nombres en lua sous forme de doubles. Ainsi le type entier est en quelque sorte désuet au point de vue de l'utilisateur, cependant, certaine structures internes utilisent encore sa représentation.
 
 Une valeur contenant ses trois LSB à 0 indique qu'elle ne pointe sur rien et donc que le GC peut l'ignorer. C'est pourquoi toutes les addresses sont des multiples de 8. Le compilateur s'assure d'aligner les adresses de retour et d'appelle, ainsi que de conserver la mémoire et la pile alignée. Ce faisant, on évite les accidents où le GC tenterait de copier une addresse de retour. La reconnaissance par le GC n'est pas la seule utilité de cet alignment. En effet, l'alignement général du stack et de la mémoire sur des multiples de 8 améliore la performance du cache, car aucun \textit{data chunk} ne risque d'être tronqué.
+\newpage
 \paragraph{Valeurs spéciales - \texttt{001}}
 Les valeurs spéciales sont des constantes qui vont permettre au compilateur de d'obtenir de l'information sur certains object, au GC de reconnaître des cas particulier, ou simplement de représenter des constantes du langages. Voici la table de valeurs spéciales.
 \begin{center}
@@ -167,6 +207,16 @@ Les valeurs spéciales sont des constantes qui vont permettre au compilateur de 
 \paragraph{Chaînes de caractères - \texttt{010}}
 Les chaînes de caractères sont représentées par une case mémoire (8 bytes) contenant la taille de la séquence de byte qui suit (moins le caractère nul) sous la forme d'un entier non-étiqueté. La fin du string contient au moins un caractère nul, mais potentiellement plus pour être aligné avec la mémoire. Exemple:
 \begin{center}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{CASE VIDE@(Longueur + 8 mod 8)}\\
+    \hline
+    \texttt{[Longueur](Caractères : UT Bytes[])}\\
+    \hline
+    \texttt{String->+(Longueur : UT Int)}\\
+    \hline
+  \end{tabular}
+  \hspace{2cm}
   \begin{tabular}{|c|}
     \hline
     \texttt{0000000073756E74}\\
@@ -187,7 +237,7 @@ Les tables en Lua ont la propriété de pouvoir recevoir non seulement des nombr
     \hline
     \texttt{*(Liste chaînée (LC) : UT Ptr)}\\
     \hline
-    \texttt{\#{}(Longueur : UT Int)}\\
+    \texttt{Table->+(Longueur : UT Int)}\\
     \hline
   \end{tabular}
   \captionof{figure}{Représentation en mémoire d'une table}
@@ -239,25 +289,24 @@ La partie tableau de la liste contient tous les index entiers. Si on tente d'acc
 \begin{center}
 \begin{tabular}{|c|}
     \hline
-    \texttt{...}\\
+    \texttt{CASE VIDE@(Capacité + 2)}\\
     \hline
-    \texttt{NIL}\\
+    \texttt{[Capacité]NIL}\\
     \hline
-    \texttt{\#{}(DÉCALAGE : T Int)}\\
+    \texttt{+(Décalage : T Int)}\\
     \hline
-    \texttt{TB->\#{}(CAPACITÉ : T Int)}\\
+    \texttt{TB->+(Capacité : T Int)}\\
     \hline
 \end{tabular}
 \captionof{figure}{Base du tableau d'index entiers}
 \end{center}
 Ceci donne la possibilité à l'usager de créer une perte de mémoire assez massive en définissant deux index extrêmement éloignés l'un de l'autre, cependant un tel comportement n'aurait pas vraiment de but autre que celui de faire planter le programe. Le bénéfice d'avoir un tableau directement indexable surpasse largement les inconvénients.
 
-\newpage
 \paragraph{Objets - \texttt{100}}
 Le type objet sert pour tous les types qui ne font pas partie des 7 principaux. En décalant à droite, on obtient un pointeur vers une case mémoire qui contient le type de l'objet, le compilateur doit donc faire une étape de plus pour obtenir le type, c'est pourquoi il décrit les objets moins fréquents. On considère que le type pointé en mémoire s'ajoute à 8 pour qu'il n'y ait pas de conflit avec les autres types existants. Par exemple, le type 4->0, est en fait le type 8 (le premier après Fonction (7)).
 \setcounter{subparagraph}{-1}
 \subparagraph{Fermetures - \texttt{1000}}
-Les fermetures suivent le même principe que la liste chaînée des tables, mais elles sont chaînées dans l'autre sens de sorte que l'objet le plus récent est accessible le plus rapidement. Leur forme est la même que celle des maillons des tables, mais avec une case mémoire en plus pour le type. Vu qu'elles pointes toutes vers la même racine(ENV), ce sont les feuilles qui sont sauvegarder dans chaque fonction (FN).
+Les fermetures suivent le même principe que la liste chaînée des tables, mais elles sont chaînées dans l'autre sens de sorte que l'objet le plus récent est accessible le plus rapidement. Leur forme est la même que celle des maillons des tables, mais avec une case mémoire en plus pour le type. Vu qu'elles pointes toutes vers la même racine(ENV), ce sont les feuilles qui sont sauvegarder dans chaque fonction.
 
 \begin{center}
 \begin{tabular}{|c|}
@@ -268,40 +317,227 @@ Les fermetures suivent le même principe que la liste chaînée des tables, mais
     \hline
     \texttt{\#{}(CLEF : T)}\\
     \hline
-    \texttt{FN->\#{}(Type : 0)}\\
+    \texttt{Fermeture->+(Type : 0)}\\
     \hline
 \end{tabular}
 \captionof{figure}{Format d'une valeur «enfermée»}
 \end{center}
 
 \subparagraph{Fichiers - \texttt{1001}}
-Les fichiers sont principalement gérés par du code C. L'objet fichier est une paire comprenant le type et soit un pointeur vers le fichier ouvert ({\lstset{style=lua}\lstinline$io.ftype() == "file"$}), ou la valeur NIL ({\lstset{style=lua}\lstinline$io.ftype() == "closed file"$}).
+Les fichiers sont principalement gérés par du code C. L'objet fichier est une paire comprenant le type et soit un pointeur vers le fichier ouvert ({\lstset{style=lua}\lstinline$io.ftype(file) == "file"$}), ou la valeur NIL ({\lstset{style=lua}\lstinline$io.ftype(file) == "closed file"$}).
 \begin{center}
 \begin{tabular}{|c|}
     \hline
-    \texttt{*(FILE : UT Ptr) | NIL}\\
+    \texttt{*(FILE : UT File Ptr) | NIL}\\
     \hline
-    \texttt{File->\#{}(Type : 1)}\\
+    \texttt{File->+(Type : 1)}\\
     \hline
 \end{tabular}
-\captionof{figure}{Format d'une valeur «enfermée»}
+\captionof{figure}{Exemple de l'objet «file»}
 \end{center}
 
 \paragraph{Piles - \texttt{101}}
+Les piles sont très importantes en Lua, une bonne partie du langage repose sur leur existance étant donné la possibilité de retourner un nombre indéfini de valeur. Les piles sont normalement volatiles, c'est-à-dire qu'elles ne sont pas sauvegardée en mémoire. Cependant, dans les fonctions variadiques la pile doit être sauvegardée c'est pourquoi le type 5 existe. Une fois désétiqueté, la valeur pointe sur une région de la mémoire ou de la pile (d'où le nom donné au type) qui peut être décrémentée successivement jusqu'à l'atteinte d'une valeur sentinelle (VOID).
+
+\begin{center}
+\begin{tabular}{|c|}
+    \hline
+    \texttt{Pile->\#{}(VALEUR : T)}\\
+    \hline
+    \texttt{...}\\
+    \hline
+    \texttt{VOID}\\
+    \hline
+\end{tabular}
+\captionof{figure}{Format d'une pile}
+\end{center}
+
 \paragraph{Nombres à virgule flottante (doubles) - \texttt{110}}
+Toutes les manipulation numérique effectuées par l'utilisateur se font sur les doubles. Ceci évide de devoir vérifier le type de chaque opérande avant chaque opération, ce qui rendrait le code lourd et beaucoup moins performant. Étant donné leur format, les double ne peuvent pas être décalés vers la gauche. On pourrait simplement masquer les trois LSB et ainsi perdre une certaine précision de la partie fractionnaire (3 bits/52). Mais cette option n'est pas idéale: en plus de perdre plus de 5\%{} de la précision, on se retrouve à devoir gérer des cas particulier (parfois les opérateur doivent utiliser \texttt{sarq} d'autre fois \texttt{xorq} pour désétiqueter, etc... Le plus simple sans compromettre la précision est tout simplement de gérer des pointeurs de double.
+
+\begin{center}
+\begin{tabular}{|c|}
+    \hline
+    \texttt{Double->+(VALEUR : UT Float)}\\
+    \hline
+\end{tabular}
+\captionof{figure}{Représentation d'un double dans la mémoire}
+\end{center}
+
 \paragraph{Fonctions - \texttt{111}}
+Les fonctions sont représentées par deux cases, l'une contient l'addresse d'appel, tandis que l'autre pointe sur l'environnement de fermeture. Avant d'appeler une fonction, le vieil environnement est sauvegardé sur la pile, et le nouvel environnement est chargé.
+
+\begin{center}
+\begin{tabular}{|c|}
+    \hline
+    \texttt{*(ENV : UT Ptr)}\\
+    \hline
+    \texttt{Fonction->*(FN : UT Fct Ptr)}\\
+    \hline
+\end{tabular}
+\captionof{figure}{Représentation d'un double dans la mémoire}
+\end{center}
 
 \subsubsection{Fermetures}
+\paragraph{Principe de fonctionnement}
+L'environnement de fermeture fonctionne un peu comme un arbre. Au départ du programme, il pointe sur une case vide (NIL), la racine. Si une nouvelle fermeture est créée, elle s'ajoute et pointe sur l'ancien environnement, cela continue ainsi jusqu'à ce que la fonction se termine, à ce moment le vieil environement est restauré et si rien ne pointe sur la fonction terminée, la feuille est perdue. Dans l'exemple suivant, on assigne la fonction \texttt{Epsilon} à une variable globale, ce qui conserve une référence à son pointeur d'environnement. Les fonctions \texttt{Alpha} et \texttt{Gamma} qui ne sont pas assignée voient leur environnement disparaître à la fin de leur exécution.
+
+\tikzset{>=latex}
+\begin{center}
+  \begin{tikzpicture}[sibling distance = 10em,
+      every node/.style =
+      {shape = rectangle, rounded corners, font=\ttfamily},
+    alive/.style =
+    {fill=green!50},
+    dead/.style =
+    {fill=red!50},
+    edge from parent path={[<-](\tikzparentnode)--(\tikzchildnode)}]
+  \node[alive]{NIL}
+  child { node [dead] { Alpha }}
+  child { node [alive] { Beta }
+    child { node [alive]{ Delta }
+      child { node [alive] { Epsilon }}
+      child { node [dead] { Gamma }}}};
+\end{tikzpicture}
+\end{center}
+
+\paragraph{Déroulement}
+Une fois que le compilateur détecte qu'une valeur locale devra être utilisée depuis une autre fonction, il «enferme» cette valeur dans l'environnement de fermeture, une fois cela produit, toute les références ultérieures à cette valeur (même celles de son propre environnement) seront toutes passées par l'environnement de fermeture. C'est pourquoi dans l'exemple suivant, même si \texttt{a} est modifié après que la fonction \texttt{x} soit définie, le résultat est quand même 10.
+\begin{lstlisting}[style=lua, caption={Fermeture},label=DescriptiveLabel]
+test = function (a) 
+   local x ; x = function (b) 
+      return (a + b) 
+   end 
+   a = (a + 2) 
+   return x 
+end 
+
+local x = test (3)
+print (x (5)) 
+\end{lstlisting}
 
 \subsubsection{Assignation}
+Le processus d'assignation de Lua est assez complexe malgré son apparente simplicité. Tout d'abord, les déclaration multiples ne sont pas faites variable par variable, comme en C. Elles sont plutôt faites par lot.
+C'est parce qu'en lua, toutes les destinations sont évaluées avant les valeurs.
+\begin{lstlisting}[style=lua, caption={Déclaration multiple},label=DescriptiveLabel]
+  local x, y, z = 1, 2, 3
+  x, y, z = y, y + x, x + y
+\end{lstlisting}
+On pourrait s'attendre à ce que \texttt{x} prenne la valeur de \texttt{y}, et ainsi donne la valeur de \texttt{2 * y} à \texttt{y}, et alors que \texttt{z} vaille \texttt{3 * y}. Or le résultat est le même que si toutes les assignation avaient été effectuées simultanéement.
+
+Le compilateur utilise la pile pour sauvegarder la position des variables. Au fur et à mesure de l'évaluation, les adresses sont empilées, ensuite il calcule les résultats qui sont empilés eux aussi, puis une fonction de transfert fait corresondre chaque partie valeur de la pile à sa partie destination. Cette opération est beaucoup plus couteuse qu'une affection directe, mais elle est fidèle aux spécificités du langage\footnote{Cet algorithme de transfert pourrait être amélioré. Si on empiles les destinations à l'envers, ils suffit alors de "poper" la destination et y placer la valeur. L'idée derrière la fonction de transfert actuelle était de permettre que des fonctions retournant plusieurs arguments puissent être retournée au sein de la déclaration (et non seulement en dernière posisition)}.
 
 \subsubsection{Boucles}
+Le compilateur \luna{} prend en charge toute les boucle définie dans le langage Lua soient {\lstset{style=lua}\lstinline$for, for ... in, while, repeat .. until$}. Pour la plupart, leur implémentation est très simple. Dans le cas des boucles {\lstset{style=lua}\lstinline$while$} et {\lstset{style=lua}\lstinline$repeat .. until$} il s'agit d'un simple saut accompagné d'une comparaison. Dans le cas des boucles {\lstset{style=lua}\lstinline$for$} c'est un peu plus complexe.
 
-\subsubsection{Appel récursif}
+\paragraph{Boucle \texttt{\textbf{for ... in}}}
+Lorsque la boucle {\lstset{style=lua}\lstinline$for .. in$} est appelée, le compilateur réserve 3 espace sur la pile d'exécution où il placera respectivement la fonction d'itération, puis les deux paramètres d'initialisation. La pile d'exécution ressemble alors à ceci:
+\begin{center}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{...}\\
+    \hline
+    \texttt{*(Itérateur : T Fct Ptr)}\\
+    \hline
+    \texttt{\#{}(P1 : T)}\\
+    \hline
+    \texttt{\#{}(P2 : T)}\\
+    \hline
+    \texttt{[n]\#{}(Variables d'itération : T)}\\
+    \hline
+  \end{tabular}
+\captionof{figure}{Bloc d'activation de la boucle {\protect\lstset{style=lua}\lstinline$for .. in$}}
+\end{center}
+Les variables d'itérations sont définies par l'utilisateur pour prendre la valeur de retour (ou les valeurs) de la fonction d'itération.
+
+\paragraph{Boucle \texttt{\textbf{for}}}
+La boucle {\lstset{style=lua}\lstinline$for$} quand à elle est optimisée pour pouvoir «tourner» le plus vite possible, on veut donc stocker les doubles directement pour qu'ils soient facilement accessible et manipulable. Cependant, des double non-étiquetés sur la pile sont dangereux pour le GC, c'est pour quoi il est averti de la présence du {\lstset{style=lua}\lstinline$for$} grâce au FRAH.
+\begin{center}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{...}\\
+    \hline
+    \texttt{FRAH}\\
+    \hline
+    \texttt{*(Référence : T Float Ptr)}\\
+    \hline
+    \texttt{+(Itérateur : UT Float)}\\
+    \hline
+    \texttt{+(Arrêt : UT Float)}\\
+    \hline
+    \texttt{+(Incrémentateur : UT Float)}\\
+    \hline
+  \end{tabular}
+\captionof{figure}{Bloc d'activation de la boucle {\protect\lstset{style=lua}\lstinline$for$}}
+\end{center}
+
+Toutes les variables d'itération ne sont pas étiquetées sauf la variable de référence. C'est pour pouvoir référer à l'itérateur dans le code. En Lua, il est impossible de changer la valeur de l'itérateur dans une boucle {\lstset{style=lua}\lstinline$for$}, un nouveau double est donc synthétisé à chaque tour depuis l'itérateur et placé dans la case de référence.
+
+\subsubsection{Fonctions variadiques}
+\paragraph{Paramètres manquants}
+En Lua il est acceptable d'appeler une fonction avec le mauvais nombre de paramètres. Cette situation est problématique car \luna{} respecte les standard d'appel de C, langage ou cette pratique est totalement interdite. Le problème vient du fait que les 6 premier paramètres sont passés par les registres, mais les paramètres suivant sont sur la pile. Cela ne pose pas problème si il y a trop de paramètres, mais en appelant une fonction qui requière au dessus de 6 paramètres, si on en omet un ou plus, les éléments de la fonction vont tenter de référer à une partie de la pile d'exécution qui ne leur appartient pas. C'est pourquoi avant chaque fonction, la routine \texttt{\_{}nil\_{}fill} est appelée. Cette routine va modifier la pile de sorte à ce que les arguments manquants soient référençables (et contiennent la valeur NIL). L'exemple ci-dessous se produirait si on appelait une fonction de 8 arguments avec 6 arguments ou moins:
+
+\begin{center}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{\#{}(PREVIOUS FRAME)}\\
+    \hline
+    \texttt{*(RETURN ADDRESS : T Address)}\\
+    \hline
+    \texttt{*(BASE POINTER : T Address)}\\
+    \hline
+  \end{tabular}
+  \hspace{1cm} {\Huge{$\,\to\,$}} \hspace{1cm}
+  \begin{tabular}{|c|}
+    \hline
+    \texttt{\#{}(PREVIOUS FRAME)}\\
+    \hline
+    \texttt{NIL}\\
+    \hline
+    \texttt{NIL}\\
+    \hline
+    \texttt{*(RETURN ADDRESS : T Address)}\\
+    \hline
+    \texttt{*(BASE POINTER : T Address)}\\
+    \hline
+  \end{tabular}
+\captionof{figure}{Effet de \texttt{\_{}nil\_{}fill} sur la pile}
+\end{center}
+
+\paragraph{Paramètres variables}
+Si le paramètre variable est inclu, la fonction va ensuite appeler la routine \texttt{\_{}var\_{}args}. Cette routine a pour bu de récupérer les paramètres en trop et de les placer dans une pile à laquelle le programme peut avoir accès tout au long de la fonction.
+
+
+\subsubsection{Appels terminaux}
+Le compilateur optimise l'appel terminal en conservant le même \textit{frame} pour tous les appels terminaux. En raison de l'imprévisibilité de la taille du \textit{frame} dans une fonction variadique, celles-ci ne peuvent pas bénéficier de l'optimisation terminale.
 
 \subsubsection{Librairies}
+Le compilateur \luna{} a accès à une série de librairies où sont définies des variables et fonctions utiles. Quand les librairies sont construites, le compilateur inscrit les variables disponibles ainsi que leur provenance dans un fichier «.lib». Par la suite, chaque fois qu'il compile un fichier, il vérifie si celui-ci accède à une des variables des librairies. Si c'est le cas, il l'ajoute à la liste d'inclusion. De cette manière l'inclusion est automatique et l'usager n'a pas à se tracasser. De plus, le fichier exécutable produit ne contient pas de code mort qui augmenterait inutilement sa taille.
 
+\paragraph{arg}
+La librairie arg est toute petite, elle permet à un programme Lua d'accéder aux arguments de la ligne de commande et défini ces arguments dans la table \texttt{arg}.
+
+\paragraph{io}
+Cette librairie est presque complèment implémentée, elle décrit la table \texttt{io}. Cette table définie une série de fonction qui permettent entre autre la lecture et l'écriture de fichier, la redirection du \texttt{stdin} ou \texttt{stdout}.
+
+\paragraph{lua}
+Cette librairie est la librairie «de base», presque tout les programmes en ont besoin. C'est elle qui contient les référence à \texttt{print}, \texttt{tostring}, \texttt{tonumber}, etc...
+
+\paragraph{os}
+La table \texttt{os}, définie dans cette libraire contient des fonctions relative au système d'exploitation. Elles permettent par exemple d'exécuter un programme, ou bien de quitter l'exécution abruptement.
+
+\paragraph{string}
+La librairie \texttt{string}, contient toutes les fonctions relatives aux chaînes de caractères, comme le formattage, la recherche, ou le prélèvement.
+
+\paragraph{table}
+Finalement, \texttt{table} est une librairie qui contient des utilitées pour faciliter le traitement des tables, comme une fonction de bouclage ou de concaténation.
+
+\paragraph{}
+\textbf{\color{red}***Sans compter la libraire \texttt{io}, toutes les librairies sont à un stage très jeune de leur écriture.}
+
+\newpage
 \subsection{Collection de déchets}
+Le compilateur inclu dans le code son collecteur de déchet, ou \textit{Garbage Collector} (écrit en C). Le but du GC est de réorganiser et compacter la mémoire pour faire de la place aux allocation ultérieures. À chaque fois que le programme effectue une opération qui remplie potentiellement la mémoire (transfert, appel de fonction, retour de fonction, définition de variable, définition de table, etc.) il appelle le GC. Celui-ci vérifie si la mémoire est encore en dessous du seuil acceptable, définie par défaut à 75\%{}. Si c'est le cas, il retourne immédiatement à l'exécution, sinon, il commence sont travail. Suite à la relocalisation de la mémoire le GC va évaluer si le programme utilise trop d'espace (la nouvelle plage mémoire se situe en dessous de 25\%{} de la mémoire allouée) où pas assez (la nouvelle plage mémoire est toujours au dessus de 75\%{} même après la compaction. Si c'est le cas, il va ajuster la taille de la mémoire en conséquence (la diviser par deux, ou la doubler respectivement). De cette manière si un programme à besoin d'une quantité immense de mémoire pour un court laps de temps, il se la verra allouée et le programme ne plantera pas, mais lorsque sa demande va diminuer, le GC diminuera à sont tour la taille 
 
 \subsubsection{Type de GC}
 
