@@ -747,7 +747,7 @@ scan(expr):
 \texttt{scan} s'exécute récursivement lorsque des parenthèses sont déja présentes. Avant d'appeler les fonctions de combinaison, \texttt{scan} s'assure également de combiner les fonctions avec leurs paramètres. Il est impératif que cette fonction produise du code fidèle (sans parenthèse superflue), car en lua les parenthèse de trop sont utilisée pour la troncation de la séquence de retour, ainsi «\texttt{(var)}» n'a pas la même signification que «\texttt{var}».
 
 \subsubsection{Préprocesseur et parcours des environnements}
-Afin de préparer le code, le préprocesseur appelle la fonction de lecture de ligne en boucle. Mais parfois celle-ci tomber sur un délimitateur d'environnement. Les fonctions décrites précédemment sont toutes à l'affût des délimitateurs, si l'une d'entre elles détecte un mot réservé qui débute un environnement, le préprocesseur s'appelera lui-même en augmentant de 1 le paramètre d'indexation. Le préprocesseur descend ainsi récursivement dans les environnements s'assurant par le fait même d'une bonne indexation et d'une structure cohérente.
+Afin de préparer le code, le préprocesseur appelle la fonction de lecture de ligne en boucle. Mais parfois celle-ci tomber sur un délimitateur d'environnement. Les fonctions décrites précédemment sont toutes à l'affût des délimitateurs, si l'une d'entre elles détecte un mot réservé qui débute un environnement, le préprocesseur s'appelera lui-même en augmentant de 1 le paramètre d'indexation. Le préprocesseur descend ainsi récursivement dans les environnements s'assurant par le fait même d'une bonne indexation et d'une structure cohérente. Ce faisant, il transforme également les {\lstset{style=lua}\lstinline$elseif$} en {\lstset{style=lua}\lstinline$else if$} pour que le code soit plus facile à traiter.
 
 \newpage
 \subsection{Récapitulation}
@@ -793,7 +793,7 @@ end
 \begin{longtable}{p{1.3cm} r p{12cm}}
   {\lstinline$a + b$} & \textbf{add} & Effectue l'addition de deux doubles.\\
   {\lstinline$x and y$} & \textbf{and} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, poursuit l'exécution à \texttt{y}, sinon retourne la valeur de \texttt{x}, si l'exécution est poursuivie à \texttt{y}, retourne la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline${;[x] = y}$} & \textbf{append} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline${, y}$} & \textbf{append} & Ajoute un élément à la table en cours de définition au prochain index vide après sa conclusion.\\
   {\lstinline$m & n$} & \textbf{band} & Effectue un 'AND' bit à bit entre \texttt{m} et \texttt{n}.\\
   {\lstinline$p === q$} & \textbf{beq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$true$} si ils pointent vers le même objet.\\
   {\lstinline$~n$} & \textbf{binv} & Inverse les bits du nombre entier \texttt{n}.\\
@@ -803,72 +803,74 @@ end
   {\lstinline$m >> n$} & \textbf{bsar} & Décale l'entier \texttt{m} de \texttt{n} bits vers la droite. Si le MSB est 1, tous les bits décalés depuis le MSB sont mis à 1 (décalage arithmétique, conserve la négativité).\\
   {\lstinline$m >>> n$} & \textbf{bshr} & Décale \texttt{m} de \texttt{n} bits vers la droite. Les bits décalés depuis le MSB sont 0 (décalage logique, ne conserve pas la négativité).\\
   {\lstinline$m ~ n$} \newline {\lstinline$m ^^ n$} & \textbf{bxor} & Effectue un 'XOR' bit à bit entre \texttt{m} et \texttt{n}.\\
-  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{call} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstinline$x = y$} & \textbf{chg} & Effectue le transfert de la valeur de \texttt{y} à l'addresse de \texttt{x}.\\
-  {\lstinline$s .. t$} & \textbf{con} & Effectue la concaténation de la chaîne de caractère \texttt{s} avec la chaîne de caractère \texttt{t}\\
+   & \textbf{call} & Procède à l'appel de la fonction préparée dans \texttt{\textbf{params}} ou \texttt{\textbf{fparams}}.\\
+  {\lstinline$x = y$} & \textbf{chg} & Effectue le transfert de la valeur de \texttt{y} à l'addresse de \texttt{x}, pour les variables globales ou déjà définie.\\
+  {\lstinline$s .. t$} & \textbf{con} & Effectue la concaténation de la chaîne de caractère \texttt{s} avec la chaîne de caractère \texttt{t}.\\
+   & \textbf{clo} & Réfère à un élément de l'environnement de fermeture.\\
   {\lstinline$a / b$} & \textbf{div} & Effectue la division de deux doubles.\\
-  {\lstset{style=lua}\lstinline$do$} & \textbf{do} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$}$} & \textbf{done} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$else$} & \textbf{else} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$end$} & \textbf{end} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{do} & Commence l'environnement {\lstset{style=lua}\lstinline$do$}.\\
+  {\lstset{style=lua}\lstinline$}$} & \textbf{done} & Conclu la définition d'une table après \texttt{\textbf{init}}.\\
+  {\lstset{style=lua}\lstinline$else$} & \textbf{else} & Marque le début de la seconde branche du {\lstset{style=lua}\lstinline$if$}.\\
+   & \textbf{encl} & «Enferme» une valeur dans l'environnement de fermeture.\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{end} & Termine l'environnement {\lstset{style=lua}\lstinline$do$}.\\
   {\lstinline$x == y$} & \textbf{eq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont les mêmes, {\lstset{style=lua}\lstinline$false$} sinon.\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{exit} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{fct} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{fend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$do$} & \textbf{fido} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$end$} & \textbf{fiend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$x:y$} & \textbf{findex} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{fname} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$for$} & \textbf{for} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$for ... in$} & \textbf{forin} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$f:y(x)$} & \textbf{fparams} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$do$} & \textbf{frdo} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{free} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$end$} & \textbf{frend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{gbl} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  & \textbf{exit} & Termine le programme.\\
+  {\lstset{style=lua}\lstinline$function$} & \textbf{fct} & Marque le début d'une fonction.\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{fend} & Marque la fin d'une fonction.\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{fido} & Marque l'entrée dans la boucle {\lstset{style=lua}\lstinline$for ... in$}.\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{fiend} & Marque la fin de la boucle {\lstset{style=lua}\lstinline$for ... in$}.\\
+  {\lstset{style=lua}\lstinline$x:y$} & \textbf{findex} & Indexe un objet, en conservant celui-ci sur la pile pour qu'il soit utilisé par \texttt{\textbf{fparams}}.\\
+   & \textbf{fname} & Spécifie le nom de la fonction.\\
+  {\lstset{style=lua}\lstinline$for$} & \textbf{for} & Marque le début de la boucle {\lstset{style=lua}\lstinline$for$}.\\
+  {\lstset{style=lua}\lstinline$for ... in$} & \textbf{forin} & Marque le début de la boucle {\lstset{style=lua}\lstinline$for ... in$}.\\
+  {\lstset{style=lua}\lstinline$f:y(x)$} & \textbf{fparams} & Suite à \texttt{\textbf{findex}}, appelle une fonction à la notation contractée. \\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{frdo} & Marque l'entrée dans la boucle {\lstset{style=lua}\lstinline$for$}.\\
+  & \textbf{free} & Libère les variables locales du context courrant.\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{frend} & Marque la fin de la boucle {\lstset{style=lua}\lstinline$for$}.\\
+  {\lstset{style=lua}\lstinline$x$} & \textbf{gbl} & Accède ou définie une variable globale.\\
   {\lstinline$x > y$} & \textbf{gt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
   {\lstinline$x >= y$} & \textbf{gte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
   {\lstinline$a \ b$} \newline {\lstinline$a // b$} & \textbf{idiv} & Effectue la division entière de \texttt{a} par \texttt{b}.\\
-  {\lstset{style=lua}\lstinline$end$} & \textbf{iend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$if$} & \textbf{if} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$x[y]$} & \textbf{index} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline${$} & \textbf{init} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{iend} & Termine l'environnement {\lstset{style=lua}\lstinline$if$}.\\
+  {\lstset{style=lua}\lstinline$if$} & \textbf{if} & Marque le début de l'environnement {\lstset{style=lua}\lstinline$if$}.\\
+  {\lstset{style=lua}\lstinline$x[y]$} & \textbf{index} & Index une table avec la valeur spécifiée.\\
+  {\lstset{style=lua}\lstinline${$} & \textbf{init} & Débute la définition d'une table.\\
   {\lstinline$#x$} & \textbf{len} & Si \texttt{x} est une table ou un string, retourne sa longueur. La longueur d'une table est considérée comme le nombre d'éléments non-nuls entre l'index 1 et le premier élément valant {\lstset{style=lua}\lstinline$nil$}.\\
   {\lstinline$x < y$} & \textbf{lt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
   {\lstinline$x <= y$} & \textbf{lte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
   {\lstinline$a % b$} & \textbf{mod} & Calcule le modulo de \texttt{a} dans la base \texttt{b}\\
   {\lstinline$a * b$} & \textbf{mul} & Effectue la multiplication de deux doubles.\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{narg} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{nargs} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  & \textbf{narg} & Spéficie le nombre d'arguments d'une fonction ordinaire.\\
+  & \textbf{nargs} & Spéficie le nombre d'arguments d'une fonction variadique.\\
   {\lstinline$-a$} & \textbf{neg} & Inverse le signe du nombre \texttt{a}.\\
   {\lstinline$x == y$} & \textbf{neq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont différentes, {\lstset{style=lua}\lstinline$false$} sinon.\\
-  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{new} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{new} & Ajoute un élément à la table en cours de à l'index spécifié.\\
   {\lstset{style=lua}\lstinline$not x$} & \textbf{not} & \texttt{x} prend la valeur {\lstset{style=lua}\lstinline$true$} si \texttt{x} vaut {\lstset{style=lua}\lstinline$nil$} ou {\lstset{style=lua}\lstinline$false$}, et la valeur {\lstset{style=lua}\lstinline$false$} dans tous les autres cas.\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{num} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  & \textbf{num} & Pousse un double sur la pile.\\
   {\lstinline$x or y$} & \textbf{or} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, retourne \texttt{x}, sinon poursuit l'exécution à \texttt{y}, et retourne \texttt{y}\\
-  {\lstset{style=lua}\lstinline$f(x)$} & \textbf{params} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstinline$x = y$} & \textbf{place} & Effectue le transfert de la valeur de \texttt{y} à l'addresse de \texttt{x}.\\
+  {\lstset{style=lua}\lstinline$f(x)$} & \textbf{params} & Débute l'évaluation des paramètres d'une fonction à venir.\\
+  & \textbf{place} & Suite à \texttt{\textbf{chg}}, consolide la pile de destinations avant de recevoir les valeurs.\\
   {\lstinline$a ^ b$} & \textbf{pow} & Effectue de calcul de \texttt{a} à la puissance \texttt{b}, si \texttt{a} est négatif, alors \texttt{b} doit impérativement être un entier sans quoi le résultat est indéfini.\\
-  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{put} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{ref} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-   & \textbf{rend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{req} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{rfct} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$local x = y$} & \textbf{set} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$local x = y$} & \textbf{stack} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{struct} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{str} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{put} & Suite à \texttt{\textbf{new}} ou \texttt{\textbf{append}}, place le dernier élément à la place voulue dans la table.\\
+  {\lstset{style=lua}\lstinline$a$} & \textbf{ref} & Réfère à une variable locale sur la pile.\\
+   & \textbf{rend} & Marque la fin de l'environnement {\lstset{style=lua}\lstinline$repeat$}.\\
+  {\lstset{style=lua}\lstinline$repeat$} & \textbf{repeat} & Marque le début de l'environnement {\lstset{style=lua}\lstinline$repeat$}.\\
+   & \textbf{req} & Charge un autre programme lua.\\
+  & \textbf{rfct} & Retourne l'adresse de la fonction spécifiée.\\
+  {\lstset{style=lua}\lstinline$local x = y$} & \textbf{set} & Débute l'empilage de valeurs.\\
+  & \textbf{stack} & Suite à \texttt{\textbf{set}}, consolide la pile. Suite à \texttt{\textbf{place}} effectue le transfert des valeurs vers les destinations.\\
+  & \textbf{struct} & Inquique que la valeur finale est en position pour retourner plusieurs valeurs.\\
+  {\lstset{style=lua}\lstinline$"..."$} & \textbf{str} & Pousse une chaîne de caractères.\\
   {\lstinline$a - b$} & \textbf{sub} & Effectue la soustraction de deux doubles.\\
-  {\lstset{style=lua}\lstinline$,$} & \textbf{tac} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{tcall} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$then$} & \textbf{then} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$while$} & \textbf{while} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$do$} & \textbf{wdo} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$end$} & \textbf{wend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$repeat$} & \textbf{repeat} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$until$} & \textbf{until} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{var} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
-  {\lstset{style=lua}\lstinline$$} & \textbf{trunc} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$,$} & \textbf{tac} & Marque la séparation de deux éléments.\\
+  {\lstset{style=lua}\lstinline$return f(x)$} & \textbf{tcall} & Appel terminal de la fonction spécifiée par \texttt{\textbf{params}}.\\
+  {\lstset{style=lua}\lstinline$then$} & \textbf{then} & Marque le début de la première branche du {\lstset{style=lua}\lstinline$if$}.\\
+  {\lstset{style=lua}\lstinline$x, y, (z)$} & \textbf{trunc} & Supprimes les valeurs de retour supplémentaires\\
+  {\lstset{style=lua}\lstinline$until$} & \textbf{until} & Test la condition de sortie de la boucle {\lstset{style=lua}\lstinline$repeat$}.\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{var} & Réfère à une variable à l'extérieur du programme.\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{wdo} & Teste la condition de sortie de la boucle while {\lstset{style=lua}\lstinline$while$}.\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{wend} & Termine la boucle while {\lstset{style=lua}\lstinline$while$}.\\
+  {\lstset{style=lua}\lstinline$while$} & \textbf{while} & Marque le début de la boucle while {\lstset{style=lua}\lstinline$while$}.\\
   
   
 \end{longtable}
