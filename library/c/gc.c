@@ -17,10 +17,10 @@
 quad *stack_base;
 quad mem_size;
 quad mem_max;
-quad trf_mask = 0x4000000000000000;
+quad trf_mask = 0x2000000000000000;
 
 static quad *copy;
-static quad heartbreaker = 0x8000000000000000;
+static quad heartbreaker = 0x4000000000000000;
 
 static quad copydata(quad);
 static void copyll(quad*, quad*);
@@ -52,7 +52,7 @@ quad copydata(quad data)
     *(point++) = heartbreaker | Q(copy);
     base = copy;
     copy += 3;
-    if (*base == -VOID) {
+    if (*base == NEW) {
       base[1] = point[0];
       base[2] = point[1];
       return (Q(base) << 3) | TABLE;
@@ -106,11 +106,13 @@ quad copydata(quad data)
       *p = NIL;
       return ret;
     case O_FILE:
+      printf("file!\n");
       base = copy;
       copy += 2;
       base[0] = point[0];
       base[1] = point[1];
       point[0] = heartbreaker | Q(base);
+      printf("%016llx\n", (Q(base) << 3) | OBJECT);
       return (Q(base) << 3) | OBJECT;
     }
     break;
@@ -166,7 +168,7 @@ void copyll(quad *point, quad *last)
 
 void printmem(quad *start, int lines)
 {
-  int i, offset = 0x60;
+  int i, offset = 0x40;
   printf
     ("---------------------------------------------------------------------------------------------\n");
   for (i = offset + lines / 4 - 1; i >= offset; i--)
@@ -194,9 +196,12 @@ vals gc(quad *stack_ptr, quad *mem_ptr, quad *mem_base)
     fprintf(stderr, "Memory allocation failed (Process aborted)\n");
     exit(1);
   }
-  //printmem(new.mem_base, 65);
+  //printmem(mem_base, 100);
   // Globals
   copydata((Q(mem_base) << 3) | TABLE);
+  //printmem(new.mem_base, 100);
+  //char *s = malloc(10);
+  //scanf("%s", s);
   
   // Stack
   for (i = stack_base - 1; i >= stack_ptr; i--) {

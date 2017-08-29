@@ -140,7 +140,7 @@ _i_new:
 	push	%rbx
 	pushq	%rdi
 	pushq	%rsi
-	movq	$-1, (%rbx)
+	movq	$0x7FFFFFF1, (%rbx)
 	movq	16(%rbx), %rbx
 	movq	(%rbx), %rdi
 	movq	8(%rbx), %rsi	

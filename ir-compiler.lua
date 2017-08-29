@@ -762,7 +762,7 @@ function len()
    ret = prep(true) ..
       "\tmovq\t" .. v1 .. ", %rax\n" ..
       "\tsarq\t$3, %rax\n" ..
-      "\tcmpq\t$-1, (%rax)\n" ..
+      "\tcmpq\t$0x7FFFFFF1, (%rax)\n" ..
       "\tjnz\t" .. lab .. "\n" ..
       "\tcall\t_check\n" ..
       lab .. ":" ..
@@ -962,7 +962,7 @@ function init(text, i, p)
    local tmp
    
    ret = ret ..
-      "\tmovq\t$-33, (%r12)\n" ..
+      "\tmovq\t$0x7FFFFFE1, (%r12)\n" ..
       "\tmovq\t$17, 8(%r12)\n" ..
       "\tleaq\t" .. -8 * r_size .. "(%rbp), %rax\n" ..
       "\tmovq\t%rax, 16(%r12)\n" ..

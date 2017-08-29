@@ -10,8 +10,9 @@
   #define TRUE		9
   #define NIL		17
   #define VOID		33
-  #define UNKN		-1
   #define FRAH		129
+  #define UNKN		0x7FFFFFF1
+  #define NEW		0x7FFFFFE1
 #define STRING		2
 #define TABLE		3
 #define OBJECT		4

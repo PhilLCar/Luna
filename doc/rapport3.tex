@@ -136,63 +136,52 @@ Le but du compilateur-IR est assez direct: produire du code assembleur compilabl
 \begin{itemize}
 \item Appeler des fonctions avec les registres
 \item Aligner adéquatement la pile
-\item 
-\item Détecter l'appel terminal et la fermeture
 \end{itemize}
 
 \section{Le compilateur-IR}
 Le compilateur-IR lit une liste d'instructions comportant au plus un paramètre, la question du \textit{parsing} ici est complètement éliminée. Les instructions sont basées sur le principe d'une pile d'exécution. Bien entendu on pourrait utiliser la pile de l'ordinateur, mais cela produirait du code illisible, plutôt lent, mais surtout incroyable long. À tous les niveau, l'utilisation de registres est favorable à celle de la pile. De plus si l'objectif est un jour non seulement d'appeler du C, mais de pouvoir être appelé PAR du C, alors le code se doit de respecter une certaine norme.
 
-\section{Pile virtuelle}
-Pour utiliser les registre sans faire d'erreur, \luna{} utilise une pile virtuelle (\texttt{v\_{}stack}). Sur cette pile, chaque case correspond à un registre précis. Il ne peut pas y avoir de registre 
+\subsection{Pile virtuelle}
+Pour utiliser les registre sans faire d'erreur, \luna{} utilise une pile virtuelle (\texttt{v\_{}stack}). Sur cette pile, chaque case correspond à un registre précis. Il ne peut pas y avoir plus qu'un registre par case sur le stack, ceci réduit grandement le risque d'erreur et de conflit. Dans le cas de \luna{}, il y a 8 registres de calculs, donc chaque registre correspond à la place qui a son numéro (mod 8). En plus de la pile virtuelle, le compilateur-IR conserve la valeur de la taille de la pile, de manière à pouvoir la protéger lors d'un appel. Il conserve aussi la dernière position connue de la pile; ceci lui permet de faire des ajustements relatifs (si la base n'est pas connue) ou des ajustement absolu dans l'autre cas.
 
-\subsubsection{evaluate et translate}
-Les fonctions \texttt{evaluate} et \texttt{translate} travaillent de concert pour produire le code IR. Le but de \texttt{evaluate} est tout d'abord de séparer les expressions en 3 catégories principales:
-\begin{itemize}
-\item \textbf{Une expression locale (set)} : Une expression précédée par le mot réservé "local" qui aura une influence sur la pile.
-\item \textbf{Une expression globale/accès (chg)} : Une expression précédée d'aucun mot réservé qui n'aura pas d'impact sur la pile.
-\item \textbf{Une expression retournée (ret)} : Une expression précédée par le mot réservé "return" qui conduira à la sortie d'une fonction.
-\end{itemize}
-Avec le mécanisme actuel d'assignation, les deux seconde expressions sont en fait une extension de la première.
-\paragraph{set ... stack}
-Le mode \textbf{set} fait tous simplement évaluer successivement toute les expression passée après le «=» et les empiles sur la pile d'exécution. Si il n'y a pas d'expression alors il ne fait que réserver l'espace sur la pile.
+\section{Déroulement}
+Évidemment, lorsqu'on est rendus aussi près de la machine, il y a beaucoup d'accident, et la phrase «Segmentation fault (Core dumped)» revient souvent. Malgré tout, l'écriture du compilateur-IR s'est déroulée sans trop d'obstacle majeurs; la plupart des problèmes était réglés rapidement et l'écrire général du compilateur avançait a un vitesse intéressante.
 
-\paragraph{chg ... place ... stack}
-La nature de ce mode vient du fait qu'en Lua les variables destinataires ne doivent pas être changée tant que toute la séquence de valeurs n'est pas évaluée. La manière la plus logique était donc d'empiler toutes les destinations, puis toute les valeurs et simplement les remplir par correspondance. En rétrospective, si seulement les valeurs avaient été sur la piles, puis distribuées par la suite à leurs destinataires, il n'y aurait pas eu d'adresse qui traîne sur la pile, et le masque de transfert n'aurait probablement pas été nécessaire.
+\section{Faits-saillants}
+L'écriture du compilateur-IR fut un travail colossal, mais certains acquis valent plus peine d'être mentionnés que d'autres
 
-\paragraph{ret ... stack}
-Comme set, ret empile les variables sur le stack, mais aulieu de réserver l'espace occupé par celui-ci, il fait plutôt pointer \%{}rbx dessus et quitte la fonction.
+\subsection{Nombres à virgules}
+En commençant à écrire le compilateur IR, il est devenu évident que supporter les nombre à virgule demanderait un changement majeur. Au lieu d'être pris avec plus tard, la décision à été prise de commencer tout de suite en supportant les nombre à virgule, de sorte qu'il n'y aurait pas de mauvaise surprise plus tard.
 
-\paragraph{translate}
-Cette fonction va traduire chacune des expression en code IR, la tâche est plutôt facile étant donné que le parenthèsage est bon. Pour de plus amples détails consulter le jeu d'instruction IR dans le manuel.
+\subsection{Fonctions externes importantes}
+Afin d'améliorer la lisibilité du code et pour éviter les fragment important redondant, à partir du moment où les opérateur prennaient plus qu'environ 5 lignes assembleur, ils étaient incorporés au fichier utils.asm puis appelés.
 
-\subsubsection{Fonctions d'environnement et compile}
-La fonction \texttt{compile} est la fonction-mère du fichier, au même titre que dans le préprocesseur elle sert simplement à diriger l'exécution dans la bonne direction. Les fonctions d'environnement ont également un rôle analogue.
+\subsubsection{utils.s}
+\paragraph{Puissance}
+L'opérateur de puissance en Lua est défini dans le langage lui-même il a donc fallu implémenter un algorithme en assembleur afin de calculer une puissance arbitraire d'une base arbitraire. Cette fonction est assez volumineuse et vaut mieux être définie dans la librairie que dans le code produite.
 
-\section{Fermetures}
-Comme pour le préprocesseur, le compilateur tente de produire du code en repassant le moins possible sur lui-même. Pour ce qui est des fermetures, cela signifie qu'une variable peut «naître» comme une variable locale, puis être «enfermée» par la suite dans l'environnement de fermeture.
+\subsubsection{mem.s}
+\paragraph{Transfert}
+À chaque fois que des variables sont reféfinies, le compilateur fait appel à la fonction de transfert. C'est en fait une routine assembleur qui fait corresondre chaque valeur à un index en mémoire, en décant un index jusqu'à ce que le pointeur des valeurs atteinge la première case des destination.
 
-\subsection{Processus de détection de fermeture}
-Lorsque que le compilateur entre dans une fonction, il possède une représentation interne des niveau d'accès de chaque variable. S'il détecte qu'une fonction tente de sortir de son niveau d'accès, alors il enferme la variable au niveau où se fait l'accès. Puisque l'environnement de fermeture a préséance sur l'environnement local, une fois qu'une variable est enfermée, elle masque son équivalent local et toutes les autres références à cette variable seront faites à l'environnement de fermeture.
+\subsubsection{array.s}
+\paragraph{Indexage}
+Les fonction d'indexage écrites en assembleur sont très fiable et permettent une gestion rapide et efficace des table. Le plus difficile a été d'écrire la fonction de redimensionnement dynamique des table lorsqu'on accède à un nouvel index, mais maintenant cette fonction fonctionne très bien et les tables sont une structure fiable malgé leur complexité
 
-Une fois sorti de la fonction, la variable demeure enfermée (puisqu'elle l'a été au niveau accédé et non au niveau de la fonction). Maintenant tous les niveau inférieurs ou égal qui voudront référer à cette variable obtiendront la fermeture.
+\paragraph{Chargement de table}
+La fonction de copie des tables est très importante car elle permet de charger une table depuis la pile. Cette implémentation a été priorisée car il est impossible de prévoir la taille d'une table quand le dernier élément est une fonction ou le stack d'argument variable. Cette fonction va simultanément définir la taille de la table produite.
 
-Si une autre fonction crée une fermeture depuis la même variable, il n'y a pas de conflit en raison de la structure en arbre de l'environnement de fermeture. Voir le manuel pour plus de détails.
+\subsubsection{special.s}
+L'indexage spécial est également un des succès agréables de cette étape. Grâce à cette fonction, le programme peut avoir accès à toute les sous-fonctions d'un type, sans devoir appeler sa fonction de librairie associée.
 
-\section{Appel terminal}
-Lorsque que le compilateur évalue une fonction, il tente d'abord de détecter son nom. S'il le trouve il le passe en paramètre à la fonction d'évaluation de fonction. À mesure que la fonction est évaluée, le nom est mis à NIL l'expression n'est pas en position terminale, et conservé sinon. Ainsi la propagation terminale est effectuée. Lorsque l'on tombre sur un "return", le nom de la fonction est comparé au nom en paramètre, si celui-ci est nil, il n'y a aucune chance que ce soit vrai, sinon, la comparaison détermine s'il sagit vraiment d'un appel terminal. L'appelle terminal ne fonctionne pas sur les fonction à arguments variables.
-
-\section{Particularités}
-\subsection{Détection des troncation}
-Lorsque le dernier élément d'une séquence est parenthèsée, le compilateur ajoute la directive IR \texttt{trunc} qui signal au compilateur-IR d'ignorer le stack retourné, à l'inverse, si cette valeur n'est pas parenthèsée, il envoir la directive \texttt{struct} qui signale au compilateur de tenter de développer la structure pour obtenir les autres valeurs de retour.
-
-\subsection{Format d'appel}
-Le langage Lua permet l'appel de string et de tables sans parenthèses, combinés avec les indexation, cela signifie que le compilateur doit toujours regarder «dans le futur» afin de s'assurer que le prochain élément n'est pas un paramètre potentiel. En raison de la signifiation de la parenthèse, le préprocesseur ne peut pas non-plus envelopper le tout entre parenthèse, il faut donc à chaque fois toujours vérifier et ajouter les éléments tant que ceux-ci peuvent être des paramètres.
-
-
-\section{Librairie}
-Le compilateur gère l'inclusion automatique de librairie. En compilant les librairie il crée un fichier dans lequel il note toutes les variables globables disponibles et dans quelle librairie les trouver. En compilant un fichier normal, il consulte la liste et détermine des librairie à être inclue dans le programme.
+\section{Défis}
+Certaines choses ont évidemment poser un plus défi qu'initialement envisagé. Un des plus gros défi a sans doute été la gestion des tables. Il y a tellement de manière de définir des éléments de table.
+\begin{lstlisting}[style = lua]
+  x = { allo = 1, ["bonjour"] = 2, n = 3; [1] = 2, 3, 4}
+  x["b"]= x.allo + x[3]
+\end{lstlisting}
+Et la contrainte auto-imposée d'avoir des tables à double format a commencer à peser lourd. Au final cependant tout est rentré dans l'ordre et le compilateur-IR rempli exactement la fonction qu'on attend de lui. Le seul problème est le retard pris, cela risque d'impacter sur le temps à dédier au GC.
 
 \section{Conclusion}
-Le compilateur s'est avérer très fiable, et le code qu'il produit est suffisemment proche du code assembleur pour que le compilateur-IR aie la tâche relativement simple. Sa capacité à choisir quel librairie inclue est également très intéressante, car dans le cas d'une librairie statique comme ici, si on décide de toujours inclure toute les librairies disponibles les fichiers exécutable risque de devnir énormes inutilement. Tout comme pour le préprocesseur, le compilateur souffre d'un codage un peu lourd, et désagréable à lire, mais ceci est un peu un effet secondaire de Lua. En effet même si ce langage possède beaucoup d'exceptions et de formes spéciales, il souffre malgré tout d'une expressivité relativement pauvre. 
+Cette étape du projet quoi que frustrante par moment s'est vraiment déroulée parfaitement en y repensant. Tous les objectifs ont été atteint, et le code produit est compatible avec gcc, l'appel de fonction C fonctionne.
 \end{document}
