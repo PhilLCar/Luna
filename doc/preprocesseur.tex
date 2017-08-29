@@ -49,7 +49,8 @@
   basicstyle=\normalsize\ttfamily,        % the size of the fonts that are used for the code
   breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
   breaklines=true,                 % sets automatic line breaking
-  captionpos=b,  
+  captionpos=b, 
+  language=[5.3]Lua,
   escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
   extendedchars=true,% lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
   %frame=single,                   % how far the line-numbers are from the code
@@ -196,12 +197,13 @@ Les valeurs spéciales sont des constantes qui vont permettre au compilateur de 
   \begin{tabular}{r|c|p{12cm}}
     Nom & Valeur (hex) & Utilisation\\
     \hline
-    FALSE & \texttt{0x01} & Représente la constante {\lstset{style=lua}\lstinline$false$}\\
-    TRUE  & \texttt{0x09} & Représente la constante {\lstset{style=lua}\lstinline$true$}\\
-    NIL   & \texttt{0x11} & Représente la constante {\lstset{style=lua}\lstinline$nil$}\\
-    VOID  & \texttt{0x21} & Indique que la pile est vide et ne contient plus de valeur\\
-    UNKN  & \texttt{0x41} & (Unknown) Indique que la longueur d'un tableau n'est plus fiable et doit être recalculée\\
-    FRAH  & \texttt{0x81} & (For Ahead) Signale au GC qu'une boucle {\lstset{style=lua}\lstinline$for$} se trouve à cet endoroit sur la pile\\
+    FALSE & \texttt{0x00000001} & Représente la constante {\lstset{style=lua}\lstinline$false$}\\
+    TRUE  & \texttt{0x00000009} & Représente la constante {\lstset{style=lua}\lstinline$true$}\\
+    NIL   & \texttt{0x00000011} & Représente la constante {\lstset{style=lua}\lstinline$nil$}\\
+    VOID  & \texttt{0x00000021} & Indique que la pile est vide et ne contient plus de valeur\\
+    FRAH  & \texttt{0x00000081} & (For Ahead) Signale au GC qu'une boucle {\lstset{style=lua}\lstinline$for$} se trouve à cet endoroit sur la pile\\
+    NEW   & \texttt{0x7FFFFFE1} & Signale au GC que le le tableau est en cours d'initialisation\\
+    UNKN  & \texttt{0x7FFFFFF1} & (Unknown) Indique que la longueur d'un tableau n'est plus fiable et doit être recalculée\\
   \end{tabular}
 \end{center}
 \paragraph{Chaînes de caractères - \texttt{010}}
@@ -537,11 +539,18 @@ Finalement, \texttt{table} est une librairie qui contient des utilitées pour fa
 
 \newpage
 \subsection{Collection de déchets}
-Le compilateur inclu dans le code son collecteur de déchet, ou \textit{Garbage Collector} (écrit en C). Le but du GC est de réorganiser et compacter la mémoire pour faire de la place aux allocation ultérieures. À chaque fois que le programme effectue une opération qui remplie potentiellement la mémoire (transfert, appel de fonction, retour de fonction, définition de variable, définition de table, etc.) il appelle le GC. Celui-ci vérifie si la mémoire est encore en dessous du seuil acceptable, définie par défaut à 75\%{}. Si c'est le cas, il retourne immédiatement à l'exécution, sinon, il commence sont travail. Suite à la relocalisation de la mémoire le GC va évaluer si le programme utilise trop d'espace (la nouvelle plage mémoire se situe en dessous de 25\%{} de la mémoire allouée) où pas assez (la nouvelle plage mémoire est toujours au dessus de 75\%{} même après la compaction. Si c'est le cas, il va ajuster la taille de la mémoire en conséquence (la diviser par deux, ou la doubler respectivement). De cette manière si un programme à besoin d'une quantité immense de mémoire pour un court laps de temps, il se la verra allouée et le programme ne plantera pas, mais lorsque sa demande va diminuer, le GC diminuera à sont tour la taille 
+Le compilateur inclu dans le code son collecteur de déchet, ou \textit{Garbage Collector} (écrit en C). Le but du GC est de réorganiser et compacter la mémoire pour faire de la place aux allocation ultérieures. À chaque fois que le programme effectue une opération qui remplie potentiellement la mémoire (transfert, appel de fonction, retour de fonction, définition de variable, définition de table, etc.) il appelle le GC. Celui-ci vérifie si la mémoire est encore en dessous du seuil acceptable, définie par défaut à 75\%{}. Si c'est le cas, il retourne immédiatement à l'exécution, sinon, il commence sont travail. Suite à la relocalisation de la mémoire le GC va évaluer si le programme utilise trop d'espace (la nouvelle plage mémoire se situe en dessous de 25\%{} de la mémoire allouée) où pas assez (la nouvelle plage mémoire est toujours au dessus de 75\%{} même après la compaction. Si c'est le cas, il va ajuster la taille de la mémoire en conséquence (la diviser par deux, ou la doubler respectivement). De cette manière si un programme à besoin d'une quantité immense de mémoire pour un court laps de temps, il se la verra allouée et le programme ne plantera pas, mais lorsque sa demande va diminuer, le GC diminuera à sont tour la taille de la mémoire afin d'alléger le stresse que le programme impose à la machine.
 
 \subsubsection{Type de GC}
+Au départ, \luna{} était supposé avoir un GC Stop \&{} Copy standard. Cependant, afin d'optimiser les opération interne sur les structures (qui sont nombreuse, particulièrement dans le cas des tableaux) les pointeurs internes ne sont pas étiquetés. Ceci signifie que le GC Stop \&{} Copy ne serait pas en mesure de détecter les fragments de structures internes nouvellement copiées dans la mémoire (à moins que celles-ci soient pourvue d'un tag lors de la copie). Pour faire plus simple, le programme fait tout simplement explorer récursivement toute les structures qu'il rencontre au moment de la copie. Cela occupe plus de mémoire lors du processus de nettoyage, mais permet de sauver beaucoup d'étape pendant l'exécution normale du programme.
 
 \subsubsection{Performance du GC}
+La performance du GC n'est pas optimale, premièrement il y a le problème de mémoire décrit plus haut. Si on a une liste chaînée de 100 valeurs, ce qui est très plausible, le GC devra descendre récursivement jusqu'à la 100ième valeur puis retourner tout en haut. Non seulement le trajet est deux fois plus long mais des listes chaînées de grande taille sont suceptibles de causer un \textit{Stack Overflow}. Changer le GC pour un GC Stop \&{} Copy ordinaire serait envisageable, et probablement relativement facile étant donné que toute les structures de copies sont en place.
+
+Un autre désavantage (qui ne peut être corrigée par une architecture de GC plus efficace) provient de la manière dont sont traitées les assignations en Lua. Puisque les destinations sont d'abord empilées \textit{puis} les valeurs sont transférées, on se retrouve avec une série de destinations sur la pile qui doivent être modifiées. Or les objets sur lesquels celles-ci pointent ne sont pas distingable (peut-être un index de l'environnement de fermeture, peut-être un index de la table globale, peut-être une case sur la pile). Il faut donc attendre que toute la mémoire vivante soit copiée avant de pouvoir regarder le tag de «c\oe{}ur brisé» et faire l'ajustement nécessaire.
+
+\subsubsection{Bugs}
+Le GC fonctionne bien avec toutes les fonctions natives du compilateur, mais il persite un bug non résolu qui se produit lorsque le GC est appelé avant qu'une fonction C relative aux fichiers soit appelée (popen, fopen).
 
 \newpage
 \section{Préprocesseur}
@@ -782,34 +791,85 @@ end
 \paragraph{Jeu d'instruction IR}
 \label{par:instructions}
 \begin{longtable}{p{1.3cm} r p{12cm}}
+  {\lstinline$a + b$} & \textbf{add} & Effectue l'addition de deux doubles.\\
+  {\lstinline$x and y$} & \textbf{and} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, poursuit l'exécution à \texttt{y}, sinon retourne la valeur de \texttt{x}, si l'exécution est poursuivie à \texttt{y}, retourne la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline${;[x] = y}$} & \textbf{append} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstinline$m & n$} & \textbf{band} & Effectue un 'AND' bit à bit entre \texttt{m} et \texttt{n}.\\
+  {\lstinline$p === q$} & \textbf{beq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$true$} si ils pointent vers le même objet.\\
+  {\lstinline$~n$} & \textbf{binv} & Inverse les bits du nombre entier \texttt{n}.\\
+  {\lstinline$p != q$} & \textbf{bneq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$false$} si ils pointent vers le même objet.\\
+  {\lstinline$m | n$} & \textbf{bor} & Effectue un 'OR' bit à bit entre \texttt{m} et \texttt{n}.\\
   {\lstinline$m << n$} & \textbf{bsal/bshl} &  Décale l'entier \texttt{m} de \texttt{n} bits vers la gauche (décalage arithmétique ou logique).\\
   {\lstinline$m >> n$} & \textbf{bsar} & Décale l'entier \texttt{m} de \texttt{n} bits vers la droite. Si le MSB est 1, tous les bits décalés depuis le MSB sont mis à 1 (décalage arithmétique, conserve la négativité).\\
   {\lstinline$m >>> n$} & \textbf{bshr} & Décale \texttt{m} de \texttt{n} bits vers la droite. Les bits décalés depuis le MSB sont 0 (décalage logique, ne conserve pas la négativité).\\
-  {\lstinline$m | n$} & \textbf{bor} & Effectue un 'OR' bit à bit entre \texttt{m} et \texttt{n}.\\
-  {\lstinline$m & n$} & \textbf{band} & Effectue un 'AND' bit à bit entre \texttt{m} et \texttt{n}.\\
   {\lstinline$m ~ n$} \newline {\lstinline$m ^^ n$} & \textbf{bxor} & Effectue un 'XOR' bit à bit entre \texttt{m} et \texttt{n}.\\
-  {\lstinline$p === q$} & \textbf{beq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$true$} si ils pointent vers le même objet.\\
-  {\lstinline$p != q$} & \textbf{bneq} & Compare les pointeurs, retourne {\lstset{style=lua}\lstinline$false$} si ils pointent vers le même objet.\\
-  {\lstinline$a ^ b$} & \textbf{pow} & Effectue de calcul de \texttt{a} à la puissance \texttt{b}, si \texttt{a} est négatif, alors \texttt{b} doit impérativement être un entier sans quoi le résultat est indéfini.\\
-  {\lstinline$-a$} & \textbf{neg} & Inverse le signe du nombre \texttt{a}.\\
-  {\lstinline$~n$} & \textbf{binv} & Inverse les bits du nombre entier \texttt{n}.\\
-  {\lstset{style=lua}\lstinline$not x$} & \textbf{not} & \texttt{x} prend la valeur {\lstset{style=lua}\lstinline$true$} si \texttt{x} vaut {\lstset{style=lua}\lstinline$nil$} ou {\lstset{style=lua}\lstinline$false$}, et la valeur {\lstset{style=lua}\lstinline$false$} dans tous les autres cas.\\
-  {\lstinline$#x$} & \textbf{len} & Si \texttt{x} est une table ou un string, retourne sa longueur. La longueur d'une table est considérée comme le nombre d'éléments non-nuls entre l'index 1 et le premier élément valant {\lstset{style=lua}\lstinline$nil$}.\\
-  {\lstinline$a * b$} & \textbf{mul} & Effectue la multiplication de deux doubles.\\
-  {\lstinline$a / b$} & \textbf{div} & Effectue la division de deux doubles.\\
-  {\lstinline$a % b$} & \textbf{mod} & Calcule le modulo de \texttt{a} dans la base \texttt{b}\\
-  {\lstinline$a \ b$} \newline {\lstinline$a // b$} & \textbf{idiv} & Effectue la division entière de \texttt{a} par \texttt{b}.\\
-  {\lstinline$a + b$} & \textbf{add} & Effectue l'addition de deux doubles.\\
-  {\lstinline$a - b$} & \textbf{sub} & Effectue la soustraction de deux doubles.\\
+  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{call} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstinline$x = y$} & \textbf{chg} & Effectue le transfert de la valeur de \texttt{y} à l'addresse de \texttt{x}.\\
   {\lstinline$s .. t$} & \textbf{con} & Effectue la concaténation de la chaîne de caractère \texttt{s} avec la chaîne de caractère \texttt{t}\\
+  {\lstinline$a / b$} & \textbf{div} & Effectue la division de deux doubles.\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{do} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$}$} & \textbf{done} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$else$} & \textbf{else} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{end} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
   {\lstinline$x == y$} & \textbf{eq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont les mêmes, {\lstset{style=lua}\lstinline$false$} sinon.\\
-  {\lstinline$x == y$} & \textbf{neq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont différentes, {\lstset{style=lua}\lstinline$false$} sinon.\\
-  {\lstinline$x <= y$} & \textbf{lte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
-  {\lstinline$x >= y$} & \textbf{gte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
-  {\lstinline$x < y$} & \textbf{lt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{exit} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{fct} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{fend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{fido} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{fiend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$x:y$} & \textbf{findex} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{fname} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$for$} & \textbf{for} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$for ... in$} & \textbf{forin} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$f:y(x)$} & \textbf{fparams} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{frdo} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{free} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{frend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{gbl} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
   {\lstinline$x > y$} & \textbf{gt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
-  {\lstinline$x and y$} & \textbf{and} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, poursuit l'exécution à \texttt{y}, sinon retourne la valeur de \texttt{x}, si l'exécution est poursuivie à \texttt{y}, retourne la valeur de \texttt{y}\\
+  {\lstinline$x >= y$} & \textbf{gte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus grande ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$a \ b$} \newline {\lstinline$a // b$} & \textbf{idiv} & Effectue la division entière de \texttt{a} par \texttt{b}.\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{iend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$if$} & \textbf{if} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$x[y]$} & \textbf{index} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline${$} & \textbf{init} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstinline$#x$} & \textbf{len} & Si \texttt{x} est une table ou un string, retourne sa longueur. La longueur d'une table est considérée comme le nombre d'éléments non-nuls entre l'index 1 et le premier élément valant {\lstset{style=lua}\lstinline$nil$}.\\
+  {\lstinline$x < y$} & \textbf{lt} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite que la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$x <= y$} & \textbf{lte} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} la première valeur est plus petite ou égale à la seconde, {\lstset{style=lua}\lstinline$false$} sinon. Dans le cas des string, on utilise l'ordre lexicographique.\\
+  {\lstinline$a % b$} & \textbf{mod} & Calcule le modulo de \texttt{a} dans la base \texttt{b}\\
+  {\lstinline$a * b$} & \textbf{mul} & Effectue la multiplication de deux doubles.\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{narg} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{nargs} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstinline$-a$} & \textbf{neg} & Inverse le signe du nombre \texttt{a}.\\
+  {\lstinline$x == y$} & \textbf{neq} & Effectue la comparaison de \texttt{x} avec \texttt{y}, si \texttt{x} et \texttt{y} sont des string ou des doubles, cette comparaison compare l'objet pointé et non les pointeurs. Retourne {\lstset{style=lua}\lstinline$true$} si les valeurs sont différentes, {\lstset{style=lua}\lstinline$false$} sinon.\\
+  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{new} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$not x$} & \textbf{not} & \texttt{x} prend la valeur {\lstset{style=lua}\lstinline$true$} si \texttt{x} vaut {\lstset{style=lua}\lstinline$nil$} ou {\lstset{style=lua}\lstinline$false$}, et la valeur {\lstset{style=lua}\lstinline$false$} dans tous les autres cas.\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{num} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
   {\lstinline$x or y$} & \textbf{or} & Si \texttt{x} n'est pas {\lstset{style=lua}\lstinline$false$} ou {\lstset{style=lua}\lstinline$nil$}, retourne \texttt{x}, sinon poursuit l'exécution à \texttt{y}, et retourne \texttt{y}\\
+  {\lstset{style=lua}\lstinline$f(x)$} & \textbf{params} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstinline$x = y$} & \textbf{place} & Effectue le transfert de la valeur de \texttt{y} à l'addresse de \texttt{x}.\\
+  {\lstinline$a ^ b$} & \textbf{pow} & Effectue de calcul de \texttt{a} à la puissance \texttt{b}, si \texttt{a} est négatif, alors \texttt{b} doit impérativement être un entier sans quoi le résultat est indéfini.\\
+  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{put} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{ref} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+   & \textbf{rend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{req} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{rfct} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$local x = y$} & \textbf{set} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$local x = y$} & \textbf{stack} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{struct} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{str} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstinline$a - b$} & \textbf{sub} & Effectue la soustraction de deux doubles.\\
+  {\lstset{style=lua}\lstinline$,$} & \textbf{tac} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline${,[x] = y}$} & \textbf{tcall} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$then$} & \textbf{then} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$while$} & \textbf{while} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$do$} & \textbf{wdo} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$end$} & \textbf{wend} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$repeat$} & \textbf{repeat} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$until$} & \textbf{until} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{var} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  {\lstset{style=lua}\lstinline$$} & \textbf{trunc} & Réserve un espace sur la pile pour la variable \texttt{x} et y inscrit la valeur de \texttt{y}\\
+  
   
 \end{longtable}
 \end{document}
